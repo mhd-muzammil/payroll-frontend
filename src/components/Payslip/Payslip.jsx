@@ -11,6 +11,7 @@ import {
   Dialog,
   DialogContent,
 } from "@/components/ui/dialog";
+import { extractArray } from "../../Utility/apiUtils";
 
 const PayslipsPage = () => {
   const [slips, setSlips] = useState([]);
@@ -22,7 +23,7 @@ const PayslipsPage = () => {
     setLoading(true);
     try {
       const res = await api.get("/api/payslips/");
-      setSlips(res.data);
+      setSlips(extractArray(res.data));
     } catch (err) {
       console.error("Failed to fetch payslips:", err);
     } finally {

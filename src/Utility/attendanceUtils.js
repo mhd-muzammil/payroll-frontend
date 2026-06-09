@@ -57,18 +57,19 @@ export const getStatusDisplay = (status) => STATUS_DISPLAY[status] || status;
 export const getStatusVariant = (status) => STATUS_VARIANTS[status] || "muted";
 
 export const calculateStats = (records) => {
-  const present = records.filter(
+  const safeRecords = Array.isArray(records) ? records : [];
+  const present = safeRecords.filter(
     (r) => r.status === "Present" || r.status === "overTime"
   ).length;
-  const leave = records.filter((r) => r.status === "Leave").length;
-  const absent = records.filter((r) => r.status === "Absent").length;
+  const leave = safeRecords.filter((r) => r.status === "Leave").length;
+  const absent = safeRecords.filter((r) => r.status === "Absent").length;
 
-  const totalOvertime = records.reduce((sum, r) => {
+  const totalOvertime = safeRecords.reduce((sum, r) => {
     const overtime = calculateOvertime(r.intime, r.outtime);
     return sum + parseFloat(overtime);
   }, 0);
 
-  const totalWorkedHours = records.reduce((sum, r) => {
+  const totalWorkedHours = safeRecords.reduce((sum, r) => {
     return sum + parseFloat(calculateHours(r.intime, r.outtime));
   }, 0);
 

@@ -10,6 +10,7 @@ import OnboardingForm from "./OnboardingForm";
 import { onboardingService } from "../../services/onboardingService";
 import { employeeService } from "../../services/employeeService";
 import { api } from "../../api/Api";
+import { extractArray } from "../../Utility/apiUtils";
 
 const OnboardingManagement = () => {
   const [records, setRecords] = useState([]);
@@ -49,13 +50,16 @@ const OnboardingManagement = () => {
         employeeService.getAll()
       ]);
       
-      setRecords(onboardingData);
+      const safeOnboardingData = extractArray(onboardingData);
+      const safeEmployeeData = extractArray(employeeData);
+      
+      setRecords(safeOnboardingData);
 
       // Calculate counts of current employees (active, onleave) and separated employees (inactive) ONLY IF they were onboarded
-      const onboardedEmails = new Set(onboardingData.map(o => o.email_id?.toLowerCase()));
-      const onboardedNames = new Set(onboardingData.map(o => o.employee_name?.toLowerCase()));
+      const onboardedEmails = new Set(safeOnboardingData.map(o => o.email_id?.toLowerCase()));
+      const onboardedNames = new Set(safeOnboardingData.map(o => o.employee_name?.toLowerCase()));
 
-      const onboardedEmployees = employeeData.filter(e => 
+      const onboardedEmployees = safeEmployeeData.filter(e => 
         (e.email && onboardedEmails.has(e.email.toLowerCase())) || 
         (e.employee_name && onboardedNames.has(e.employee_name.toLowerCase()))
       );
@@ -178,12 +182,14 @@ const OnboardingManagement = () => {
     }
   };
 
+  const safeRecords = Array.isArray(records) ? records : [];
+
   const stats = useMemo(() => {
-    const total = records.length;
-    const completed = records.filter(r => r.status === "Completed").length;
-    const progress = records.filter(r => r.status === "In Progress").length;
+    const total = safeRecords.length;
+    const completed = safeRecords.filter(r => r.status === "Completed").length;
+    const progress = safeRecords.filter(r => r.status === "In Progress").length;
     return { total, completed, progress };
-  }, [records]);
+  }, [safeRecords]);
 
   if (showForm) {
     return (
@@ -195,7 +201,7 @@ const OnboardingManagement = () => {
     );
   }
 
-  if (loading && records.length === 0 && !showForm) {
+  if (loading && safeRecords.length === 0 && !showForm) {
     return <div className="p-6 text-center text-muted-foreground">Loading Onboarding Data...</div>;
   }
 
@@ -225,7 +231,7 @@ const OnboardingManagement = () => {
       </div>
 
       <DataTable
-        data={records}
+        data={safeRecords}
         columns={[
           {
             key: "name",

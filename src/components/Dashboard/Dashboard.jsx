@@ -11,6 +11,7 @@ import UpcomingPayment from './UpcomingPayment';
 
 import GreetingHeader from '../ui/GreetingHeader';
 import { api } from "@/api/Api";
+import { extractArray } from "../../Utility/apiUtils";
 
 const parseCurrency = (value) => {
   if (typeof value === "number") return value;
@@ -64,7 +65,7 @@ function Dashboard() {
       if (!Array.isArray(nextSummary.departmentSplit) || nextSummary.departmentSplit.length === 0) {
         try {
           const employeesRes = await api.get("/api/employees/");
-          nextSummary.departmentSplit = buildDepartmentSplit(employeesRes.data || []);
+          nextSummary.departmentSplit = buildDepartmentSplit(extractArray(employeesRes.data));
         } catch (employeeErr) {
           console.warn("Department split fallback failed:", employeeErr);
           nextSummary.departmentSplit = [];
@@ -74,7 +75,7 @@ function Dashboard() {
       if (!Array.isArray(nextSummary.payrollTrend) || nextSummary.payrollTrend.length === 0) {
         try {
           const cyclesRes = await api.get("/api/payslips/cycles_summary/");
-          nextSummary.payrollTrend = buildPayrollTrend(cyclesRes.data || []);
+          nextSummary.payrollTrend = buildPayrollTrend(extractArray(cyclesRes.data));
         } catch (cyclesErr) {
           console.warn("Payroll trend fallback failed:", cyclesErr);
           nextSummary.payrollTrend = [];

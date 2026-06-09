@@ -1,6 +1,7 @@
 // hooks/useAttendance.js
 import { useState, useCallback } from "react";
 import { attendanceService } from "../services/attendanceService";
+import { extractArray } from "../Utility/apiUtils";
 
 export const useAttendance = () => {
   const [records, setRecords] = useState([]);
@@ -46,7 +47,11 @@ export const useAttendance = () => {
     const data = await handleRequest(
       () => attendanceService.getAll(params)
     );
-    if (data) setRecords(data);
+    if (typeof data === "string") {
+      throw new Error("API returned invalid format (HTML instead of JSON). Check proxy or backend server.");
+    }
+    const resultList = extractArray(data);
+    setRecords(resultList);
     return data;
   }, []);
 

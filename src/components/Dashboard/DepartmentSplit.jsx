@@ -21,8 +21,8 @@ const DepartmentSplit = ({ data = [] }) => {
       </div>
       {hasDepartments ? (
         <>
-          <div className="relative h-[240px] min-h-[240px] w-full min-w-0">
-            <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
+          <div className="relative h-[240px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie data={departments} dataKey="value" innerRadius={60} outerRadius={90} paddingAngle={departments.length > 1 ? 5 : 0}>
                   {departments.map((d) => <Cell key={d.name} fill={d.color} stroke="none" />)}

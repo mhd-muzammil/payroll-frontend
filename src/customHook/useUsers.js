@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
-import { userService } from "@/services/userService";
+import { userService } from "../services/userService";
+import { extractArray } from "../Utility/apiUtils";
 
 const parseError = (err) => {
   const data = err.response?.data;
@@ -39,7 +40,11 @@ export const useUsers = () => {
 
   const fetchAll = useCallback(async (params = {}) => {
     const data = await run(() => userService.getAll(params));
-    setRecords(data || []);
+    if (typeof data === "string") {
+      throw new Error("API returned invalid format (HTML instead of JSON). Check proxy or backend server.");
+    }
+    const resultList = extractArray(data);
+    setRecords(resultList);
     return data;
   }, []);
 

@@ -135,11 +135,13 @@ const Attendance = () => {
     }
   }, [success, clearMessages]);
 
+  const safeRecords = Array.isArray(records) ? records : [];
+
   const filteredRecords = useMemo(() => {
     const [year, month, day] = selectedDate.split("-").map(Number);
     const selected = new Date(year, month - 1, day);
 
-    return records.filter((record) => {
+    return safeRecords.filter((record) => {
       if (isEmployee) {
         if (employeeId && Number(record.employee_id) !== employeeId) return false;
         if (!employeeId && username) {
@@ -160,7 +162,7 @@ const Attendance = () => {
 
   const employeeFixedValues = useMemo(() => {
     if (!isEmployee) return {};
-    const lastRecord = records.find((r) => {
+    const lastRecord = safeRecords.find((r) => {
       if (employeeId) return Number(r.employee_id) === employeeId;
       return String(r.employee_name || "").toLowerCase() === String(username).toLowerCase();
     });
@@ -176,7 +178,7 @@ const Attendance = () => {
 
   const employeeSelectedDateRecord = useMemo(() => {
     if (!isEmployee) return null;
-    return records.find((record) => {
+    return safeRecords.find((record) => {
       const matchesUser =
         employeeId
           ? Number(record.employee_id) === employeeId
@@ -382,7 +384,7 @@ const Attendance = () => {
     return baseColumns.filter(Boolean);
   }, [isEmployee]);
 
-  if (loading && records.length === 0) {
+  if (loading && safeRecords.length === 0) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="flex flex-col items-center gap-2">

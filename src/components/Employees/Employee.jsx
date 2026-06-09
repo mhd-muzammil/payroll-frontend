@@ -48,9 +48,11 @@ const EmployeesPage = () => {
     setDeleteConfirm(null);
   };
 
+  const safeRecords = Array.isArray(records) ? records : [];
+
   const employeeRows = useMemo(
     () =>
-      records.map((employee) => ({
+      safeRecords.map((employee) => ({
         ...employee,
         employee_name: employee.employee_name || "Unnamed Employee",
         branch: employee.branch || "Chennai",
@@ -62,7 +64,7 @@ const EmployeesPage = () => {
         status: employee.status || "active",
         joining_date: employee.joining_date || "",
       })),
-    [records]
+    [safeRecords]
   );
 
   const filteredEmployees = useMemo(() => {
@@ -82,7 +84,7 @@ const EmployeesPage = () => {
     return { total, active, onLeave, inactive };
   }, [employeeRows]);
 
-  if (loading && records.length === 0) {
+  if (loading && safeRecords.length === 0) {
     return <div className="p-6 text-sm text-muted-foreground">Loading employees...</div>;
   }
 

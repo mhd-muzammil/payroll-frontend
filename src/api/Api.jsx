@@ -1,8 +1,9 @@
-import  axios  from "axios";
+import axios from "axios";
 import { clearAuth, getAccessToken, getRefreshToken, setAccessToken } from "@/auth/rbac";
 
 export const Base_URL = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/+$/, "");
-export const api = new axios.create({
+
+export const api = axios.create({
   baseURL: Base_URL,
   headers: {
     "Content-Type": "application/json",
@@ -14,6 +15,11 @@ api.interceptors.request.use((config) => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+  
+  // Log the final request URL for debugging
+  const finalUrl = config.baseURL ? new URL(config.url, config.baseURL).href : config.url;
+  console.log(`[API Request] ${config.method.toUpperCase()} ${finalUrl}`);
+  
   return config;
 });
 

@@ -13,6 +13,7 @@ import UserManagementPage from './pages/UserManagementPage';
 import OnboardingPage from './pages/OnboardingPage';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import { ROLES, getDefaultRouteByRole, getUserRole, isAuthenticated } from './auth/rbac';
+import { ErrorBoundary } from './components/ui/ErrorBoundary';
 // import CompliancePage from './pages/CompliancePage';
 
 function RoleHomeRedirect() {
@@ -24,6 +25,7 @@ function App() {
 
   return (
     <>
+    <ErrorBoundary>
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<RoleHomeRedirect />} />
@@ -49,6 +51,7 @@ function App() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
+    </ErrorBoundary>
     </>
   )
 }

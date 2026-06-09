@@ -10,6 +10,7 @@ import DataTable from "../ui/DataTable";
 import StatsCard from "../ui/StatsCard";
 import { ROLES, getUserRole, normalizeRole } from "@/auth/rbac";
 import { leaveService } from "../../services/leaveService";
+import { extractArray } from "../../Utility/apiUtils";
 
 const LeaveManagement = () => {
   const [requests, setRequests] = useState([]);
@@ -33,7 +34,7 @@ const LeaveManagement = () => {
     setLoading(true);
     try {
       const data = await leaveService.getAll();
-      setRequests(data);
+      setRequests(extractArray(data));
       setError(null);
     } catch (err) {
       setError("Failed to fetch leave requests.");
@@ -98,14 +99,16 @@ const LeaveManagement = () => {
     }
   };
 
+  const safeRequests = Array.isArray(requests) ? requests : [];
+
   const stats = useMemo(() => {
     return {
-      total: requests.length,
-      pending: requests.filter(r => r.status === "Pending").length,
-      approved: requests.filter(r => r.status === "Approved").length,
-      rejected: requests.filter(r => r.status === "Rejected").length
+      total: safeRequests.length,
+      pending: safeRequests.filter(r => r.status === "Pending").length,
+      approved: safeRequests.filter(r => r.status === "Approved").length,
+      rejected: safeRequests.filter(r => r.status === "Rejected").length
     };
-  }, [requests]);
+  }, [safeRequests]);
 
   const columns = [
     {
@@ -282,9 +285,9 @@ const LeaveManagement = () => {
          </div>
       )}
 
-      <DataTable data={requests} columns={columns} loading={loading} />
+      <DataTable data={safeRequests} columns={columns} loading={loading} />
       
-      {!loading && requests.length === 0 && (
+      {!loading && safeRequests.length === 0 && (
          <div className="mt-4 p-8 border border-dashed rounded-2xl text-center text-muted-foreground">
             No leave requests found.
          </div>

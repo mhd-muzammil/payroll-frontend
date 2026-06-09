@@ -6,6 +6,7 @@ import { Download, TrendingUp, DollarSign, Users, BarChart3, Loader2, AlertCircl
 import StatsCard from "../ui/StatsCard";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, LineChart, Line, Legend } from "recharts";
 import { api } from "@/api/Api";
+import { extractArray } from "../../Utility/apiUtils";
 
 const currency = new Intl.NumberFormat("en-IN", {
   style: "currency",
@@ -120,9 +121,9 @@ const ReportsPage = () => {
         api.get("/api/payslips/cycles_summary/"),
       ]);
 
-      setEmployees(employeesRes.data || []);
-      setPayslips(payslipsRes.data || []);
-      setCycles(cyclesRes.data || []);
+      setEmployees(extractArray(employeesRes.data));
+      setPayslips(extractArray(payslipsRes.data));
+      setCycles(extractArray(cyclesRes.data));
     } catch (err) {
       console.error("Reports Fetch Error:", err);
       setError("Failed to load live report data from the core system.");
@@ -180,9 +181,9 @@ const ReportsPage = () => {
                 <h3 className="text-lg font-semibold leading-none">Salary Breakdown</h3>
                 <p className="text-sm text-muted-foreground mt-1.5">Base vs bonus by department (in ₹K)</p>
               </div>
-              <div className="h-[320px] min-h-[320px] w-full min-w-0 pr-2">
+              <div className="h-[320px] w-full pr-2">
                 {hasSalaryData ? (
-                  <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
+                  <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={salary}>
                       <CartesianGrid strokeDasharray="3 3" stroke="rgba(127,127,127,0.15)" vertical={false} />
                       <XAxis dataKey="dept" stroke="currentColor" className="text-muted-foreground" tick={{ fontSize: 12 }} axisLine={false} tickLine={false} />
@@ -209,9 +210,9 @@ const ReportsPage = () => {
                 <h3 className="text-lg font-semibold leading-none">Actual vs Projected</h3>
                 <p className="text-sm text-muted-foreground mt-1.5">Payroll forecast accuracy (₹K)</p>
               </div>
-              <div className="h-[320px] min-h-[320px] w-full min-w-0 pr-2">
+              <div className="h-[320px] w-full pr-2">
                 {hasTrendData ? (
-                  <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
+                  <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={trend}>
                       <CartesianGrid strokeDasharray="3 3" stroke="rgba(127,127,127,0.15)" vertical={false} />
                       <XAxis dataKey="m" stroke="currentColor" className="text-muted-foreground" tick={{ fontSize: 12 }} axisLine={false} tickLine={false} />
