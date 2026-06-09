@@ -9,7 +9,7 @@ import StatsCard from "../ui/StatsCard";
 import OnboardingForm from "./OnboardingForm";
 import { onboardingService } from "../../services/onboardingService";
 import { employeeService } from "../../services/employeeService";
-import { Base_URL } from "../../api/Api";
+import { api } from "../../api/Api";
 
 const OnboardingManagement = () => {
   const [records, setRecords] = useState([]);
@@ -19,6 +19,27 @@ const OnboardingManagement = () => {
   const [viewingRecord, setViewingRecord] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [employeeStats, setEmployeeStats] = useState({ current: 0, separated: 0 });
+
+  const handleViewDocument = async (documentUrl) => {
+    const popup = window.open("", "_blank");
+    try {
+      const response = await api.get(documentUrl, { responseType: "blob" });
+      const blobUrl = URL.createObjectURL(response.data);
+
+      if (popup) {
+        popup.opener = null;
+        popup.location = blobUrl;
+      } else {
+        window.open(blobUrl, "_blank", "noopener,noreferrer");
+      }
+
+      window.setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
+    } catch (error) {
+      popup?.close();
+      console.error("Failed to open protected document:", error);
+      alert("Unable to open this document. Please sign in again and retry.");
+    }
+  };
 
   const fetchOnboardings = async () => {
     setLoading(true);
@@ -416,12 +437,10 @@ const OnboardingManagement = () => {
                       { label: "Education Certificate", field: "doc_education_cert" },
                       { label: "Resume / CV", field: "doc_resume" },
                       { label: "Driving License", field: "doc_driving_license" },
-                      { label: "Cancelled Cheque", field: "cancelledCheque" },
+                      { label: "Cancelled Cheque", field: "cancelled_cheque" },
                     ].map((doc) => {
                       const filePath = viewingRecord[doc.field];
                       const hasFile = filePath && typeof filePath === 'string' && filePath.trim() !== "";
-                      // Construct standard full URL for file
-                      const fullUrl = hasFile ? (filePath.startsWith('http') ? filePath : `${Base_URL}${filePath}`) : null;
                       
                       return (
                         <div key={doc.field} className="flex items-center justify-between p-2 bg-card rounded-xl border border-border/60 hover:border-border transition-colors group">
@@ -430,14 +449,13 @@ const OnboardingManagement = () => {
                             <span className="text-xs font-medium truncate text-foreground">{doc.label}</span>
                           </div>
                           {hasFile ? (
-                            <a 
-                              href={fullUrl} 
-                              target="_blank" 
-                              rel="noreferrer" 
+                            <button
+                              type="button"
+                              onClick={() => handleViewDocument(filePath)}
                               className="text-[10px] flex items-center gap-1 font-semibold text-primary bg-primary/10 px-2 py-1 rounded-lg hover:bg-primary hover:text-white transition-colors"
                             >
                               View <ExternalLink className="h-3 w-3" />
-                            </a>
+                            </button>
                           ) : (
                             <span className="text-[9px] font-bold text-muted-foreground bg-muted px-2 py-1 rounded-lg">Not Uploaded</span>
                           )}
