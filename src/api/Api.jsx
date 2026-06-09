@@ -1,8 +1,7 @@
 import  axios  from "axios";
 import { clearAuth, getAccessToken, getRefreshToken, setAccessToken } from "@/auth/rbac";
 
-// export const Base_URL = "https://payroll-backend-zi8u.onrender.com";
-export const Base_URL = "http://localhost:8000";
+export const Base_URL = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/+$/, "");
 export const api = new axios.create({
   baseURL: Base_URL,
   headers: {
