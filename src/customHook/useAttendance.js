@@ -140,6 +140,15 @@ export const useAttendance = () => {
     setSuccess(null);
   }, []);
 
+  const importSheet = useCallback(async (file) => {
+    const data = await handleRequest(
+      () => attendanceService.importSheet(file),
+      "Attendance sheet imported successfully"
+    );
+    fetchAll();
+    return data;
+  }, [fetchAll]);
+
   return {
     records,
     loading,
@@ -151,6 +160,7 @@ export const useAttendance = () => {
     patchRecord,
     deleteRecord,
     bulkCreate,
+    importSheet,
     checkInGeo,
     checkOutGeo,
     clearMessages,

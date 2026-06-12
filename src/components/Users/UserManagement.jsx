@@ -103,6 +103,7 @@ const UserManagement = () => {
           { key: "name", label: "Name", render: (u) => <span className="text-sm">{`${u.first_name || ""} ${u.last_name || ""}`.trim() || "-"}</span> },
           { key: "role", label: "Role", render: (u) => <Badge variant="primary">{u.role}</Badge> },
           { key: "phone", label: "Phone", render: (u) => <span className="text-sm">{u.phone_number || "-"}</span> },
+          { key: "password", label: "Password", render: (u) => <span className="font-mono text-xs font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/30 px-2 py-1 rounded-md border border-indigo-100 dark:border-indigo-900/30">{u.plain_password || "-"}</span> },
           { key: "status", label: "Status", render: (u) => <button onClick={() => toggleStatus(u.id, !u.is_active)} className="text-sm">{u.is_active ? <Badge variant="success">Active</Badge> : <Badge variant="muted">Inactive</Badge>}</button> },
           { key: "joined", label: "Joined", render: (u) => <span className="text-sm text-muted-foreground">{new Date(u.date_joined).toLocaleDateString()}</span> },
           { key: "actions", label: "", render: (u) => <div className="flex gap-1"><button className="grid h-8 w-8 place-items-center rounded-lg border border-border" onClick={() => openEdit(u)}><Pencil className="h-4 w-4" /></button><button className="grid h-8 w-8 place-items-center rounded-lg border border-border hover:text-red-600" onClick={() => deleteUser(u.id)}><Trash2 className="h-4 w-4" /></button></div> },

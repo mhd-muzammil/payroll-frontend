@@ -5,9 +5,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { 
   Clock, CheckCircle2, AlertCircle, Timer, 
-  ChevronLeft, ChevronRight, Plus, Pencil, Trash2, X, Check 
+  ChevronLeft, ChevronRight, Plus, Pencil, Trash2, X, Check,
+  Upload, FileText, Loader2
 } from "lucide-react";
 import PageHeader from "../ui/PageHeader";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "../ui/dialog";
 import GreetingHeader from "../ui/GreetingHeader";
 import StatsCard from "../ui/StatsCard";
 import DataTable from "../ui/DataTable";
@@ -47,6 +49,7 @@ const Attendance = () => {
     updateRecord,
     patchRecord,
     deleteRecord,
+    importSheet,
     checkInGeo,
     checkOutGeo,
     clearMessages,
@@ -54,6 +57,66 @@ const Attendance = () => {
 
   const [geoLocating, setGeoLocating] = useState(false);
   const [showForm, setShowForm] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState(null);
+  const [importError, setImportError] = useState(null);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const handleImportSubmit = async (e) => {
+    e.preventDefault();
+    if (!selectedFile) return;
+
+    setImporting(true);
+    setImportError(null);
+    setImportResult(null);
+
+    try {
+      const res = await importSheet(selectedFile);
+      setImportResult(res);
+      setSelectedFile(null);
+    } catch (err) {
+      console.error(err);
+      setImportError(err.response?.data?.detail || err.message || "Failed to import attendance sheet.");
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const handleExportCSV = () => {
+    if (filteredRecords.length === 0) {
+      alert("No attendance records to export for this date.");
+      return;
+    }
+
+    const headers = ["Employee Name", "Department", "Role", "Clock In", "Clock Out", "Total Hours", "Overtime", "Status"];
+    const rows = filteredRecords.map(record => [
+      record.employee_name || "",
+      record.department || "",
+      record.role || "",
+      record.intime ? new Date(record.intime).toLocaleTimeString("en-US", { hour: '2-digit', minute: '2-digit' }) : "--:--",
+      record.outtime ? new Date(record.outtime).toLocaleTimeString("en-US", { hour: '2-digit', minute: '2-digit' }) : "--:--",
+      calculateHours(record.intime, record.outtime),
+      calculateOvertime(record.intime, record.outtime),
+      record.status || ""
+    ]);
+
+    const csvContent = [
+      headers.join(","),
+      ...rows.map(e => e.map(val => `"${String(val).replace(/"/g, '""')}"`).join(","))
+    ].join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `Attendance_Report_${selectedDate}.csv`);
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
   
   const handleGeoPunchIn = useCallback(() => {
     if (!navigator.geolocation) {
@@ -149,6 +212,20 @@ const Attendance = () => {
           if (recordName !== String(username).toLowerCase()) return false;
         }
       }
+      
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase();
+        const nameMatch = String(record.employee_name || "").toLowerCase().includes(query);
+        const deptMatch = String(record.department || "").toLowerCase().includes(query);
+        const roleMatch = String(record.role || "").toLowerCase().includes(query);
+        if (!nameMatch && !deptMatch && !roleMatch) return false;
+      }
+
+      // If search query is active, bypass the date-specific filter to search globally
+      if (searchQuery) {
+        return true;
+      }
+
       const recordDate = record.intime || record.outtime;
       if (!recordDate) return false;
       const current = new Date(recordDate);
@@ -158,7 +235,7 @@ const Attendance = () => {
         current.getDate() === selected.getDate()
       );
     });
-  }, [records, selectedDate, isEmployee, username, employeeId]);
+  }, [records, selectedDate, isEmployee, username, employeeId, searchQuery]);
 
   const employeeFixedValues = useMemo(() => {
     if (!isEmployee) return {};
@@ -429,9 +506,14 @@ const Attendance = () => {
         description="Track daily attendance, overtime and absences."
         actions={
           !isEmployee ? (
-            <Button variant="brand" size="pill" icon={Plus} onClick={() => setShowForm(true)}>
-              Add Record
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" size="pill" icon={Upload} onClick={() => setShowImportModal(true)}>
+                Import Excel
+              </Button>
+              <Button variant="brand" size="pill" icon={Plus} onClick={() => setShowForm(true)}>
+                Add Record
+              </Button>
+            </div>
           ) : null
         }
       />
@@ -548,9 +630,9 @@ const Attendance = () => {
         />
       </div>
 
-      {/* Date Navigation */}
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
+      {/* Date Navigation & Search */}
+      <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => moveSelectedDate(-1)}
             className="grid h-9 w-9 place-items-center rounded-lg border border-border hover:bg-muted"
@@ -574,6 +656,15 @@ const Attendance = () => {
           >
             <ChevronRight className="h-4 w-4" />
           </button>
+
+          {/* Search Input */}
+          <input
+            type="text"
+            placeholder="Search employee or department..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="h-9 w-60 ml-2 rounded-xl border border-border bg-card px-3 text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+          />
         </div>
         <div className="flex items-center gap-2">
           <Button
@@ -586,7 +677,11 @@ const Attendance = () => {
           <Button variant="outline" onClick={fetchAll} disabled={loading}>
             {loading ? "Refreshing..." : "Refresh"}
           </Button>
-          {!isEmployee && <Button variant="outline">Export Report</Button>}
+          {!isEmployee && (
+            <Button variant="outline" onClick={handleExportCSV}>
+              Export Report
+            </Button>
+          )}
         </div>
       </div>
 
@@ -659,6 +754,126 @@ const Attendance = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Import Excel Modal */}
+      {showImportModal && (
+        <Dialog open={showImportModal} onOpenChange={(open) => {
+          if (!open) {
+            setShowImportModal(false);
+            setSelectedFile(null);
+            setImportResult(null);
+            setImportError(null);
+          }
+        }}>
+          <DialogContent className="sm:max-w-md bg-card border border-border shadow-2xl rounded-3xl p-6">
+            <DialogHeader className="mb-4">
+              <DialogTitle className="text-xl font-bold tracking-tight">Import Attendance Sheet</DialogTitle>
+              <DialogDescription className="text-sm text-muted-foreground mt-1">
+                Upload your company attendance Excel spreadsheet. The system will automatically register new profiles for unrecognized employee codes and write their daily logs.
+              </DialogDescription>
+            </DialogHeader>
+
+            {!importResult ? (
+              <form onSubmit={handleImportSubmit} className="space-y-4">
+                <div className="border-2 border-dashed border-border/80 hover:border-primary/50 transition-colors rounded-2xl p-8 flex flex-col items-center justify-center bg-muted/20 relative group cursor-pointer">
+                  <input
+                    type="file"
+                    accept=".xlsx"
+                    onChange={(e) => {
+                      if (e.target.files?.length) {
+                        setSelectedFile(e.target.files[0]);
+                        setImportError(null);
+                      }
+                    }}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                    disabled={importing}
+                  />
+                  <div className="flex flex-col items-center gap-3 text-center pointer-events-none relative z-0">
+                    <div className="grid h-12 w-12 place-items-center rounded-xl bg-primary/10 text-primary group-hover:bg-primary/20 transition-colors">
+                      {importing ? (
+                        <Loader2 className="h-6 w-6 animate-spin" />
+                      ) : (
+                        <FileText className="h-6 w-6" />
+                      )}
+                    </div>
+                    <div>
+                      <p className="font-semibold text-sm">
+                        {selectedFile ? selectedFile.name : "Choose Excel file"}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {selectedFile ? `${(selectedFile.size / 1024).toFixed(1)} KB` : "Drag and drop sheet or click to browse"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {importError && (
+                  <div className="flex items-center gap-2 bg-red-500/10 border border-red-500/20 text-red-500 p-3 rounded-xl text-xs font-medium">
+                    <AlertCircle className="h-4 w-4 shrink-0" />
+                    <span>{importError}</span>
+                  </div>
+                )}
+
+                <DialogFooter className="flex gap-2 justify-end pt-2">
+                  <Button
+                    variant="outline"
+                    type="button"
+                    onClick={() => {
+                      setShowImportModal(false);
+                      setSelectedFile(null);
+                      setImportError(null);
+                    }}
+                    disabled={importing}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="brand"
+                    type="submit"
+                    disabled={!selectedFile || importing}
+                    className="shadow-glow-brand"
+                  >
+                    {importing ? "Processing..." : "Start Import"}
+                  </Button>
+                </DialogFooter>
+              </form>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex flex-col items-center justify-center text-center p-6 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl">
+                  <div className="grid h-12 w-12 place-items-center rounded-full bg-emerald-500/20 text-emerald-500 mb-3">
+                    <CheckCircle2 className="h-6 w-6" />
+                  </div>
+                  <h4 className="font-bold text-base text-foreground">Import Completed Successfully</h4>
+                  <p className="text-sm text-muted-foreground mt-1">{importResult.message || "All records sync complete."}</p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 bg-muted/30 p-4 rounded-xl border border-border/50">
+                  <div className="text-center">
+                    <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">New Profiles</p>
+                    <p className="text-2xl font-bold text-primary mt-1">{importResult.employees_created}</p>
+                  </div>
+                  <div className="text-center border-l border-border">
+                    <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">Records Saved</p>
+                    <p className="text-2xl font-bold text-success mt-1">{importResult.records_saved}</p>
+                  </div>
+                </div>
+
+                <DialogFooter className="flex justify-end pt-2">
+                  <Button
+                    variant="brand"
+                    onClick={() => {
+                      setShowImportModal(false);
+                      setImportResult(null);
+                    }}
+                  >
+                    Done
+                  </Button>
+                </DialogFooter>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );

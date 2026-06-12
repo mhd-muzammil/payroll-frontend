@@ -55,6 +55,17 @@ export const attendanceService = {
     return data;
   },
 
+  importSheet: async (file) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    const { data } = await api.post("/api/attendance/import_sheet/", formData, {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+    });
+    return data;
+  },
+
   getStats: async () => {
     const { data } = await api.get(ENDPOINTS.STATS);
     return data;
