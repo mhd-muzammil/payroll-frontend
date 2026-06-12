@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar } from "@/components/ui/avatar";
 import PageHeader from "@/components/ui/PageHeader";
 import DataTable from "@/components/ui/DataTable";
-import { Check, Pencil, Trash2, UserPlus, X } from "lucide-react";
+import { Check, Copy, Pencil, Share2, Trash2, UserPlus, X } from "lucide-react";
 import { useUsers } from "@/customHook/useUsers";
 
 const emptyForm = {
@@ -26,6 +26,39 @@ const UserManagement = () => {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(emptyForm);
+  const [copiedId, setCopiedId] = useState(null);
+  const [canShare, setCanShare] = useState(false);
+
+  useEffect(() => {
+    setCanShare(!!(navigator.share && navigator.canShare));
+  }, []);
+
+  const handleCopy = async (u) => {
+    const text = `Username: ${u.username}\nPassword: ${u.plain_password || ""}`;
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedId(u.id);
+      setTimeout(() => setCopiedId(null), 2000);
+    } catch (err) {
+      console.error("Failed to copy credentials: ", err);
+    }
+  };
+
+  const handleShare = async (u) => {
+    const shareData = {
+      title: "PayrollX Credentials",
+      text: `Username: ${u.username}\nPassword: ${u.plain_password || ""}`,
+    };
+    if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
+      try {
+        await navigator.share(shareData);
+      } catch (err) {
+        console.error("Share failed:", err);
+      }
+    } else {
+      handleCopy(u);
+    }
+  };
 
   const load = async () => {
     await fetchAll({
@@ -103,7 +136,41 @@ const UserManagement = () => {
           { key: "name", label: "Name", render: (u) => <span className="text-sm">{`${u.first_name || ""} ${u.last_name || ""}`.trim() || "-"}</span> },
           { key: "role", label: "Role", render: (u) => <Badge variant="primary">{u.role}</Badge> },
           { key: "phone", label: "Phone", render: (u) => <span className="text-sm">{u.phone_number || "-"}</span> },
-          { key: "password", label: "Password", render: (u) => <span className="font-mono text-xs font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/30 px-2 py-1 rounded-md border border-indigo-100 dark:border-indigo-900/30">{u.plain_password || "-"}</span> },
+          {
+            key: "password",
+            label: "Password",
+            render: (u) => (
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-xs font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/30 px-2 py-1 rounded-md border border-indigo-100 dark:border-indigo-900/30">
+                  {u.plain_password || "-"}
+                </span>
+                {u.plain_password && (
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      onClick={() => handleCopy(u)}
+                      className="p-1 hover:bg-muted rounded-md transition text-muted-foreground hover:text-indigo-600"
+                      title="Copy credentials"
+                    >
+                      {copiedId === u.id ? (
+                        <Check className="h-3.5 w-3.5 text-emerald-600" />
+                      ) : (
+                        <Copy className="h-3.5 w-3.5" />
+                      )}
+                    </button>
+                    {canShare && (
+                      <button
+                        onClick={() => handleShare(u)}
+                        className="p-1 hover:bg-muted rounded-md transition text-muted-foreground hover:text-indigo-600"
+                        title="Share credentials"
+                      >
+                        <Share2 className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            ),
+          },
           { key: "status", label: "Status", render: (u) => <button onClick={() => toggleStatus(u.id, !u.is_active)} className="text-sm">{u.is_active ? <Badge variant="success">Active</Badge> : <Badge variant="muted">Inactive</Badge>}</button> },
           { key: "joined", label: "Joined", render: (u) => <span className="text-sm text-muted-foreground">{new Date(u.date_joined).toLocaleDateString()}</span> },
           { key: "actions", label: "", render: (u) => <div className="flex gap-1"><button className="grid h-8 w-8 place-items-center rounded-lg border border-border" onClick={() => openEdit(u)}><Pencil className="h-4 w-4" /></button><button className="grid h-8 w-8 place-items-center rounded-lg border border-border hover:text-red-600" onClick={() => deleteUser(u.id)}><Trash2 className="h-4 w-4" /></button></div> },
