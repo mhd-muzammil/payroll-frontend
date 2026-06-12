@@ -66,6 +66,11 @@ export const attendanceService = {
     return data;
   },
 
+  deleteAll: async () => {
+    const { data } = await api.delete("/api/attendance/delete_all/");
+    return data;
+  },
+
   getStats: async () => {
     const { data } = await api.get(ENDPOINTS.STATS);
     return data;

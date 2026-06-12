@@ -149,6 +149,15 @@ export const useAttendance = () => {
     return data;
   }, [fetchAll]);
 
+  const deleteAllRecords = useCallback(async () => {
+    const data = await handleRequest(
+      () => attendanceService.deleteAll(),
+      "All attendance records deleted successfully"
+    );
+    setRecords([]);
+    return data;
+  }, []);
+
   return {
     records,
     loading,
@@ -161,6 +170,7 @@ export const useAttendance = () => {
     deleteRecord,
     bulkCreate,
     importSheet,
+    deleteAllRecords,
     checkInGeo,
     checkOutGeo,
     clearMessages,

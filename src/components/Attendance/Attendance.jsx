@@ -50,6 +50,7 @@ const Attendance = () => {
     patchRecord,
     deleteRecord,
     importSheet,
+    deleteAllRecords,
     checkInGeo,
     checkOutGeo,
     clearMessages,
@@ -58,6 +59,7 @@ const Attendance = () => {
   const [geoLocating, setGeoLocating] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
+  const [showDeleteAllConfirm, setShowDeleteAllConfirm] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState(null);
@@ -507,6 +509,9 @@ const Attendance = () => {
         actions={
           !isEmployee ? (
             <div className="flex gap-2">
+              <Button variant="destructive" size="pill" icon={Trash2} onClick={() => setShowDeleteAllConfirm(true)}>
+                Delete All
+              </Button>
               <Button variant="outline" size="pill" icon={Upload} onClick={() => setShowImportModal(true)}>
                 Import Excel
               </Button>
@@ -747,6 +752,49 @@ const Attendance = () => {
               <Button
                 variant="outline"
                 onClick={() => setDeleteConfirm(null)}
+                disabled={loading}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete All Confirmation Modal */}
+      {showDeleteAllConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-card rounded-3xl p-6 w-full max-w-sm mx-4 shadow-2xl">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="grid h-10 w-10 place-items-center rounded-xl bg-red-500/15 text-red-500">
+                <AlertCircle className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-foreground">Delete All Records</h3>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Are you sure you want to delete all attendance records? This action cannot be undone.
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="destructive"
+                onClick={async () => {
+                  try {
+                    await deleteAllRecords();
+                    setShowDeleteAllConfirm(false);
+                  } catch (err) {
+                    console.error("Delete all failed:", err);
+                  }
+                }}
+                disabled={loading}
+                className="flex-1"
+              >
+                {loading ? "Deleting..." : "Delete All"}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setShowDeleteAllConfirm(false)}
                 disabled={loading}
               >
                 Cancel
