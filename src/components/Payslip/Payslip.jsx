@@ -58,6 +58,25 @@ const PayslipsPage = () => {
     return months[monthNum - 1] || monthNum;
   };
 
+  const getPeriodDates = (month, year) => {
+    let prevMonth = month - 1;
+    let prevYear = year;
+    if (prevMonth === 0) {
+      prevMonth = 12;
+      prevYear = year - 1;
+    }
+    const startMonthName = getMonthLabel(prevMonth).substring(0, 3);
+    const endMonthName = getMonthLabel(month).substring(0, 3);
+    return `25 ${startMonthName} ${prevYear} to 24 ${endMonthName} ${year}`;
+  };
+
+  const formatBankAccount = (accNum) => {
+    if (!accNum) return "N/A";
+    const str = String(accNum).trim();
+    if (str.length <= 4) return str;
+    return "*".repeat(str.length - 4) + str.slice(-4);
+  };
+
   const formatINR = (amount) => {
     if (!amount) return "0.00";
     return parseFloat(amount).toLocaleString("en-IN", { 
@@ -328,6 +347,9 @@ const PayslipsPage = () => {
                           <div style={{ fontSize: "11.5px", fontWeight: "bold", marginTop: "4px" }}>
                             Pay Slip Cum Leave Card for the month of {getMonthLabel(selectedSlip.month)} {selectedSlip.year}
                           </div>
+                          <div style={{ fontSize: "10.5px", color: "#4b5563", marginTop: "2px", fontFamily: "sans-serif" }}>
+                            Calculation Period: {getPeriodDates(selectedSlip.month, selectedSlip.year)}
+                          </div>
                         </td>
                       </tr>
 
@@ -344,7 +366,7 @@ const PayslipsPage = () => {
                         <td style={labelStyle}>DOJ</td>
                         <td style={valStyle}>{selectedSlip.employee_details?.joining_date || "01-06-2025"}</td>
                         <td style={labelStyle}>DOB</td>
-                        <td style={valStyle}>30-12-2000</td>
+                        <td style={valStyle}>{selectedSlip.employee_details?.dob || "N/A"}</td>
                       </tr>
 
                       {/* Meta Info Row 3 */}
@@ -366,9 +388,9 @@ const PayslipsPage = () => {
                       {/* Meta Info Row 5 */}
                       <tr>
                         <td style={labelStyle}>Location</td>
-                        <td style={valStyle}>Tamilnadu</td>
+                        <td style={valStyle}>{selectedSlip.employee_details?.work_location || "Tamilnadu"}</td>
                         <td style={labelStyle}>Bank Name</td>
-                        <td style={valStyle}>IndusInd Bank</td>
+                        <td style={valStyle}>{selectedSlip.employee_details?.bank_name || "N/A"}</td>
                       </tr>
 
                       {/* Meta Info Row 6 */}
@@ -376,7 +398,7 @@ const PayslipsPage = () => {
                         <td style={labelStyle}>Region</td>
                         <td style={valStyle}>{selectedSlip.employee_details?.branch || "Chennai"}</td>
                         <td style={labelStyle}>Bank Account No</td>
-                        <td style={{ ...valStyle, fontFamily: "monospace" }}>******4933</td>
+                        <td style={{ ...valStyle, fontFamily: "monospace" }}>{formatBankAccount(selectedSlip.employee_details?.account_number)}</td>
                       </tr>
 
                       {/* Meta Info Row 7 */}

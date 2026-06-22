@@ -335,7 +335,7 @@ const OnboardingManagement = () => {
                         <span>{viewingRecord.date_of_joining}</span>
                         <span className="text-muted-foreground mx-1">•</span>
                         <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
-                        <span>{viewingRecord.location}</span>
+                        <span>{viewingRecord.work_location}</span>
                       </div>
                     </div>
                   </div>
@@ -390,8 +390,8 @@ const OnboardingManagement = () => {
                       <span className="text-xs font-bold block text-foreground/70">Emergency Contact</span>
                       <div className="mt-1 text-xs bg-card border border-border/50 p-2 rounded-xl flex flex-col gap-0.5">
                         <span className="font-semibold text-foreground">{viewingRecord.emergency_contact_name || "N/A"}</span>
-                        <span className="text-muted-foreground capitalize">{viewingRecord.emergency_relation}</span>
-                        <span className="font-mono font-medium text-primary mt-0.5">{viewingRecord.emergency_contact_number || "N/A"}</span>
+                        <span className="text-muted-foreground capitalize">{viewingRecord.emergency_relationship}</span>
+                        <span className="font-mono font-medium text-primary mt-0.5">{viewingRecord.emergency_number || "N/A"}</span>
                       </div>
                     </div>
                   </div>
@@ -406,23 +406,23 @@ const OnboardingManagement = () => {
                     <div className="flex items-center justify-between bg-card p-2 rounded-xl border border-border/50">
                       <div>
                         <span className="text-xs font-bold">{viewingRecord.bank_name || "N/A"}</span>
-                        <span className="text-[10px] text-muted-foreground block">Holder: {viewingRecord.bank_account_holder_name || "-"}</span>
+                        <span className="text-[10px] text-muted-foreground block">Holder: {viewingRecord.account_holder_name || "-"}</span>
                       </div>
                       <Building2 className="h-5 w-5 text-muted-foreground/60" />
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       <div>
                         <span className="text-xs text-muted-foreground block">Account Number</span>
-                        <span className="font-medium font-mono tracking-wide">{viewingRecord.bank_account_number || "N/A"}</span>
+                        <span className="font-medium font-mono tracking-wide">{viewingRecord.account_number || "N/A"}</span>
                       </div>
                       <div>
                         <span className="text-xs text-muted-foreground block">IFSC Code</span>
-                        <span className="font-medium font-mono uppercase">{viewingRecord.bank_ifsc_code || "N/A"}</span>
+                        <span className="font-medium font-mono uppercase">{viewingRecord.ifsc_code || "N/A"}</span>
                       </div>
                     </div>
                     <div>
                       <span className="text-xs text-muted-foreground block">Bank Branch</span>
-                      <span className="font-medium text-xs">{viewingRecord.bank_branch_name || "N/A"}</span>
+                      <span className="font-medium text-xs">{viewingRecord.bank_branch || "N/A"}</span>
                     </div>
                   </div>
                 </div>

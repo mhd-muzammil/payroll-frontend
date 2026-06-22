@@ -78,11 +78,39 @@ export const calculateStats = (records) => {
     WORKING_HOURS_PER_DAY - totalWorkedHours
   );
 
+  // Region-wise breakdown calculation
+  const regions = ["Chennai", "Vellore", "Salem", "Kanchipuram", "Hosur"];
+  const regionBreakdown = {};
+  regions.forEach((region) => {
+    regionBreakdown[region] = {
+      present: 0,
+      absent: 0,
+      leave: 0,
+      total: 0,
+    };
+  });
+
+  safeRecords.forEach((r) => {
+    const branch = r.branch || "Chennai";
+    const matchedRegion = regions.find((reg) => reg.toLowerCase() === branch.toLowerCase()) || "Chennai";
+    if (regionBreakdown[matchedRegion]) {
+      regionBreakdown[matchedRegion].total += 1;
+      if (r.status === "Present" || r.status === "overTime") {
+        regionBreakdown[matchedRegion].present += 1;
+      } else if (r.status === "Leave") {
+        regionBreakdown[matchedRegion].leave += 1;
+      } else if (r.status === "Absent") {
+        regionBreakdown[matchedRegion].absent += 1;
+      }
+    }
+  });
+
   return {
     presentToday: present,
     onLeave: leave,
     absent,
     overtimeHours: totalOvertime.toFixed(1),
     remainingWorkingHours: remainingWorkingHours.toFixed(1),
+    regionBreakdown,
   };
 };

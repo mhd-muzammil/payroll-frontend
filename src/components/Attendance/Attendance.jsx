@@ -65,6 +65,7 @@ const Attendance = () => {
   const [importResult, setImportResult] = useState(null);
   const [importError, setImportError] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedRegion, setSelectedRegion] = useState("");
 
   const handleImportSubmit = async (e) => {
     e.preventDefault();
@@ -215,12 +216,18 @@ const Attendance = () => {
         }
       }
       
+      if (!isEmployee && selectedRegion) {
+        const recordBranch = record.branch || "Chennai";
+        if (recordBranch.toLowerCase() !== selectedRegion.toLowerCase()) return false;
+      }
+      
       if (searchQuery) {
         const query = searchQuery.toLowerCase();
         const nameMatch = String(record.employee_name || "").toLowerCase().includes(query);
         const deptMatch = String(record.department || "").toLowerCase().includes(query);
         const roleMatch = String(record.role || "").toLowerCase().includes(query);
-        if (!nameMatch && !deptMatch && !roleMatch) return false;
+        const branchMatch = String(record.branch || "Chennai").toLowerCase().includes(query);
+        if (!nameMatch && !deptMatch && !roleMatch && !branchMatch) return false;
       }
 
       // If search query is active, bypass the date-specific filter to search globally
@@ -237,7 +244,7 @@ const Attendance = () => {
         current.getDate() === selected.getDate()
       );
     });
-  }, [records, selectedDate, isEmployee, username, employeeId, searchQuery]);
+  }, [records, selectedDate, isEmployee, username, employeeId, searchQuery, selectedRegion]);
 
   const employeeFixedValues = useMemo(() => {
     if (!isEmployee) return {};
@@ -369,6 +376,15 @@ const Attendance = () => {
         label: "Role",
         render: ({ role }) => (
           <span className="text-sm text-muted-foreground">{role}</span>
+        ),
+      },
+      {
+        key: "branch",
+        label: "Region",
+        render: ({ branch }) => (
+          <Badge variant="outline" className="capitalize border-border/80 text-foreground">
+            {branch || "Chennai"}
+          </Badge>
         ),
       },
       {
@@ -635,6 +651,51 @@ const Attendance = () => {
         />
       </div>
 
+      {/* Region-Wise Breakdown */}
+      {!isEmployee && stats.regionBreakdown && (
+        <div className="mb-6 bg-card border border-border rounded-3xl p-6 shadow-sm">
+          <h3 className="text-base font-bold tracking-tight mb-4 flex items-center gap-2">
+            <Clock className="h-5 w-5 text-primary" />
+            Region-Wise Live Attendance Summary
+          </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+            {Object.entries(stats.regionBreakdown).map(([region, data]) => (
+              <div key={region} className="bg-muted/30 border border-border/50 rounded-2xl p-4 flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-bold text-sm text-foreground capitalize">{region}</span>
+                    <Badge variant="outline" className="text-[10px] px-1.5 py-0.5 border-primary/20 text-primary bg-primary/5">
+                      {data.total} Total
+                    </Badge>
+                  </div>
+                  <div className="space-y-1.5 text-xs">
+                    <div className="flex justify-between items-center text-muted-foreground">
+                      <span>Present</span>
+                      <span className="font-semibold text-emerald-500">{data.present}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-muted-foreground">
+                      <span>Absent</span>
+                      <span className="font-semibold text-red-500">{data.absent}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-muted-foreground">
+                      <span>On Leave</span>
+                      <span className="font-semibold text-amber-500">{data.leave}</span>
+                    </div>
+                  </div>
+                </div>
+                {/* Visual Progress Bar representing present percentage */}
+                <div className="mt-3 w-full bg-border/40 rounded-full h-1.5 overflow-hidden">
+                  <div 
+                    className="bg-emerald-500 h-1.5 rounded-full" 
+                    style={{ width: `${data.total > 0 ? (data.present / data.total) * 100 : 0}%` }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Date Navigation & Search */}
       <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
         <div className="flex flex-wrap items-center gap-2">
@@ -670,6 +731,22 @@ const Attendance = () => {
             onChange={(e) => setSearchQuery(e.target.value)}
             className="h-9 w-60 ml-2 rounded-xl border border-border bg-card px-3 text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
           />
+
+          {/* Region Filter */}
+          {!isEmployee && (
+            <select
+              value={selectedRegion}
+              onChange={(e) => setSelectedRegion(e.target.value)}
+              className="h-9 rounded-xl border border-border bg-card px-3 text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 cursor-pointer"
+            >
+              <option value="">All Regions</option>
+              <option value="Chennai">Chennai</option>
+              <option value="Vellore">Vellore</option>
+              <option value="Salem">Salem</option>
+              <option value="Kanchipuram">Kanchipuram</option>
+              <option value="Hosur">Hosur</option>
+            </select>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <Button
