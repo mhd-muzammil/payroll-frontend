@@ -19,8 +19,13 @@ const parseCurrency = (value) => {
   return Number(String(value).replace(/[^\d.-]/g, "")) || 0;
 };
 
-const buildDepartmentSplit = (employees = []) => {
-  const activeEmployees = employees.filter((employee) => employee.status === "active");
+const buildDepartmentSplit = (employees = [], branch = "") => {
+  let activeEmployees = employees.filter((employee) => employee.status === "active");
+  if (branch) {
+    activeEmployees = activeEmployees.filter(
+      (employee) => (employee.branch || "Chennai").toLowerCase() === branch.toLowerCase()
+    );
+  }
   const counts = activeEmployees.reduce((acc, employee) => {
     const department = employee.department || "Unassigned";
     acc[department] = (acc[department] || 0) + 1;
@@ -54,18 +59,20 @@ function Dashboard() {
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [selectedRegion, setSelectedRegion] = useState("");
 
-  const fetchDashboard = async () => {
+  const fetchDashboard = async (region = selectedRegion) => {
     setLoading(true);
     setError(null);
     try {
-      const res = await api.get("/api/payslips/dashboard_summary/");
+      const url = region ? `/api/payslips/dashboard_summary/?branch=${region}` : "/api/payslips/dashboard_summary/";
+      const res = await api.get(url);
       const nextSummary = { ...res.data };
 
       if (!Array.isArray(nextSummary.departmentSplit) || nextSummary.departmentSplit.length === 0) {
         try {
           const employeesRes = await api.get("/api/employees/");
-          nextSummary.departmentSplit = buildDepartmentSplit(extractArray(employeesRes.data));
+          nextSummary.departmentSplit = buildDepartmentSplit(extractArray(employeesRes.data), region);
         } catch (employeeErr) {
           console.warn("Department split fallback failed:", employeeErr);
           nextSummary.departmentSplit = [];
@@ -92,7 +99,7 @@ function Dashboard() {
   };
 
   useEffect(() => {
-    fetchDashboard();
+    fetchDashboard(selectedRegion);
   }, []);
 
   if (loading) {
@@ -115,7 +122,7 @@ function Dashboard() {
           System Feed Disconnected
         </div>
         <p className="text-sm mt-2 text-red-700">{error}</p>
-        <Button onClick={fetchDashboard} className="mt-4" variant="outline">Retry Fetch</Button>
+        <Button onClick={() => fetchDashboard(selectedRegion)} className="mt-4" variant="outline">Retry Fetch</Button>
       </div>
     );
   }
@@ -128,8 +135,23 @@ function Dashboard() {
         <h2 className="text-xl md:text-2xl font-bold tracking-tight">
           Payroll <span className="text-gradient">Overview</span>
         </h2>
-        <div className="flex items-center gap-3">
-            <Button variant="outline" className="hidden sm:flex" onClick={fetchDashboard}>Refresh Metrics</Button>
+        <div className="flex flex-wrap items-center gap-3">
+            <select
+              value={selectedRegion}
+              onChange={(e) => {
+                setSelectedRegion(e.target.value);
+                fetchDashboard(e.target.value);
+              }}
+              className="h-9 rounded-xl border border-border bg-card px-3 text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 cursor-pointer"
+            >
+              <option value="">All Regions</option>
+              <option value="Chennai">Chennai</option>
+              <option value="Vellore">Vellore</option>
+              <option value="Salem">Salem</option>
+              <option value="Kanchipuram">Kanchipuram</option>
+              <option value="Hosur">Hosur</option>
+            </select>
+            <Button variant="outline" className="hidden sm:flex" onClick={() => fetchDashboard(selectedRegion)}>Refresh Metrics</Button>
             {/* <Button icon={ArrowUpRight} className="w-full sm:w-auto">Run payroll</Button> */}
         </div>
       </div>

@@ -26,6 +26,7 @@ const EmployeesPage = () => {
   const [editingRecord, setEditingRecord] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [activeTab, setActiveTab] = useState("working"); // working | separated
+  const [selectedRegion, setSelectedRegion] = useState("");
 
   useEffect(() => {
     fetchAll();
@@ -68,21 +69,30 @@ const EmployeesPage = () => {
   );
 
   const filteredEmployees = useMemo(() => {
+    let list = employeeRows;
     if (activeTab === "working") {
-      return employeeRows.filter((e) => e.status === "active" || e.status === "onleave");
+      list = list.filter((e) => e.status === "active" || e.status === "onleave");
     } else {
-      return employeeRows.filter((e) => e.status === "inactive");
+      list = list.filter((e) => e.status === "inactive");
     }
-  }, [employeeRows, activeTab]);
+    if (selectedRegion) {
+      list = list.filter((e) => (e.branch || "Chennai").toLowerCase() === selectedRegion.toLowerCase());
+    }
+    return list;
+  }, [employeeRows, activeTab, selectedRegion]);
 
   const employeeStats = useMemo(() => {
-    const total = employeeRows.length;
-    const active = employeeRows.filter((employee) => employee.status === "active").length;
-    const onLeave = employeeRows.filter((employee) => employee.status === "onleave").length;
-    const inactive = employeeRows.filter((employee) => employee.status === "inactive").length;
+    let list = employeeRows;
+    if (selectedRegion) {
+      list = list.filter((e) => (e.branch || "Chennai").toLowerCase() === selectedRegion.toLowerCase());
+    }
+    const total = list.length;
+    const active = list.filter((employee) => employee.status === "active").length;
+    const onLeave = list.filter((employee) => employee.status === "onleave").length;
+    const inactive = list.filter((employee) => employee.status === "inactive").length;
 
     return { total, active, onLeave, inactive };
-  }, [employeeRows]);
+  }, [employeeRows, selectedRegion]);
 
   if (loading && safeRecords.length === 0) {
     return <div className="p-6 text-sm text-muted-foreground">Loading employees...</div>;
@@ -135,27 +145,42 @@ const EmployeesPage = () => {
         <StatsCard label="Inactive" value={employeeStats.inactive.toString()} delta="14%" icon={UserMinus} accent="muted" />
       </div>
 
-      <div className="flex rounded-2xl overflow-hidden bg-muted/40 p-1.5 mb-6 max-w-md border border-border">
-        <button
-          onClick={() => setActiveTab("working")}
-          className={`flex-1 py-2 text-center rounded-xl text-sm font-medium transition-all duration-200 ${
-            activeTab === "working"
-              ? "bg-card text-foreground shadow-sm border border-border/50"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
+      <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+        <div className="flex rounded-2xl overflow-hidden bg-muted/40 p-1.5 max-w-md border border-border flex-1 min-w-[280px]">
+          <button
+            onClick={() => setActiveTab("working")}
+            className={`flex-1 py-2 text-center rounded-xl text-sm font-medium transition-all duration-200 ${
+              activeTab === "working"
+                ? "bg-card text-foreground shadow-sm border border-border/50"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            Working ({employeeStats.active + employeeStats.onLeave})
+          </button>
+          <button
+            onClick={() => setActiveTab("separated")}
+            className={`flex-1 py-2 text-center rounded-xl text-sm font-medium transition-all duration-200 ${
+              activeTab === "separated"
+                ? "bg-card text-foreground shadow-sm border border-border/50"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            Separated ({employeeStats.inactive})
+          </button>
+        </div>
+
+        <select
+          value={selectedRegion}
+          onChange={(e) => setSelectedRegion(e.target.value)}
+          className="h-9 rounded-xl border border-border bg-card px-3 text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 cursor-pointer"
         >
-          Working ({employeeStats.active + employeeStats.onLeave})
-        </button>
-        <button
-          onClick={() => setActiveTab("separated")}
-          className={`flex-1 py-2 text-center rounded-xl text-sm font-medium transition-all duration-200 ${
-            activeTab === "separated"
-              ? "bg-card text-foreground shadow-sm border border-border/50"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          Separated ({employeeStats.inactive})
-        </button>
+          <option value="">All Regions</option>
+          <option value="Chennai">Chennai</option>
+          <option value="Vellore">Vellore</option>
+          <option value="Salem">Salem</option>
+          <option value="Kanchipuram">Kanchipuram</option>
+          <option value="Hosur">Hosur</option>
+        </select>
       </div>
 
       <Toolbar
