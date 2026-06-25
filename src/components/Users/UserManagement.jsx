@@ -209,12 +209,12 @@ const UserManagement = () => {
           />
         </button>
         {/* Region Breakdown Cards */}
-        <div className="lg:col-span-3 bg-card border border-border/60 rounded-3xl p-5 shadow-xs flex flex-col justify-between">
-          <div className="flex items-center gap-2 mb-3">
-            <MapPin className="h-4 w-4 text-primary" />
-            <span className="text-sm font-bold tracking-tight text-foreground">Region Distribution</span>
+        <div className="lg:col-span-3 bg-card border border-border/60 rounded-3xl p-6 shadow-xs flex flex-col justify-between">
+          <div className="flex items-center gap-2 mb-4">
+            <MapPin className="h-5 w-5 text-primary" />
+            <span className="text-base font-bold tracking-tight text-foreground">Region Distribution</span>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-4">
             {Object.entries(regionStats).map(([region, count]) => {
               const style = regionStyles[region] || defaultStyle;
               const isSelected = selectedRegion.toLowerCase() === region.toLowerCase();
@@ -224,7 +224,7 @@ const UserManagement = () => {
                 <button
                   key={region}
                   onClick={() => setSelectedRegion(prev => prev.toLowerCase() === region.toLowerCase() ? "" : region)}
-                  className={`bg-gradient-to-br ${style.bg} border ${style.border} rounded-2xl p-3 flex flex-col justify-between text-left transition-all duration-300 ${
+                  className={`bg-gradient-to-br ${style.bg} border ${style.border} rounded-2xl p-4 md:p-5 flex flex-col justify-between text-left transition-all duration-300 ${
                     isSelected 
                       ? "ring-2 ring-primary ring-offset-1 dark:ring-offset-background shadow-md scale-[1.05]" 
                       : hasActiveFilter 
@@ -232,10 +232,10 @@ const UserManagement = () => {
                         : "hover:shadow-sm hover:scale-[1.02]"
                   }`}
                 >
-                  <span className={`font-bold text-[11px] tracking-tight ${style.text}`}>{region}</span>
-                  <div className="flex items-baseline gap-1 mt-1.5">
-                    <span className="text-lg font-extrabold tracking-tight text-foreground">{count}</span>
-                    <span className="text-[9px] font-semibold text-muted-foreground">users</span>
+                  <span className={`font-bold text-xs md:text-sm tracking-tight ${style.text}`}>{region}</span>
+                  <div className="flex items-baseline gap-1.5 mt-3">
+                    <span className="text-2xl md:text-3xl font-black tracking-tight text-foreground">{count}</span>
+                    <span className="text-xs font-semibold text-muted-foreground">users</span>
                   </div>
                 </button>
               );

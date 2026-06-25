@@ -12,6 +12,52 @@ import { employeeService } from "../../services/employeeService";
 import { api } from "../../api/Api";
 import { extractArray } from "../../Utility/apiUtils";
 
+const regionStyles = {
+  Chennai: {
+    bg: "from-indigo-50/50 to-purple-50/30 dark:from-indigo-950/20 dark:to-purple-950/10",
+    border: "border-indigo-100 dark:border-indigo-950/50",
+    iconBg: "bg-indigo-100 dark:bg-indigo-950/80 text-indigo-600 dark:text-indigo-400",
+    bar: "from-indigo-500 to-purple-500",
+    text: "text-indigo-700 dark:text-indigo-300"
+  },
+  Vellore: {
+    bg: "from-blue-50/50 to-sky-50/30 dark:from-blue-950/20 dark:to-sky-950/10",
+    border: "border-blue-100 dark:border-blue-950/50",
+    iconBg: "bg-blue-100 dark:bg-blue-950/80 text-blue-600 dark:text-blue-400",
+    bar: "from-blue-500 to-sky-500",
+    text: "text-blue-700 dark:text-blue-300"
+  },
+  Salem: {
+    bg: "from-emerald-50/50 to-teal-50/30 dark:from-emerald-950/20 dark:to-teal-950/10",
+    border: "border-emerald-100 dark:border-emerald-950/50",
+    iconBg: "bg-emerald-100 dark:bg-emerald-950/80 text-emerald-600 dark:text-emerald-400",
+    bar: "from-emerald-500 to-teal-500",
+    text: "text-emerald-700 dark:text-emerald-300"
+  },
+  Kanchipuram: {
+    bg: "from-amber-50/50 to-orange-50/30 dark:from-amber-950/20 dark:to-orange-950/10",
+    border: "border-amber-100 dark:border-amber-950/50",
+    iconBg: "bg-amber-100 dark:bg-amber-950/80 text-amber-600 dark:text-amber-400",
+    bar: "from-amber-500 to-orange-500",
+    text: "text-amber-700 dark:text-amber-300"
+  },
+  Hosur: {
+    bg: "from-rose-50/50 to-pink-50/30 dark:from-rose-950/20 dark:to-rose-950/10",
+    border: "border-rose-100 dark:border-rose-950/50",
+    iconBg: "bg-rose-100 dark:bg-rose-950/80 text-rose-600 dark:text-rose-400",
+    bar: "from-rose-500 to-pink-500",
+    text: "text-rose-700 dark:text-rose-300"
+  }
+};
+
+const defaultStyle = {
+  bg: "from-gray-50/50 to-slate-50/30 dark:from-gray-950/20 dark:to-slate-950/10",
+  border: "border-gray-100 dark:border-gray-950/50",
+  iconBg: "bg-gray-100 dark:bg-gray-950/80 text-gray-600 dark:text-gray-400",
+  bar: "from-gray-500 to-slate-500",
+  text: "text-gray-700 dark:text-gray-300"
+};
+
 const OnboardingManagement = () => {
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -20,6 +66,7 @@ const OnboardingManagement = () => {
   const [viewingRecord, setViewingRecord] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [employeeStats, setEmployeeStats] = useState({ current: 0, separated: 0 });
+  const [selectedRegion, setSelectedRegion] = useState("");
 
   const handleViewDocument = async (documentUrl) => {
     const popup = window.open("", "_blank");
@@ -191,6 +238,40 @@ const OnboardingManagement = () => {
     return { total, completed, progress };
   }, [safeRecords]);
 
+  const regionStats = useMemo(() => {
+    const regions = ["Chennai", "Vellore", "Salem", "Kanchipuram", "Hosur"];
+    const stats = {
+      Chennai: 0,
+      Vellore: 0,
+      Salem: 0,
+      Kanchipuram: 0,
+      Hosur: 0,
+      "Not Assigned": 0,
+    };
+    safeRecords.forEach((r) => {
+      const loc = r.work_location;
+      if (loc) {
+        const matched = regions.find((reg) => reg.toLowerCase() === loc.trim().toLowerCase());
+        if (matched) {
+          stats[matched] += 1;
+        } else {
+          stats["Not Assigned"] += 1;
+        }
+      } else {
+        stats["Not Assigned"] += 1;
+      }
+    });
+    return stats;
+  }, [safeRecords]);
+
+  const filteredRecords = useMemo(() => {
+    if (!selectedRegion) return safeRecords;
+    return safeRecords.filter((r) => {
+      const loc = r.work_location || "Not Assigned";
+      return loc.toLowerCase() === selectedRegion.toLowerCase();
+    });
+  }, [safeRecords, selectedRegion]);
+
   if (showForm) {
     return (
       <OnboardingForm 
@@ -223,15 +304,59 @@ const OnboardingManagement = () => {
       />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 md:gap-6 mb-6">
-        <StatsCard label="Total Onboarded" value={stats.total.toString()} icon={FileCheck} accent="primary" />
+        <button
+          onClick={() => setSelectedRegion("")}
+          className={`text-left w-full transition-all duration-300 ${
+            selectedRegion !== "" 
+              ? "opacity-60 hover:opacity-100 scale-[0.98]" 
+              : "ring-2 ring-primary ring-offset-2 dark:ring-offset-background rounded-3xl shadow-lg scale-[1.02]"
+          }`}
+        >
+          <StatsCard label="Total Onboarded" value={stats.total.toString()} icon={FileCheck} accent="primary" />
+        </button>
         <StatsCard label="Completed" value={stats.completed.toString()} icon={CheckCircle2} accent="success" />
         <StatsCard label="In Progress" value={stats.progress.toString()} icon={Clock} accent="warning" />
         <StatsCard label="Current Employee" value={employeeStats.current.toString()} icon={UserCheck} accent="info" />
         <StatsCard label="Ex-employee" value={employeeStats.separated.toString()} icon={UserMinus} accent="muted" />
       </div>
 
+      {/* Region-Wise Onboarding Distribution */}
+      <div className="bg-card border border-border/60 rounded-3xl p-6 shadow-xs mb-6">
+        <div className="flex items-center gap-2 mb-4">
+          <MapPin className="h-5 w-5 text-primary" />
+          <span className="text-base font-bold tracking-tight text-foreground">Region-Wise Onboarding Distribution</span>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-4">
+          {Object.entries(regionStats).map(([region, count]) => {
+            const style = regionStyles[region] || defaultStyle;
+            const isSelected = selectedRegion.toLowerCase() === region.toLowerCase();
+            const hasActiveFilter = selectedRegion !== "";
+
+            return (
+              <button
+                key={region}
+                onClick={() => setSelectedRegion(prev => prev.toLowerCase() === region.toLowerCase() ? "" : region)}
+                className={`bg-gradient-to-br ${style.bg} border ${style.border} rounded-2xl p-4 md:p-5 flex flex-col justify-between text-left transition-all duration-300 ${
+                  isSelected 
+                    ? "ring-2 ring-primary ring-offset-1 dark:ring-offset-background shadow-md scale-[1.05]" 
+                    : hasActiveFilter 
+                      ? "opacity-50 hover:opacity-100 scale-[0.95]" 
+                      : "hover:shadow-sm hover:scale-[1.02]"
+                }`}
+              >
+                <span className={`font-bold text-xs md:text-sm tracking-tight ${style.text}`}>{region}</span>
+                <div className="flex items-baseline gap-1.5 mt-3">
+                  <span className="text-2xl md:text-3xl font-black tracking-tight text-foreground">{count}</span>
+                  <span className="text-xs font-semibold text-muted-foreground">onboarded</span>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       <DataTable
-        data={safeRecords}
+        data={filteredRecords}
         columns={[
           {
             key: "name",
@@ -248,6 +373,7 @@ const OnboardingManagement = () => {
           },
           { key: "department", label: "Department", render: (r) => <Badge variant="outline">{r.department}</Badge> },
           { key: "designation", label: "Designation", render: (r) => <span className="text-sm">{r.designation}</span> },
+          { key: "work_location", label: "Work Location", render: (r) => <span className="text-sm font-medium">{r.work_location || "Not Assigned"}</span> },
           { key: "joining", label: "Joining Date", render: (r) => <span className="text-sm text-muted-foreground">{r.date_of_joining}</span> },
           { key: "contact", label: "Contact", render: (r) => <span className="text-sm font-mono">{r.mobile_number}</span> },
           {
