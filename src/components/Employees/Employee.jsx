@@ -6,9 +6,55 @@ import PageHeader from "../ui/PageHeader";
 import StatsCard from "../ui/StatsCard";
 import Toolbar from "../ui/Toolbar";
 import DataTable from "../ui/DataTable";
-import { Users, UserPlus, UserCheck, UserMinus, Pencil, Trash2, X, Check, Clock } from "lucide-react";
+import { Users, UserPlus, UserCheck, UserMinus, Pencil, Trash2, X, Check, Clock, MapPin } from "lucide-react";
 import { useEmployee } from "../../customHook/useEmployee";
 import EmployeeForm from "./EmployeeForm";
+
+const regionStyles = {
+  Chennai: {
+    bg: "from-indigo-50/50 to-purple-50/30 dark:from-indigo-950/20 dark:to-purple-950/10",
+    border: "border-indigo-100 dark:border-indigo-950/50",
+    iconBg: "bg-indigo-100 dark:bg-indigo-950/80 text-indigo-600 dark:text-indigo-400",
+    bar: "from-indigo-500 to-purple-500",
+    text: "text-indigo-700 dark:text-indigo-300"
+  },
+  Vellore: {
+    bg: "from-blue-50/50 to-sky-50/30 dark:from-blue-950/20 dark:to-sky-950/10",
+    border: "border-blue-100 dark:border-blue-950/50",
+    iconBg: "bg-blue-100 dark:bg-blue-950/80 text-blue-600 dark:text-blue-400",
+    bar: "from-blue-500 to-sky-500",
+    text: "text-blue-700 dark:text-blue-300"
+  },
+  Salem: {
+    bg: "from-emerald-50/50 to-teal-50/30 dark:from-emerald-950/20 dark:to-teal-950/10",
+    border: "border-emerald-100 dark:border-emerald-950/50",
+    iconBg: "bg-emerald-100 dark:bg-emerald-950/80 text-emerald-600 dark:text-emerald-400",
+    bar: "from-emerald-500 to-teal-500",
+    text: "text-emerald-700 dark:text-emerald-300"
+  },
+  Kanchipuram: {
+    bg: "from-amber-50/50 to-orange-50/30 dark:from-amber-950/20 dark:to-orange-950/10",
+    border: "border-amber-100 dark:border-amber-950/50",
+    iconBg: "bg-amber-100 dark:bg-amber-950/80 text-amber-600 dark:text-amber-400",
+    bar: "from-amber-500 to-orange-500",
+    text: "text-amber-700 dark:text-amber-300"
+  },
+  Hosur: {
+    bg: "from-rose-50/50 to-pink-50/30 dark:from-rose-950/20 dark:to-pink-950/10",
+    border: "border-rose-100 dark:border-rose-950/50",
+    iconBg: "bg-rose-100 dark:bg-rose-950/80 text-rose-600 dark:text-rose-400",
+    bar: "from-rose-500 to-pink-500",
+    text: "text-rose-700 dark:text-rose-300"
+  }
+};
+
+const defaultStyle = {
+  bg: "from-gray-50/50 to-slate-50/30 dark:from-gray-950/20 dark:to-slate-950/10",
+  border: "border-gray-100 dark:border-gray-950/50",
+  iconBg: "bg-gray-100 dark:bg-gray-950/80 text-gray-600 dark:text-gray-400",
+  bar: "from-gray-500 to-slate-500",
+  text: "text-gray-700 dark:text-gray-300"
+};
 
 const EmployeesPage = () => {
   const {
@@ -94,6 +140,20 @@ const EmployeesPage = () => {
     return { total, active, onLeave, inactive };
   }, [employeeRows, selectedRegion]);
 
+  const regionStats = useMemo(() => {
+    const regions = ["Chennai", "Vellore", "Salem", "Kanchipuram", "Hosur"];
+    const stats = {};
+    regions.forEach((r) => {
+      stats[r] = 0;
+    });
+    employeeRows.forEach((e) => {
+      const branch = e.branch || "Chennai";
+      const matched = regions.find((reg) => reg.toLowerCase() === branch.toLowerCase()) || "Chennai";
+      stats[matched] += 1;
+    });
+    return stats;
+  }, [employeeRows]);
+
   if (loading && safeRecords.length === 0) {
     return <div className="p-6 text-sm text-muted-foreground">Loading employees...</div>;
   }
@@ -143,6 +203,66 @@ const EmployeesPage = () => {
         <StatsCard label="Active" value={employeeStats.active.toString()} delta="2.1%" icon={UserCheck} accent="success" />
         <StatsCard label="On Leave" value={employeeStats.onLeave.toString()} delta="0.8%" icon={Clock} accent="warning" />
         <StatsCard label="Inactive" value={employeeStats.inactive.toString()} delta="14%" icon={UserMinus} accent="muted" />
+      </div>
+
+      {/* Region-Wise Employee Distribution Dashboard */}
+      <div className="mb-6 bg-card border border-border/60 rounded-3xl p-6 shadow-xs relative overflow-hidden">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-2xl bg-primary/10 text-primary">
+              <MapPin className="h-5 w-5" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold tracking-tight text-foreground">
+                Region-Wise Employee Distribution
+              </h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Live breakdown of active workforce strength across geographic locations
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+          {Object.entries(regionStats).map(([region, count]) => {
+            const style = regionStyles[region] || defaultStyle;
+            const pct = employeeRows.length > 0 ? Math.round((count / employeeRows.length) * 100) : 0;
+            return (
+              <div 
+                key={region} 
+                className={`bg-gradient-to-br ${style.bg} border ${style.border} rounded-2xl p-4 flex flex-col justify-between hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 group`}
+              >
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <span className={`font-bold text-sm tracking-tight ${style.text}`}>{region}</span>
+                    <div className={`p-1.5 rounded-lg ${style.iconBg} opacity-80 group-hover:opacity-100 transition-opacity duration-300`}>
+                      <MapPin className="h-3.5 w-3.5" />
+                    </div>
+                  </div>
+                  <div className="flex items-baseline gap-1.5">
+                    <span className="text-2xl font-black tracking-tight text-foreground">{count}</span>
+                    <span className="text-xs font-semibold text-muted-foreground">
+                      {count === 1 ? "Employee" : "Employees"}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="mt-4">
+                  <div className="flex items-center justify-between text-[10px] font-bold text-muted-foreground mb-1 px-0.5">
+                    <span className="tracking-wider">RATIO</span>
+                    <span className={style.text}>{pct}%</span>
+                  </div>
+                  <div className="w-full bg-muted/60 dark:bg-muted/30 rounded-full h-1.5 overflow-hidden">
+                    <div 
+                      className={`bg-gradient-to-r ${style.bar} h-1.5 rounded-full transition-all duration-500`}
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
