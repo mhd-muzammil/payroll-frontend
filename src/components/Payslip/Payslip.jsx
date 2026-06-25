@@ -1,11 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import PageHeader from "../ui/PageHeader";
 import Toolbar from "../ui/Toolbar";
 import DataTable from "../ui/DataTable";
-import { Download, Eye, Sparkles, Loader2, Printer } from "lucide-react";
+import { Download, Eye, Sparkles, Loader2, Printer, MapPin, Users } from "lucide-react";
 import { api } from "@/api/Api";
 import {
   Dialog,
@@ -13,11 +13,58 @@ import {
 } from "@/components/ui/dialog";
 import { extractArray } from "../../Utility/apiUtils";
 
+const regionStyles = {
+  Chennai: {
+    bg: "from-indigo-50/50 to-purple-50/30 dark:from-indigo-950/20 dark:to-purple-950/10",
+    border: "border-indigo-100 dark:border-indigo-950/50",
+    iconBg: "bg-indigo-100 dark:bg-indigo-950/80 text-indigo-600 dark:text-indigo-400",
+    bar: "from-indigo-500 to-purple-500",
+    text: "text-indigo-700 dark:text-indigo-300"
+  },
+  Vellore: {
+    bg: "from-blue-50/50 to-sky-50/30 dark:from-blue-950/20 dark:to-sky-950/10",
+    border: "border-blue-100 dark:border-blue-950/50",
+    iconBg: "bg-blue-100 dark:bg-blue-950/80 text-blue-600 dark:text-blue-400",
+    bar: "from-blue-500 to-sky-500",
+    text: "text-blue-700 dark:text-blue-300"
+  },
+  Salem: {
+    bg: "from-emerald-50/50 to-teal-50/30 dark:from-emerald-950/20 dark:to-teal-950/10",
+    border: "border-emerald-100 dark:border-emerald-950/50",
+    iconBg: "bg-emerald-100 dark:bg-emerald-950/80 text-emerald-600 dark:text-emerald-400",
+    bar: "from-emerald-500 to-teal-500",
+    text: "text-emerald-700 dark:text-emerald-300"
+  },
+  Kanchipuram: {
+    bg: "from-amber-50/50 to-orange-50/30 dark:from-amber-950/20 dark:to-orange-950/10",
+    border: "border-amber-100 dark:border-amber-950/50",
+    iconBg: "bg-amber-100 dark:bg-amber-950/80 text-amber-600 dark:text-amber-400",
+    bar: "from-amber-500 to-orange-500",
+    text: "text-amber-700 dark:text-amber-300"
+  },
+  Hosur: {
+    bg: "from-rose-50/50 to-pink-50/30 dark:from-rose-950/20 dark:to-rose-950/10",
+    border: "border-rose-100 dark:border-rose-950/50",
+    iconBg: "bg-rose-100 dark:bg-rose-950/80 text-rose-600 dark:text-rose-400",
+    bar: "from-rose-500 to-pink-500",
+    text: "text-rose-700 dark:text-rose-300"
+  }
+};
+
+const defaultStyle = {
+  bg: "from-gray-50/50 to-slate-50/30 dark:from-gray-950/20 dark:to-slate-950/10",
+  border: "border-gray-100 dark:border-gray-950/50",
+  iconBg: "bg-gray-100 dark:bg-gray-950/80 text-gray-600 dark:text-gray-400",
+  bar: "from-gray-500 to-slate-500",
+  text: "text-gray-700 dark:text-gray-300"
+};
+
 const PayslipsPage = () => {
   const [slips, setSlips] = useState([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [selectedSlip, setSelectedSlip] = useState(null);
+  const [selectedRegion, setSelectedRegion] = useState("");
 
   const fetchPayslips = async () => {
     setLoading(true);
@@ -202,6 +249,40 @@ const PayslipsPage = () => {
     width: "32%"
   };
 
+  const regionStats = useMemo(() => {
+    const regions = ["Chennai", "Vellore", "Salem", "Kanchipuram", "Hosur"];
+    const stats = {
+      Chennai: 0,
+      Vellore: 0,
+      Salem: 0,
+      Kanchipuram: 0,
+      Hosur: 0,
+      "Not Assigned": 0,
+    };
+    slips.forEach((s) => {
+      const branch = s.employee_details?.branch;
+      if (branch) {
+        const matched = regions.find((reg) => reg.toLowerCase() === branch.trim().toLowerCase());
+        if (matched) {
+          stats[matched] += 1;
+        } else {
+          stats["Not Assigned"] += 1;
+        }
+      } else {
+        stats["Not Assigned"] += 1;
+      }
+    });
+    return stats;
+  }, [slips]);
+
+  const filteredSlips = useMemo(() => {
+    if (!selectedRegion) return slips;
+    return slips.filter((s) => {
+      const branch = s.employee_details?.branch || "Not Assigned";
+      return branch.toLowerCase() === selectedRegion.toLowerCase();
+    });
+  }, [slips, selectedRegion]);
+
   return (
     <div>
       <PageHeader
@@ -221,6 +302,56 @@ const PayslipsPage = () => {
 
       <Toolbar />
 
+      {/* Region-Wise Payslip Distribution */}
+      <div className="bg-card border border-border/60 rounded-3xl p-6 shadow-xs mb-6">
+        <div className="flex items-center gap-2 mb-4">
+          <MapPin className="h-5 w-5 text-primary" />
+          <span className="text-base font-bold tracking-tight text-foreground">Region-Wise Payslip Distribution</span>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-4">
+          <button
+            onClick={() => setSelectedRegion("")}
+            className={`bg-gradient-to-br from-indigo-50/50 to-purple-50/30 border border-indigo-100 rounded-2xl p-4 md:p-5 flex flex-col justify-between text-left transition-all duration-300 ${
+              selectedRegion === "" 
+                ? "ring-2 ring-primary ring-offset-1 dark:ring-offset-background shadow-md scale-[1.05]" 
+                : "opacity-50 hover:opacity-100 scale-[0.95]"
+            }`}
+          >
+            <span className="font-bold text-xs md:text-sm tracking-tight text-indigo-700">All Regions</span>
+            <div className="flex items-baseline gap-1.5 mt-3">
+              <span className="text-2xl md:text-3xl font-black tracking-tight text-foreground">{slips.length}</span>
+              <span className="text-xs font-semibold text-muted-foreground">slips</span>
+            </div>
+          </button>
+          {Object.entries(regionStats).map(([region, count]) => {
+            if (region === "Not Assigned") return null;
+            const style = regionStyles[region] || defaultStyle;
+            const isSelected = selectedRegion.toLowerCase() === region.toLowerCase();
+            const hasActiveFilter = selectedRegion !== "";
+
+            return (
+              <button
+                key={region}
+                onClick={() => setSelectedRegion(prev => prev.toLowerCase() === region.toLowerCase() ? "" : region)}
+                className={`bg-gradient-to-br ${style.bg} border ${style.border} rounded-2xl p-4 md:p-5 flex flex-col justify-between text-left transition-all duration-300 ${
+                  isSelected 
+                    ? "ring-2 ring-primary ring-offset-1 dark:ring-offset-background shadow-md scale-[1.05]" 
+                    : hasActiveFilter 
+                      ? "opacity-50 hover:opacity-100 scale-[0.95]" 
+                      : "hover:shadow-sm hover:scale-[1.02]"
+                }`}
+              >
+                <span className={`font-bold text-xs md:text-sm tracking-tight ${style.text}`}>{region}</span>
+                <div className="flex items-baseline gap-1.5 mt-3">
+                  <span className="text-2xl md:text-3xl font-black tracking-tight text-foreground">{count}</span>
+                  <span className="text-xs font-semibold text-muted-foreground">slips</span>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       {loading ? (
         <div className="flex h-64 w-full flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -228,7 +359,7 @@ const PayslipsPage = () => {
         </div>
       ) : (
         <DataTable
-          data={slips}
+          data={filteredSlips}
           columns={[
             {
               key: "name", 
@@ -247,6 +378,11 @@ const PayslipsPage = () => {
               key: "period", 
               label: "Period", 
               render: (s) => <span className="text-sm font-medium">{getMonthLabel(s.month).substring(0, 3)} {s.year}</span> 
+            },
+            { 
+              key: "region", 
+              label: "Region", 
+              render: (s) => <span className="text-sm font-medium text-foreground">{s.employee_details?.branch || "Not Assigned"}</span> 
             },
             { 
               key: "amount", 

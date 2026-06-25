@@ -1,29 +1,88 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import PageHeader from "../ui/PageHeader";
 import StatsCard from "../ui/StatsCard";
 import Toolbar from "../ui/Toolbar";
 import DataTable from "../ui/DataTable";
-import { Wallet, TrendingUp, Clock, CheckCircle2, Play, MoreHorizontal, Loader2 } from "lucide-react";
+import { Wallet, TrendingUp, Clock, CheckCircle2, Play, MoreHorizontal, Loader2, MapPin, Users } from "lucide-react";
 import { api } from "@/api/Api";
+import { extractArray } from "../../Utility/apiUtils";
+
+const regionStyles = {
+  Chennai: {
+    bg: "from-indigo-50/50 to-purple-50/30 dark:from-indigo-950/20 dark:to-purple-950/10",
+    border: "border-indigo-100 dark:border-indigo-950/50",
+    iconBg: "bg-indigo-100 dark:bg-indigo-950/80 text-indigo-600 dark:text-indigo-400",
+    bar: "from-indigo-500 to-purple-500",
+    text: "text-indigo-700 dark:text-indigo-300"
+  },
+  Vellore: {
+    bg: "from-blue-50/50 to-sky-50/30 dark:from-blue-950/20 dark:to-sky-950/10",
+    border: "border-blue-100 dark:border-blue-950/50",
+    iconBg: "bg-blue-100 dark:bg-blue-950/80 text-blue-600 dark:text-blue-400",
+    bar: "from-blue-500 to-sky-500",
+    text: "text-blue-700 dark:text-blue-300"
+  },
+  Salem: {
+    bg: "from-emerald-50/50 to-teal-50/30 dark:from-emerald-950/20 dark:to-teal-950/10",
+    border: "border-emerald-100 dark:border-emerald-950/50",
+    iconBg: "bg-emerald-100 dark:bg-emerald-950/80 text-emerald-600 dark:text-emerald-400",
+    bar: "from-emerald-500 to-teal-500",
+    text: "text-emerald-700 dark:text-emerald-300"
+  },
+  Kanchipuram: {
+    bg: "from-amber-50/50 to-orange-50/30 dark:from-amber-950/20 dark:to-orange-950/10",
+    border: "border-amber-100 dark:border-amber-950/50",
+    iconBg: "bg-amber-100 dark:bg-amber-950/80 text-amber-600 dark:text-amber-400",
+    bar: "from-amber-500 to-orange-500",
+    text: "text-amber-700 dark:text-amber-300"
+  },
+  Hosur: {
+    bg: "from-rose-50/50 to-pink-50/30 dark:from-rose-950/20 dark:to-rose-950/10",
+    border: "border-rose-100 dark:border-rose-950/50",
+    iconBg: "bg-rose-100 dark:bg-rose-950/80 text-rose-600 dark:text-rose-400",
+    bar: "from-rose-500 to-pink-500",
+    text: "text-rose-700 dark:text-rose-300"
+  }
+};
+
+const defaultStyle = {
+  bg: "from-gray-50/50 to-slate-50/30 dark:from-gray-950/20 dark:to-slate-950/10",
+  border: "border-gray-100 dark:border-gray-950/50",
+  iconBg: "bg-gray-100 dark:bg-gray-950/80 text-gray-600 dark:text-gray-400",
+  bar: "from-gray-500 to-slate-500",
+  text: "text-gray-700 dark:text-gray-300"
+};
 
 const PayrollPage = () => {
   const [runs, setRuns] = useState([]);
   const [stats, setStats] = useState({ thisMonth: "₹0", ytdTotal: "₹0", pending: "₹0", processed: "0%" });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [selectedRegion, setSelectedRegion] = useState("");
+  const [employeeStats, setEmployeeStats] = useState({
+    Chennai: 0,
+    Vellore: 0,
+    Salem: 0,
+    Kanchipuram: 0,
+    Hosur: 0,
+    "Not Assigned": 0,
+  });
 
-  const fetchData = async () => {
+  const fetchData = async (region = selectedRegion) => {
     setLoading(true);
     setError(null);
     try {
+      const summaryUrl = region ? `/api/payslips/cycles_summary/?branch=${region}` : "/api/payslips/cycles_summary/";
+      const statsUrl = region ? `/api/payslips/company_stats/?branch=${region}` : "/api/payslips/company_stats/";
+
       const [cyclesRes, statsRes] = await Promise.all([
-        api.get("/api/payslips/cycles_summary/").catch(e => {
+        api.get(summaryUrl).catch(e => {
           console.error("Cycle API Error Details:", e);
           throw new Error(`Summary Endpt Failure: ${e.response?.status || e.message}`);
         }),
-        api.get("/api/payslips/company_stats/").catch(e => {
+        api.get(statsUrl).catch(e => {
           console.error("Stats API Error Details:", e);
           throw new Error(`KPI Endpt Failure: ${e.response?.status || e.message}`);
         })
@@ -41,16 +100,52 @@ const PayrollPage = () => {
     }
   };
 
+  const fetchEmployees = async () => {
+    try {
+      const res = await api.get("/api/employees/");
+      const list = extractArray(res.data);
+      const regions = ["Chennai", "Vellore", "Salem", "Kanchipuram", "Hosur"];
+      const statsObj = {
+        Chennai: 0,
+        Vellore: 0,
+        Salem: 0,
+        Kanchipuram: 0,
+        Hosur: 0,
+        "Not Assigned": 0,
+      };
+      list.forEach((e) => {
+        const branch = e.branch;
+        if (branch) {
+          const matched = regions.find((reg) => reg.toLowerCase() === branch.trim().toLowerCase());
+          if (matched) {
+            statsObj[matched] += 1;
+          } else {
+            statsObj["Not Assigned"] += 1;
+          }
+        } else {
+          statsObj["Not Assigned"] += 1;
+        }
+      });
+      setEmployeeStats(statsObj);
+    } catch (e) {
+      console.error("Failed to fetch employees for stats", e);
+    }
+  };
+
   useEffect(() => {
-    fetchData();
+    fetchEmployees();
   }, []);
+
+  useEffect(() => {
+    fetchData(selectedRegion);
+  }, [selectedRegion]);
 
   return (
     <div>
       <PageHeader
         title="Payroll Overview"
         description="Review company-wide processing history and financial cycles."
-        actions={<Button icon={Play} onClick={fetchData}>Refresh Data</Button>}
+        actions={<Button icon={Play} onClick={() => { fetchData(selectedRegion); fetchEmployees(); }}>Refresh Data</Button>}
       />
 
       {error && (
@@ -73,6 +168,58 @@ const PayrollPage = () => {
         <StatsCard label="YTD Total Net" value={stats.ytdTotal} delta="Live Cumulative" icon={TrendingUp} accent="success" />
         <StatsCard label="Pending Adjusts" value={stats.pending} icon={Clock} accent="warning" />
         <StatsCard label="Month Completion" value={stats.processed} icon={CheckCircle2} accent="info" />
+      </div>
+
+      {/* Region-Wise Payroll Distribution */}
+      <div className="bg-card border border-border/60 rounded-3xl p-6 shadow-xs mb-6">
+        <div className="flex items-center gap-2 mb-4">
+          <MapPin className="h-5 w-5 text-primary" />
+          <span className="text-base font-bold tracking-tight text-foreground">Filter by Region</span>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-4">
+          <button
+            onClick={() => setSelectedRegion("")}
+            className={`bg-gradient-to-br from-indigo-50/50 to-purple-50/30 border border-indigo-100 rounded-2xl p-4 md:p-5 flex flex-col justify-between text-left transition-all duration-300 ${
+              selectedRegion === "" 
+                ? "ring-2 ring-primary ring-offset-1 dark:ring-offset-background shadow-md scale-[1.05]" 
+                : "opacity-50 hover:opacity-100 scale-[0.95]"
+            }`}
+          >
+            <span className="font-bold text-xs md:text-sm tracking-tight text-indigo-700">All Regions</span>
+            <div className="flex items-baseline gap-1.5 mt-3">
+              <span className="text-2xl md:text-3xl font-black tracking-tight text-foreground">
+                {Object.values(employeeStats).reduce((a, b) => a + b, 0)}
+              </span>
+              <span className="text-xs font-semibold text-muted-foreground">staff</span>
+            </div>
+          </button>
+          {Object.entries(employeeStats).map(([region, count]) => {
+            if (region === "Not Assigned") return null;
+            const style = regionStyles[region] || defaultStyle;
+            const isSelected = selectedRegion.toLowerCase() === region.toLowerCase();
+            const hasActiveFilter = selectedRegion !== "";
+
+            return (
+              <button
+                key={region}
+                onClick={() => setSelectedRegion(prev => prev.toLowerCase() === region.toLowerCase() ? "" : region)}
+                className={`bg-gradient-to-br ${style.bg} border ${style.border} rounded-2xl p-4 md:p-5 flex flex-col justify-between text-left transition-all duration-300 ${
+                  isSelected 
+                    ? "ring-2 ring-primary ring-offset-1 dark:ring-offset-background shadow-md scale-[1.05]" 
+                    : hasActiveFilter 
+                      ? "opacity-50 hover:opacity-100 scale-[0.95]" 
+                      : "hover:shadow-sm hover:scale-[1.02]"
+                }`}
+              >
+                <span className={`font-bold text-xs md:text-sm tracking-tight ${style.text}`}>{region}</span>
+                <div className="flex items-baseline gap-1.5 mt-3">
+                  <span className="text-2xl md:text-3xl font-black tracking-tight text-foreground">{count}</span>
+                  <span className="text-xs font-semibold text-muted-foreground">staff</span>
+                </div>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <Toolbar />
