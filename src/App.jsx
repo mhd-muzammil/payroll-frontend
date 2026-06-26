@@ -11,6 +11,8 @@ import LeavePage from './pages/LeavePage';
 import LoginPage from './pages/Login';
 import UserManagementPage from './pages/UserManagementPage';
 import OnboardingPage from './pages/OnboardingPage';
+import TasksPage from './pages/TasksPage';
+import PerformancePage from './pages/PerformancePage';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import { ROLES, getDefaultRouteByRole, getUserRole, isAuthenticated } from './auth/rbac';
 import { ErrorBoundary } from './components/ui/ErrorBoundary';
@@ -44,7 +46,10 @@ function App() {
           <Route path="/attendance" element={<AttendancePage />} />
           <Route path="/payslips" element={<PayslipPage />} />
           <Route path="/leaves" element={<LeavePage />} />
+          <Route path="/tasks" element={<TasksPage />} />
+          <Route path="/performance" element={<PerformancePage />} />
         </Route>
+
 
         {/* <Route path="/calendar" element={<CalendarPage />} /> */}
         {/* <Route path='/compliance' element={<CompliancePage />} /> */}

@@ -13,7 +13,9 @@ import {
   Settings,
   ChevronLeft,
   Sparkles,
-  X
+  X,
+  ClipboardList,
+  TrendingUp
 } from "lucide-react";
 import { useState } from "react";
 import { ROLES, clearAuth, getUserRole, normalizeRole } from "@/auth/rbac";
@@ -24,9 +26,11 @@ const nav = [
   { to: "/onboarding", label: "Onboarding", icon: UserPlus, roles: [ROLES.SUPER_ADMIN, ROLES.ADMIN] },
   { to: "/employees", label: "Employees", icon: Users },
   { to: "/attendance", label: "Attendance", icon: CalendarCheck },
+  { to: "/tasks", label: "Tasks", icon: ClipboardList },
   { to: "/payroll", label: "Payroll", icon: Wallet },
   { to: "/payslips", label: "Payslips", icon: FileText },
   { to: "/leaves", label: "Leave & Permissions", icon: CalendarDays },
+  { to: "/performance", label: "Performance", icon: TrendingUp },
   // { to: "/calendar", label: "Calendar", icon: CalendarDays },
   { to: "/reports", label: "Reports", icon: BarChart3, roles: [ROLES.SUPER_ADMIN, ROLES.ADMIN] },
   // { to: "/compliance", label: "Tax & Compliance", icon: ShieldCheck },
@@ -35,11 +39,18 @@ const nav = [
 const defaultRoles = [ROLES.SUPER_ADMIN, ROLES.ADMIN];
 
 const navWithRoles = nav.map((item) => {
-  if (item.to === "/attendance" || item.to === "/payslips" || item.to === "/leaves") {
+  if (
+    item.to === "/attendance" ||
+    item.to === "/payslips" ||
+    item.to === "/leaves" ||
+    item.to === "/tasks" ||
+    item.to === "/performance"
+  ) {
     return { ...item, roles: [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.EMPLOYEE] };
   }
   return { ...item, roles: item.roles || defaultRoles };
 });
+
 
 export function Sidebar({ collapsed, setCollapsed, mobileOpen, setMobileOpen }) {
   const { pathname: path } = useLocation();

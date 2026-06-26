@@ -1,0 +1,23 @@
+{
+  "short_name": "PayrollX",
+  "name": "Payroll Management System",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/vite.svg",
+      "type": "image/svg+xml",
+      "sizes": "any",
+      "purpose": "any"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#141517",
+  "theme_color": "#7C4DFF",
+  "display": "standalone",
+  "orientation": "portrait"
+}
