@@ -2,6 +2,8 @@ const CACHE_NAME = 'payroll-cache-v1';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
+  '/icon-192.png',
+  '/icon-512.png',
   '/favicon.svg',
   '/vite.svg'
 ];
