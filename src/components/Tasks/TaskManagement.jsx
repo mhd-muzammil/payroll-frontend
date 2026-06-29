@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { ROLES, getUserRole, normalizeRole, getUserDisplayName } from "@/auth/rbac";
+import { ROLES, getUserRole, normalizeRole, getUserDisplayName, getTokenClaims } from "@/auth/rbac";
 import { taskService } from "@/services/taskService";
 import { employeeService } from "@/services/employeeService";
 import DataTable from "../ui/DataTable";
@@ -41,15 +41,28 @@ export default function TaskManagement() {
   const isAdmin = role === ROLES.ADMIN || role === ROLES.SUPER_ADMIN;
   const displayName = getUserDisplayName();
 
+  const claims = getTokenClaims() || {};
+  const currentUsername = claims.username || claims.user_name || claims.sub || "";
+
+  const canEditTask = (task) => {
+    if (isAdmin) return true;
+    return task && task.assigned_by_name && task.assigned_by_name === currentUsername;
+  };
+
   const [tasks, setTasks] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  // View state (List vs. Kanban)
+  const [viewMode, setViewMode] = useState(isAdmin ? "list" : "kanban");
+
   // Filters state
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [priorityFilter, setPriorityFilter] = useState("all");
+  const [assigneeFilter, setAssigneeFilter] = useState("all");
+  const [dateFilter, setDateFilter] = useState("all");
 
   // Create/Edit Task dialog state
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -86,10 +99,8 @@ export default function TaskManagement() {
       const tasksData = await taskService.getAll();
       setTasks(tasksData);
 
-      if (isAdmin) {
-        const empData = await employeeService.getAll();
-        setEmployees(empData);
-      }
+      const empData = await employeeService.getAll();
+      setEmployees(empData);
     } catch (err) {
       console.error(err);
       setError("Failed to fetch tasks. Please try again.");
@@ -396,9 +407,48 @@ export default function TaskManagement() {
 
     const matchesStatus = statusFilter === "all" || task.status === statusFilter;
     const matchesPriority = priorityFilter === "all" || task.priority === priorityFilter;
+    const matchesAssignee = assigneeFilter === "all" || String(task.assigned_to) === String(assigneeFilter);
 
-    return matchesSearch && matchesStatus && matchesPriority;
+    let matchesDate = true;
+    if (dateFilter !== "all") {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const due = new Date(task.due_date);
+      due.setHours(0, 0, 0, 0);
+      const diffTime = due - today;
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+      if (dateFilter === "overdue") {
+        matchesDate = diffDays < 0 && task.status !== "completed";
+      } else if (dateFilter === "today") {
+        matchesDate = diffDays === 0;
+      } else if (dateFilter === "this_week") {
+        matchesDate = diffDays >= 0 && diffDays <= 7;
+      }
+    }
+
+    return matchesSearch && matchesStatus && matchesPriority && matchesAssignee && matchesDate;
   });
+
+  const getStats = () => {
+    const total = tasks.length;
+    const pending = tasks.filter((t) => t.status === "pending").length;
+    const inProgress = tasks.filter((t) => t.status === "in_progress").length;
+    const completed = tasks.filter((t) => t.status === "completed").length;
+    
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const overdue = tasks.filter((t) => {
+      if (t.status === "completed") return false;
+      const due = new Date(t.due_date);
+      due.setHours(0, 0, 0, 0);
+      return due < today;
+    }).length;
+
+    return { total, pending, inProgress, completed, overdue };
+  };
+
+  const stats = getStats();
 
   const getPriorityBadge = (priority) => {
     switch (priority) {
@@ -471,6 +521,15 @@ export default function TaskManagement() {
         </div>
       ),
     },
+    {
+      key: "assigned_by_name",
+      label: "Assigned By",
+      render: (row) => (
+        <span className="text-xs font-semibold text-muted-foreground bg-muted/60 px-2.5 py-1 rounded-lg">
+          {row.assigned_by_name || "Admin/System"}
+        </span>
+      ),
+    },
     { key: "priority", label: "Priority", render: (row) => getPriorityBadge(row.priority) },
     {
       key: "status",
@@ -501,7 +560,7 @@ export default function TaskManagement() {
           <Button variant="outline" size="sm" className="h-8 text-xs font-semibold gap-1" onClick={() => handleOpenDetails(row)}>
             <ExternalLink className="h-3.5 w-3.5" /> Details
           </Button>
-          {isAdmin && (
+          {canEditTask(row) && (
             <>
               <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-muted/80 text-muted-foreground" onClick={() => handleOpenEditDialog(row)}>
                 <Edit2 className="h-4 w-4" />
@@ -537,14 +596,36 @@ export default function TaskManagement() {
           <p className="text-sm text-muted-foreground mt-1">
             {isAdmin
               ? "Assign, manage, and monitor employee tasks, checklists, and activity log feeds."
-              : "View checklists, update progress, and log notes on tasks assigned to you."}
+              : "View checklists, update progress, and log notes on tasks assigned to or by you."}
           </p>
         </div>
-        {isAdmin && (
+        <div className="flex flex-wrap items-center gap-3">
+          {/* View Switcher */}
+          <div className="flex bg-muted/60 p-1 rounded-xl border border-border/60">
+            <Button
+              type="button"
+              variant={viewMode === "list" ? "secondary" : "ghost"}
+              size="sm"
+              onClick={() => setViewMode("list")}
+              className="h-8 text-xs font-semibold px-3 rounded-lg"
+            >
+              List View
+            </Button>
+            <Button
+              type="button"
+              variant={viewMode === "kanban" ? "secondary" : "ghost"}
+              size="sm"
+              onClick={() => setViewMode("kanban")}
+              className="h-8 text-xs font-semibold px-3 rounded-lg"
+            >
+              Kanban Board
+            </Button>
+          </div>
+          
           <Button onClick={handleOpenCreateDialog} className="gradient-brand shadow-glow text-white font-semibold flex items-center gap-1.5 px-4 rounded-xl py-2.5">
             <Plus className="h-4.5 w-4.5" /> Assign New Task
           </Button>
-        )}
+        </div>
       </div>
 
       {error && (
@@ -554,46 +635,119 @@ export default function TaskManagement() {
         </div>
       )}
 
-      {/* Filter / Search Panel */}
-      <div className="flex flex-col md:flex-row gap-4 items-center bg-card/20 border border-border/80 rounded-3xl p-5 shadow-xs">
-        <div className="relative w-full md:flex-1">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search by title, description, or employee name..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10 h-11 bg-background/50 rounded-xl"
-          />
+      {/* Analytics Dashboard Grid */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <div className="bg-card/40 border border-border/80 rounded-2xl p-4 flex flex-col justify-between shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-muted-foreground">Total Tasks</span>
+            <ListTodo className="h-4 w-4 text-indigo-500" />
+          </div>
+          <div className="mt-3">
+            <span className="text-2xl font-bold">{stats.total}</span>
+          </div>
         </div>
-        <div className="flex w-full md:w-auto gap-3 items-center">
-          <div className="flex items-center gap-2">
-            <Filter className="h-4 w-4 text-muted-foreground" />
+        <div className="bg-card/40 border border-border/80 rounded-2xl p-4 flex flex-col justify-between shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-muted-foreground">Pending</span>
+            <AlertCircle className="h-4 w-4 text-slate-500" />
+          </div>
+          <div className="mt-3">
+            <span className="text-2xl font-bold">{stats.pending}</span>
+          </div>
+        </div>
+        <div className="bg-card/40 border border-border/80 rounded-2xl p-4 flex flex-col justify-between shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-muted-foreground">In Progress</span>
+            <Clock className="h-4 w-4 text-amber-500" />
+          </div>
+          <div className="mt-3">
+            <span className="text-2xl font-bold">{stats.inProgress}</span>
+          </div>
+        </div>
+        <div className="bg-card/40 border border-border/80 rounded-2xl p-4 flex flex-col justify-between shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-muted-foreground">Completed</span>
+            <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+          </div>
+          <div className="mt-3">
+            <span className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{stats.completed}</span>
+          </div>
+        </div>
+        <div className="bg-card/40 border border-border/80 rounded-2xl p-4 flex flex-col justify-between shadow-xs border-red-500/20 bg-red-500/5 col-span-2 md:col-span-1">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-red-600 dark:text-red-400 font-bold">Overdue</span>
+            <AlertCircle className="h-4 w-4 text-red-500" />
+          </div>
+          <div className="mt-3">
+            <span className="text-2xl font-bold text-red-600 dark:text-red-400">{stats.overdue}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Filter / Search Panel */}
+      <div className="flex flex-col gap-4 bg-card/20 border border-border/80 rounded-3xl p-5 shadow-xs">
+        <div className="flex flex-col lg:flex-row gap-4 items-center">
+          <div className="relative w-full lg:flex-1">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search by title, description, or employee name..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10 h-11 bg-background/50 rounded-xl w-full"
+            />
+          </div>
+          <div className="flex flex-wrap w-full lg:w-auto gap-3 items-center">
+            <div className="flex items-center gap-2 flex-1 sm:flex-initial">
+              <Filter className="h-4 w-4 text-muted-foreground shrink-0" />
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="w-full sm:w-auto h-11 px-3 bg-background/50 border border-input rounded-xl text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                <option value="all">All Statuses</option>
+                <option value="pending">Pending</option>
+                <option value="in_progress">In Progress</option>
+                <option value="completed">Completed</option>
+              </select>
+            </div>
             <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="h-11 px-3 bg-background/50 border border-input rounded-xl text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              value={priorityFilter}
+              onChange={(e) => setPriorityFilter(e.target.value)}
+              className="flex-1 sm:flex-initial h-11 px-3 bg-background/50 border border-input rounded-xl text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
             >
-              <option value="all">All Statuses</option>
-              <option value="pending">Pending</option>
-              <option value="in_progress">In Progress</option>
-              <option value="completed">Completed</option>
+              <option value="all">All Priorities</option>
+              <option value="low">Low</option>
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+            </select>
+            <select
+              value={assigneeFilter}
+              onChange={(e) => setAssigneeFilter(e.target.value)}
+              className="flex-1 sm:flex-initial h-11 px-3 bg-background/50 border border-input rounded-xl text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+            >
+              <option value="all">All Assignees</option>
+              {employees.map((emp) => (
+                <option key={emp.id} value={emp.id}>
+                  {emp.employee_name}
+                </option>
+              ))}
+            </select>
+            <select
+              value={dateFilter}
+              onChange={(e) => setDateFilter(e.target.value)}
+              className="flex-1 sm:flex-initial h-11 px-3 bg-background/50 border border-input rounded-xl text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+            >
+              <option value="all">All Dates</option>
+              <option value="overdue">Overdue</option>
+              <option value="today">Due Today</option>
+              <option value="this_week">Due This Week</option>
             </select>
           </div>
-          <select
-            value={priorityFilter}
-            onChange={(e) => setPriorityFilter(e.target.value)}
-            className="h-11 px-3 bg-background/50 border border-input rounded-xl text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-          >
-            <option value="all">All Priorities</option>
-            <option value="low">Low</option>
-            <option value="medium">Medium</option>
-            <option value="high">High</option>
-          </select>
         </div>
       </div>
 
       {/* Main Task List Grid/Table Layout */}
-      {isAdmin ? (
+      {viewMode === "list" ? (
         <DataTable columns={columns} data={filteredTasks} emptyMessage="No tasks found matching your filters." />
       ) : (
         /* Employee Kanban Board */
@@ -638,6 +792,18 @@ export default function TaskManagement() {
                             </div>
                           </div>
                           <p className="text-xs text-muted-foreground line-clamp-3 leading-relaxed">{task.description}</p>
+
+                          <div className="space-y-1.5 bg-muted/20 border border-border/50 p-2.5 rounded-xl text-[11px]">
+                            <div className="flex items-center gap-1.5 text-muted-foreground">
+                              <User className="h-3.5 w-3.5 text-indigo-500" />
+                              <span>To: <strong className="text-foreground">{task.employee_name || "Unassigned"}</strong></span>
+                            </div>
+                            {task.assigned_by_name && (
+                              <div className="text-[10px] text-muted-foreground/80 pl-5">
+                                Assigned by: <span className="font-semibold text-foreground/80">{task.assigned_by_name}</span>
+                              </div>
+                            )}
+                          </div>
                           
                           {/* Subtask progress bar */}
                           {totalCount > 0 && (
@@ -657,9 +823,21 @@ export default function TaskManagement() {
                               <Calendar className="h-3.5 w-3.5" />
                               Due: {new Date(task.due_date).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}
                             </span>
-                            <Button variant="outline" size="sm" className="h-8 text-[11px] font-semibold gap-1 hover:bg-primary hover:text-white" onClick={() => handleOpenDetails(task)}>
-                              Open Details
-                            </Button>
+                            <div className="flex items-center gap-1.5">
+                              {canEditTask(task) && (
+                                <>
+                                  <Button variant="ghost" size="icon" className="h-7 w-7 hover:bg-muted/80 text-muted-foreground" onClick={() => handleOpenEditDialog(task)}>
+                                    <Edit2 className="h-3.5 w-3.5" />
+                                  </Button>
+                                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:bg-destructive/10" onClick={() => handleDeleteTask(task.id)}>
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </Button>
+                                </>
+                              )}
+                              <Button variant="outline" size="sm" className="h-8 text-[11px] font-semibold gap-1 hover:bg-primary hover:text-white" onClick={() => handleOpenDetails(task)}>
+                                Details
+                              </Button>
+                            </div>
                           </div>
                         </div>
                       );
@@ -832,6 +1010,9 @@ export default function TaskManagement() {
                     Due Date: {new Date(detailsTask.due_date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
                   </span>
                   <span className="text-xs text-muted-foreground">Assigned to: <strong>{detailsTask.employee_name}</strong></span>
+                  {detailsTask.assigned_by_name && (
+                    <span className="text-xs text-muted-foreground">Assigned by: <strong>{detailsTask.assigned_by_name}</strong></span>
+                  )}
                 </div>
               </DialogHeader>
 
