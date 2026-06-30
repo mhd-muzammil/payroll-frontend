@@ -35,16 +35,19 @@ function App() {
         <Route path="/login" element={<LoginPage />} />
 
         <Route element={<ProtectedRoute allowedRoles={[ROLES.SUPER_ADMIN, ROLES.ADMIN]} />}>
-          <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/users" element={<UserManagementPage />} />
+          <Route path="/reports" element={<ReportsPage />} />
+        </Route>
+
+        <Route element={<ProtectedRoute allowedRoles={[ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.HR]} />}>
+          <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/hiring" element={<HiringPage />} />
           <Route path="/onboarding" element={<OnboardingPage />} />
           <Route path="/employees" element={<EmployeePage />} />
           <Route path="/payroll" element={<PayrollPage />} />
-          <Route path="/reports" element={<ReportsPage />} />
         </Route>
 
-        <Route element={<ProtectedRoute allowedRoles={[ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.EMPLOYEE]} />}>
+        <Route element={<ProtectedRoute allowedRoles={[ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.HR, ROLES.EMPLOYEE]} />}>
           <Route path="/attendance" element={<AttendancePage />} />
           <Route path="/payslips" element={<PayslipPage />} />
           <Route path="/leaves" element={<LeavePage />} />

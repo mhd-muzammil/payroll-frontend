@@ -8,6 +8,19 @@ import StatsCard from "@/components/ui/StatsCard";
 import { Check, Copy, Pencil, Share2, Trash2, UserPlus, X, MapPin, Users } from "lucide-react";
 import { useUsers } from "@/customHook/useUsers";
 
+const defaultAllowedSections = {
+  dashboard: ["All"],
+  hiring: ["All"],
+  onboarding: ["All"],
+  employees: ["All"],
+  tasks: ["All"],
+  attendance: ["All"],
+  payroll: ["All"],
+  payslips: ["All"],
+  leaves: ["All"],
+  performance: ["All"]
+};
+
 const emptyForm = {
   username: "",
   email: "",
@@ -17,6 +30,8 @@ const emptyForm = {
   role: "employee",
   is_active: true,
   password: "",
+  allowed_sections: defaultAllowedSections,
+  assigned_branch: "",
 };
 
 const regionStyles = {
@@ -123,8 +138,20 @@ const UserManagement = () => {
   };
 
   const openEdit = (u) => {
+    let allowed = u.allowed_sections || defaultAllowedSections;
+    if (Array.isArray(allowed)) {
+      const dict = {};
+      allowed.forEach(k => { dict[k] = ["All"]; });
+      allowed = dict;
+    }
     setEditing(u);
-    setForm({ ...emptyForm, ...u, password: "" });
+    setForm({ 
+      ...emptyForm, 
+      ...u, 
+      password: "", 
+      allowed_sections: allowed,
+      assigned_branch: u.assigned_branch || "" 
+    });
     setShowForm(true);
   };
 
@@ -277,6 +304,7 @@ const UserManagement = () => {
           <option value="">All Roles</option>
           <option value="superadmin">Super Admin</option>
           <option value="admin">Admin</option>
+          <option value="hr">HR</option>
           <option value="employee">Employee</option>
         </select>
         <select className="h-10 rounded-xl border border-border bg-card px-3 text-sm" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
@@ -352,9 +380,112 @@ const UserManagement = () => {
               <select className="h-10 rounded-xl border border-border bg-background px-3 text-sm" value={form.role} onChange={(e) => setForm((p) => ({ ...p, role: e.target.value }))}>
                 <option value="superadmin">Super Admin</option>
                 <option value="admin">Admin</option>
+                <option value="hr">HR</option>
                 <option value="employee">Employee</option>
               </select>
+              {(form.role === "hr" || form.role === "employee") && (
+                <select 
+                  className="h-10 rounded-xl border border-border bg-background px-3 text-sm" 
+                  value={form.assigned_branch || ""} 
+                  onChange={(e) => setForm((p) => ({ ...p, assigned_branch: e.target.value || null }))}
+                >
+                  <option value="">All Branches (Global)</option>
+                  <option value="Chennai">Chennai</option>
+                  <option value="Vellore">Vellore</option>
+                  <option value="Salem">Salem</option>
+                  <option value="Kanchipuram">Kanchipuram</option>
+                  <option value="Hosur">Hosur</option>
+                </select>
+              )}
             </div>
+              {(form.role === "hr" || form.role === "employee") && (
+              <div className="border-t border-border/60 pt-3">
+                <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Allowed Sections & Region Scope</label>
+                <div className="space-y-3 bg-muted/20 border border-border/80 rounded-xl p-3 max-h-[220px] overflow-y-auto">
+                  {[
+                    { key: "hiring", label: "Hiring Portal" },
+                    { key: "onboarding", label: "Onboarding" },
+                    { key: "employees", label: "Employees List" },
+                    { key: "payroll", label: "Payroll Overview" },
+                    { key: "payslips", label: "Payslips" },
+                    { key: "attendance", label: "Attendance" },
+                    { key: "leaves", label: "Leave & Permissions" },
+                    { key: "performance", label: "Performance" },
+                    { key: "tasks", label: "Tasks Section" },
+                  ].map((sec) => {
+                    const allowedDict = form.allowed_sections || {};
+                    const isAllowed = !!allowedDict[sec.key];
+                    const selectedBranches = allowedDict[sec.key] || ["All"];
+
+                    return (
+                      <div key={sec.key} className="flex flex-col gap-1 border-b border-border/40 pb-2 last:border-0 last:pb-0">
+                        <div className="flex items-center justify-between">
+                          <label className="flex items-center gap-2 text-xs font-bold text-foreground cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              className="rounded border-border text-primary focus:ring-primary h-3.5 w-3.5"
+                              checked={isAllowed}
+                              onChange={(e) => {
+                                const current = { ...allowedDict };
+                                if (e.target.checked) {
+                                  current[sec.key] = ["All"];
+                                } else {
+                                  delete current[sec.key];
+                                }
+                                setForm((p) => ({ ...p, allowed_sections: current }));
+                              }}
+                            />
+                            {sec.label}
+                          </label>
+                          {isAllowed && (
+                            <span className="text-[9px] text-muted-foreground font-bold bg-muted px-1.5 py-0.5 rounded">
+                              {selectedBranches.join(", ")}
+                            </span>
+                          )}
+                        </div>
+                        {isAllowed && (
+                          <div className="flex flex-wrap gap-1 mt-1 pl-5">
+                            {["All", "Chennai", "Vellore", "Salem", "Kanchipuram", "Hosur"].map((branch) => {
+                              const isActive = selectedBranches.includes(branch);
+                              return (
+                                <button
+                                  type="button"
+                                  key={branch}
+                                  onClick={() => {
+                                    const current = { ...allowedDict };
+                                    let nextBranches = [...(current[sec.key] || [])];
+                                    if (branch === "All") {
+                                      nextBranches = ["All"];
+                                    } else {
+                                      nextBranches = nextBranches.filter(b => b !== "All");
+                                      if (isActive) {
+                                        nextBranches = nextBranches.filter(b => b !== branch);
+                                        if (nextBranches.length === 0) nextBranches = ["All"];
+                                      } else {
+                                        nextBranches.push(branch);
+                                      }
+                                    }
+                                    current[sec.key] = nextBranches;
+                                    setForm((p) => ({ ...p, allowed_sections: current }));
+                                  }}
+                                  className={`px-1.5 py-0.5 rounded text-[9px] font-bold border transition-all cursor-pointer ${
+                                    isActive
+                                      ? "bg-primary text-white border-primary"
+                                      : "bg-background text-muted-foreground border-border hover:bg-muted"
+                                  }`}
+                                >
+                                  {branch}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
             <input type="password" className="h-10 w-full rounded-xl border border-border bg-background px-3 text-sm" placeholder={editing ? "New password (optional)" : "Password"} value={form.password} onChange={(e) => setForm((p) => ({ ...p, password: e.target.value }))} required={!editing} />
             <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.is_active} onChange={(e) => setForm((p) => ({ ...p, is_active: e.target.checked }))} />Active</label>
             <div className="flex gap-2 pt-2">

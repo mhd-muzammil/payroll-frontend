@@ -19,7 +19,7 @@ import {
   UserCheck
 } from "lucide-react";
 import { useState } from "react";
-import { ROLES, clearAuth, getUserRole, normalizeRole } from "@/auth/rbac";
+import { ROLES, clearAuth, getUserRole, normalizeRole, canAccessSection } from "@/auth/rbac";
 
 const nav = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: [ROLES.SUPER_ADMIN, ROLES.ADMIN] },
@@ -38,7 +38,7 @@ const nav = [
   // { to: "/compliance", label: "Tax & Compliance", icon: ShieldCheck },
 ];
 
-const defaultRoles = [ROLES.SUPER_ADMIN, ROLES.ADMIN];
+const defaultRoles = [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.HR];
 
 const navWithRoles = nav.map((item) => {
   if (
@@ -48,7 +48,7 @@ const navWithRoles = nav.map((item) => {
     item.to === "/tasks" ||
     item.to === "/performance"
   ) {
-    return { ...item, roles: [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.EMPLOYEE] };
+    return { ...item, roles: [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.HR, ROLES.EMPLOYEE] };
   }
   return { ...item, roles: item.roles || defaultRoles };
 });
@@ -57,7 +57,14 @@ const navWithRoles = nav.map((item) => {
 export function Sidebar({ collapsed, setCollapsed, mobileOpen, setMobileOpen }) {
   const { pathname: path } = useLocation();
   const role = normalizeRole(getUserRole());
-  const visibleNav = navWithRoles.filter((item) => item.roles.includes(role));
+  const visibleNav = navWithRoles.filter((item) => {
+    const hasRole = item.roles.includes(role);
+    if (!hasRole) return false;
+    
+    const section = item.to.replace(/^\//, "");
+    if (!section || section === "dashboard") return true;
+    return canAccessSection(section);
+  });
 
   const content = (mobile = false) => (
     <div className="flex h-full flex-col gap-2 p-4">

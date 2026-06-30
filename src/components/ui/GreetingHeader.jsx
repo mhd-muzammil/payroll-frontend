@@ -1,12 +1,24 @@
 import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Sparkles, Sun, CloudSun, Moon } from "lucide-react";
-import { getUserDisplayName } from "@/auth/rbac";
+import { getUserDisplayName, getUserRole } from "@/auth/rbac";
 
 export const GreetingHeader = ({ subtitle = "" }) => {
   const [greeting, setGreeting] = useState("");
   const [Icon, setIcon] = useState(Sun);
   const name = getUserDisplayName();
+  const role = getUserRole();
+
+  const getRoleBadge = (roleStr) => {
+    switch (roleStr) {
+      case "super_admin": return "Super Admin";
+      case "admin": return "Administrator";
+      case "hr": return "HR Manager";
+      case "employee": return "Employee";
+      default: return "";
+    }
+  };
+  const roleLabel = getRoleBadge(role);
   
   useEffect(() => {
     const hour = new Date().getHours();
@@ -48,6 +60,11 @@ export const GreetingHeader = ({ subtitle = "" }) => {
           
           <h1 className="text-2xl md:text-4xl font-bold tracking-tight leading-tight text-foreground">
             {greeting}, <span className="text-gradient animate-gradient bg-300%">{name}</span> 
+            {roleLabel && (
+              <span className="ml-3 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-primary/10 text-primary border border-primary/20 align-middle select-none">
+                {roleLabel}
+              </span>
+            )}
             <motion.span
               className="inline-block ml-2 origin-bottom-right"
               animate={{ rotate: [0, 14, -8, 14, -4, 10, 0] }}

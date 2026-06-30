@@ -6,12 +6,14 @@ const ROLE_ALIASES = {
   superadmin: "super_admin",
   super_admin: "super_admin",
   admin: "admin",
+  hr: "hr",
   employee: "employee",
 };
 
 export const ROLES = {
   SUPER_ADMIN: "super_admin",
   ADMIN: "admin",
+  HR: "hr",
   EMPLOYEE: "employee",
 };
 
@@ -106,4 +108,39 @@ export function getDefaultRouteByRole(role) {
 export function canAccessRole(role, allowedRoles = []) {
   const normalizedRole = normalizeRole(role);
   return allowedRoles.some((r) => normalizeRole(r) === normalizedRole);
+}
+
+export function getAllowedSections() {
+  const claims = getTokenClaims();
+  if (!claims) return [];
+  const role = getRoleFromClaims(claims) || normalizeRole(localStorage.getItem(ROLE_KEY));
+  if (role === ROLES.SUPER_ADMIN || role === ROLES.ADMIN) {
+    return ["dashboard", "users", "hiring", "onboarding", "employees", "tasks", "attendance", "payroll", "payslips", "leaves", "performance", "reports"];
+  }
+  const allowed = claims.allowed_sections || {};
+  if (Array.isArray(allowed)) return allowed;
+  return Object.keys(allowed);
+}
+
+export function canAccessSection(section) {
+  const claims = getTokenClaims();
+  if (!claims) return false;
+  
+  const role = getRoleFromClaims(claims) || normalizeRole(localStorage.getItem(ROLE_KEY));
+  if (role === ROLES.SUPER_ADMIN || role === ROLES.ADMIN) {
+    return true;
+  }
+  
+  const allowed = claims.allowed_sections;
+  if (!allowed) return false;
+  
+  if (Array.isArray(allowed)) {
+    return allowed.includes(section);
+  }
+  
+  if (typeof allowed === "object") {
+    return !!allowed[section];
+  }
+  
+  return false;
 }
