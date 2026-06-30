@@ -5,7 +5,7 @@ import PageHeader from "../ui/PageHeader";
 import StatsCard from "../ui/StatsCard";
 import Toolbar from "../ui/Toolbar";
 import DataTable from "../ui/DataTable";
-import { Wallet, TrendingUp, Clock, CheckCircle2, Play, MoreHorizontal, Loader2, MapPin, Users } from "lucide-react";
+import { Wallet, TrendingUp, Clock, CheckCircle2, Play, MoreHorizontal, Loader2, MapPin, Users, Save, Calendar } from "lucide-react";
 import { api } from "@/api/Api";
 import { extractArray } from "../../Utility/apiUtils";
 
@@ -69,6 +69,86 @@ const PayrollPage = () => {
     Hosur: 0,
     "Not Assigned": 0,
   });
+
+  const [activeTab, setActiveTab] = useState("cycles"); // cycles | profitability
+  const [selectedMonth, setSelectedMonth] = useState(() => new Date().getMonth() + 1);
+  const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear());
+  const [plData, setPlData] = useState([]);
+  const [plLoading, setPlLoading] = useState(false);
+  const [savingBranch, setSavingBranch] = useState(null);
+  const [editedFinancials, setEditedFinancials] = useState({});
+
+  const monthsList = [
+    { value: 1, label: "January" },
+    { value: 2, label: "February" },
+    { value: 3, label: "March" },
+    { value: 4, label: "April" },
+    { value: 5, label: "May" },
+    { value: 6, label: "June" },
+    { value: 7, label: "July" },
+    { value: 8, label: "August" },
+    { value: 9, label: "September" },
+    { value: 10, label: "October" },
+    { value: 11, label: "November" },
+    { value: 12, label: "December" }
+  ];
+
+  const yearsList = [2025, 2026, 2027, 2028];
+
+  const fetchPLData = async (m = selectedMonth, y = selectedYear) => {
+    setPlLoading(true);
+    try {
+      const res = await api.get(`/api/payslips/pl_summary/?month=${m}&year=${y}`);
+      setPlData(res.data || []);
+      const initialEdits = {};
+      (res.data || []).forEach(b => {
+        initialEdits[b.branch] = {
+          revenue: b.revenue,
+          other_expenses: b.other_expenses
+        };
+      });
+      setEditedFinancials(initialEdits);
+    } catch (e) {
+      console.error("Failed to fetch P&L summary", e);
+    } finally {
+      setPlLoading(false);
+    }
+  };
+
+  const handleInputChange = (branch, field, val) => {
+    setEditedFinancials(prev => ({
+      ...prev,
+      [branch]: {
+        ...prev[branch],
+        [field]: val
+      }
+    }));
+  };
+
+  const handleSaveFinancials = async (branch, rev, exp, id) => {
+    setSavingBranch(branch);
+    try {
+      const payload = {
+        branch,
+        month: selectedMonth,
+        year: selectedYear,
+        revenue: parseFloat(rev) || 0,
+        other_expenses: parseFloat(exp) || 0
+      };
+      if (id) {
+        await api.put(`/api/branch-financials/${id}/`, payload);
+      } else {
+        await api.post(`/api/branch-financials/`, payload);
+      }
+      alert(`Financials for ${branch} saved successfully!`);
+      fetchPLData(selectedMonth, selectedYear);
+    } catch (e) {
+      console.error("Failed to save financials", e);
+      alert("Failed to save financials.");
+    } finally {
+      setSavingBranch(null);
+    }
+  };
 
   const fetchData = async (region = selectedRegion) => {
     setLoading(true);
@@ -140,16 +220,30 @@ const PayrollPage = () => {
     fetchData(selectedRegion);
   }, [selectedRegion]);
 
+  useEffect(() => {
+    if (activeTab === "profitability") {
+      fetchPLData(selectedMonth, selectedYear);
+    }
+  }, [activeTab, selectedMonth, selectedYear]);
+
   return (
-    <div>
+    <div className="space-y-6">
       <PageHeader
-        title="Payroll Overview"
-        description="Review company-wide processing history and financial cycles."
-        actions={<Button icon={Play} onClick={() => { fetchData(selectedRegion); fetchEmployees(); }}>Refresh Data</Button>}
+        title="Payroll & Profitability"
+        description="Review company-wide processing history, branch budgets, and financial P&L cycles."
+        actions={
+          <div className="flex gap-2">
+            {activeTab === "profitability" ? (
+              <Button icon={Play} onClick={() => fetchPLData(selectedMonth, selectedYear)}>Refresh P&L</Button>
+            ) : (
+              <Button icon={Play} onClick={() => { fetchData(selectedRegion); fetchEmployees(); }}>Refresh Data</Button>
+            )}
+          </div>
+        }
       />
 
-      {error && (
-        <div className="mb-6 p-4 border-l-4 border-red-500 bg-red-50 rounded-r-2xl shadow-sm animate-pulse-subtle">
+      {error && activeTab === "cycles" && (
+        <div className="p-4 border-l-4 border-red-500 bg-red-50 rounded-r-2xl shadow-sm animate-pulse-subtle">
           <div className="flex items-start gap-3">
             <div className="p-1 bg-red-100 rounded-full text-red-600">
               <Clock className="h-4 w-4 rotate-45" />
@@ -163,100 +257,257 @@ const PayrollPage = () => {
         </div>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 md:gap-6 mb-6">
-        <StatsCard label="This Month Net" value={stats.thisMonth} delta="Live Data" icon={Wallet} accent="primary" />
-        <StatsCard label="YTD Total Net" value={stats.ytdTotal} delta="Live Cumulative" icon={TrendingUp} accent="success" />
-        <StatsCard label="Pending Adjusts" value={stats.pending} icon={Clock} accent="warning" />
-        <StatsCard label="Month Completion" value={stats.processed} icon={CheckCircle2} accent="info" />
+      {/* Tab Switcher */}
+      <div className="flex rounded-2xl overflow-hidden bg-muted/40 p-1.5 max-w-md border border-border flex-1 min-w-[280px]">
+        <button
+          onClick={() => setActiveTab("cycles")}
+          className={`flex-1 py-2 text-center rounded-xl text-sm font-medium transition-all duration-200 ${
+            activeTab === "cycles"
+              ? "bg-card text-foreground shadow-sm border border-border/50"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          Payroll Cycles
+        </button>
+        <button
+          onClick={() => setActiveTab("profitability")}
+          className={`flex-1 py-2 text-center rounded-xl text-sm font-medium transition-all duration-200 ${
+            activeTab === "profitability"
+              ? "bg-card text-foreground shadow-sm border border-border/50"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          Profitability (P&L)
+        </button>
       </div>
 
-      {/* Region-Wise Payroll Distribution */}
-      <div className="bg-card border border-border/60 rounded-3xl p-6 shadow-xs mb-6">
-        <div className="flex items-center gap-2 mb-4">
-          <MapPin className="h-5 w-5 text-primary" />
-          <span className="text-base font-bold tracking-tight text-foreground">Filter by Region</span>
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-4">
-          <button
-            onClick={() => setSelectedRegion("")}
-            className={`bg-gradient-to-br from-indigo-50/50 to-purple-50/30 border border-indigo-100 rounded-2xl p-4 md:p-5 flex flex-col justify-between text-left transition-all duration-300 ${
-              selectedRegion === "" 
-                ? "ring-2 ring-primary ring-offset-1 dark:ring-offset-background shadow-md scale-[1.05]" 
-                : "opacity-50 hover:opacity-100 scale-[0.95]"
-            }`}
-          >
-            <span className="font-bold text-xs md:text-sm tracking-tight text-indigo-700">All Regions</span>
-            <div className="flex items-baseline gap-1.5 mt-3">
-              <span className="text-2xl md:text-3xl font-black tracking-tight text-foreground">
-                {Object.values(employeeStats).reduce((a, b) => a + b, 0)}
-              </span>
-              <span className="text-xs font-semibold text-muted-foreground">staff</span>
-            </div>
-          </button>
-          {Object.entries(employeeStats).map(([region, count]) => {
-            if (region === "Not Assigned") return null;
-            const style = regionStyles[region] || defaultStyle;
-            const isSelected = selectedRegion.toLowerCase() === region.toLowerCase();
-            const hasActiveFilter = selectedRegion !== "";
+      {activeTab === "cycles" ? (
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 md:gap-6">
+            <StatsCard label="This Month Net" value={stats.thisMonth} delta="Live Data" icon={Wallet} accent="primary" />
+            <StatsCard label="YTD Total Net" value={stats.ytdTotal} delta="Live Cumulative" icon={TrendingUp} accent="success" />
+            <StatsCard label="Pending Adjusts" value={stats.pending} icon={Clock} accent="warning" />
+            <StatsCard label="Month Completion" value={stats.processed} icon={CheckCircle2} accent="info" />
+          </div>
 
-            return (
+          {/* Region-Wise Payroll Distribution */}
+          <div className="bg-card border border-border/60 rounded-3xl p-6 shadow-xs">
+            <div className="flex items-center gap-2 mb-4">
+              <MapPin className="h-5 w-5 text-primary" />
+              <span className="text-base font-bold tracking-tight text-foreground">Filter by Region</span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-4">
               <button
-                key={region}
-                onClick={() => setSelectedRegion(prev => prev.toLowerCase() === region.toLowerCase() ? "" : region)}
-                className={`bg-gradient-to-br ${style.bg} border ${style.border} rounded-2xl p-4 md:p-5 flex flex-col justify-between text-left transition-all duration-300 ${
-                  isSelected 
+                onClick={() => setSelectedRegion("")}
+                className={`bg-gradient-to-br from-indigo-50/50 to-purple-50/30 border border-indigo-100 rounded-2xl p-4 md:p-5 flex flex-col justify-between text-left transition-all duration-300 ${
+                  selectedRegion === "" 
                     ? "ring-2 ring-primary ring-offset-1 dark:ring-offset-background shadow-md scale-[1.05]" 
-                    : hasActiveFilter 
-                      ? "opacity-50 hover:opacity-100 scale-[0.95]" 
-                      : "hover:shadow-sm hover:scale-[1.02]"
+                    : "opacity-50 hover:opacity-100 scale-[0.95]"
                 }`}
               >
-                <span className={`font-bold text-xs md:text-sm tracking-tight ${style.text}`}>{region}</span>
+                <span className="font-bold text-xs md:text-sm tracking-tight text-indigo-700">All Regions</span>
                 <div className="flex items-baseline gap-1.5 mt-3">
-                  <span className="text-2xl md:text-3xl font-black tracking-tight text-foreground">{count}</span>
+                  <span className="text-2xl md:text-3xl font-black tracking-tight text-foreground">
+                    {Object.values(employeeStats).reduce((a, b) => a + b, 0)}
+                  </span>
                   <span className="text-xs font-semibold text-muted-foreground">staff</span>
                 </div>
               </button>
-            );
-          })}
-        </div>
-      </div>
+              {Object.entries(employeeStats).map(([region, count]) => {
+                if (region === "Not Assigned") return null;
+                const style = regionStyles[region] || defaultStyle;
+                const isSelected = selectedRegion.toLowerCase() === region.toLowerCase();
+                const hasActiveFilter = selectedRegion !== "";
 
-      <Toolbar />
-
-      {loading ? (
-        <div className="flex flex-col items-center justify-center py-12 text-muted-foreground space-y-2 bg-card border border-border rounded-2xl">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          <p className="text-sm">Aggregating real-time payroll cycles...</p>
-        </div>
-      ) : (
-        <DataTable
-          data={runs}
-          emptyMessage="No payroll cycles found. Generate payslips to create payroll cycle history."
-          columns={[
-            { key: "period", label: "Period", render: (r) => <span className="font-semibold text-sm tracking-tight">{r.period}</span> },
-            { key: "employees", label: "Total Staff", render: (r) => <span className="text-sm text-muted-foreground font-medium">{r.employees}</span> },
-            { key: "gross", label: "Total Gross Payout", render: (r) => <span className="text-sm">{r.gross}</span> },
-            { key: "net", label: "Total Net Distributed", render: (r) => <span className="font-bold text-sm text-foreground">{r.net}</span> },
-            {
-              key: "status", label: "Status",
-              render: (r) => (
-                <Badge variant={r.status === "Completed" ? "success" : "warning"} className="capitalize">{r.status}</Badge>
-              ),
-            },
-            {
-              key: "act", label: "",
-              render: () => (
-                <div className="flex items-center justify-end gap-1">
-                  <button className="rounded-lg border border-border px-3 h-8 text-xs hover:bg-muted font-medium transition-colors">Details</button>
-                  <button className="grid h-8 w-8 place-items-center rounded-lg hover:bg-muted transition-colors">
-                    <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
+                return (
+                  <button
+                    key={region}
+                    onClick={() => setSelectedRegion(prev => prev.toLowerCase() === region.toLowerCase() ? "" : region)}
+                    className={`bg-gradient-to-br ${style.bg} border ${style.border} rounded-2xl p-4 md:p-5 flex flex-col justify-between text-left transition-all duration-300 ${
+                      isSelected 
+                        ? "ring-2 ring-primary ring-offset-1 dark:ring-offset-background shadow-md scale-[1.05]" 
+                        : hasActiveFilter 
+                          ? "opacity-50 hover:opacity-100 scale-[0.95]" 
+                          : "hover:shadow-sm hover:scale-[1.02]"
+                    }`}
+                  >
+                    <span className={`font-bold text-xs md:text-sm tracking-tight ${style.text}`}>{region}</span>
+                    <div className="flex items-baseline gap-1.5 mt-3">
+                      <span className="text-2xl md:text-3xl font-black tracking-tight text-foreground">{count}</span>
+                      <span className="text-xs font-semibold text-muted-foreground">staff</span>
+                    </div>
                   </button>
-                </div>
-              ),
-            },
-          ]}
-        />
+                );
+              })}
+            </div>
+          </div>
+
+          <Toolbar />
+
+          {loading ? (
+            <div className="flex flex-col items-center justify-center py-12 text-muted-foreground space-y-2 bg-card border border-border rounded-2xl">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <p className="text-sm">Aggregating real-time payroll cycles...</p>
+            </div>
+          ) : (
+            <DataTable
+              data={runs}
+              emptyMessage="No payroll cycles found. Generate payslips to create payroll cycle history."
+              columns={[
+                { key: "period", label: "Period", render: (r) => <span className="font-semibold text-sm tracking-tight">{r.period}</span> },
+                { key: "employees", label: "Total Staff", render: (r) => <span className="text-sm text-muted-foreground font-medium">{r.employees}</span> },
+                { key: "gross", label: "Total Gross Payout", render: (r) => <span className="text-sm">{r.gross}</span> },
+                { key: "net", label: "Total Net Distributed", render: (r) => <span className="font-bold text-sm text-foreground">{r.net}</span> },
+                {
+                  key: "status", label: "Status",
+                  render: (r) => (
+                    <Badge variant={r.status === "Completed" ? "success" : "warning"} className="capitalize">{r.status}</Badge>
+                  ),
+                },
+                {
+                  key: "act", label: "",
+                  render: () => (
+                    <div className="flex items-center justify-end gap-1">
+                      <button className="rounded-lg border border-border px-3 h-8 text-xs hover:bg-muted font-medium transition-colors">Details</button>
+                      <button className="grid h-8 w-8 place-items-center rounded-lg hover:bg-muted transition-colors">
+                        <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
+                      </button>
+                    </div>
+                  ),
+                },
+              ]}
+            />
+          )}
+        </>
+      ) : (
+        <>
+          {/* Period Selector Controls for P&L */}
+          <div className="flex flex-wrap items-center gap-3 bg-card border border-border/60 rounded-3xl p-5 shadow-xs">
+            <div className="flex items-center gap-2">
+              <Calendar className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm font-semibold text-foreground">Select Financial Period:</span>
+            </div>
+            
+            <select
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
+              className="h-10 rounded-xl border border-border bg-background px-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary"
+            >
+              {monthsList.map(m => (
+                <option key={m.value} value={m.value}>{m.label}</option>
+              ))}
+            </select>
+
+            <select
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+              className="h-10 rounded-xl border border-border bg-background px-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary"
+            >
+              {yearsList.map(y => (
+                <option key={y} value={y}>{y}</option>
+              ))}
+            </select>
+          </div>
+
+          {plLoading ? (
+            <div className="flex flex-col items-center justify-center py-12 text-muted-foreground space-y-2 bg-card border border-border rounded-2xl">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <p className="text-sm">Calculating branch P&L metrics...</p>
+            </div>
+          ) : (
+            <div className="bg-card border border-border/80 rounded-3xl p-6 shadow-sm overflow-x-auto">
+              <table className="w-full text-sm text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-border/60 text-muted-foreground font-semibold text-xs uppercase tracking-wider">
+                    <th className="py-3 px-4">Branch</th>
+                    <th className="py-3 px-4">Revenue (A)</th>
+                    <th className="py-3 px-4">Payroll Cost (B)</th>
+                    <th className="py-3 px-4">Other Expenses (C)</th>
+                    <th className="py-3 px-4">Total Expenses (B+C)</th>
+                    <th className="py-3 px-4">Net Profit/Loss (A-Exp)</th>
+                    <th className="py-3 px-4">Margin %</th>
+                    <th className="py-3 px-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/40">
+                  {plData.map((row) => {
+                    const currentEdit = editedFinancials[row.branch] || { revenue: row.revenue, other_expenses: row.other_expenses };
+                    
+                    const revNum = parseFloat(currentEdit.revenue) || 0;
+                    const otherExpNum = parseFloat(currentEdit.other_expenses) || 0;
+                    const payrollCost = row.payroll_cost;
+                    const totalExp = payrollCost + otherExpNum;
+                    const netPL = revNum - totalExp;
+                    const margin = revNum > 0 ? ((netPL / revNum) * 100).toFixed(1) : "0.0";
+                    const isProfit = netPL >= 0;
+
+                    return (
+                      <tr key={row.branch} className="hover:bg-muted/30 transition-colors">
+                        <td className="py-4 px-4 font-bold text-foreground flex items-center gap-2">
+                          <MapPin className="h-4 w-4 text-indigo-500" />
+                          {row.branch}
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-1.5 max-w-[140px]">
+                            <span className="text-muted-foreground">₹</span>
+                            <input
+                              type="number"
+                              value={currentEdit.revenue}
+                              onChange={(e) => handleInputChange(row.branch, "revenue", e.target.value)}
+                              className="w-full bg-background border border-border rounded-lg px-2 py-1 text-sm font-semibold focus:outline-none focus:ring-1 focus:ring-primary"
+                              placeholder="0.00"
+                            />
+                          </div>
+                        </td>
+                        <td className="py-4 px-4 font-mono font-medium text-muted-foreground">
+                          ₹{payrollCost.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-1.5 max-w-[140px]">
+                            <span className="text-muted-foreground">₹</span>
+                            <input
+                              type="number"
+                              value={currentEdit.other_expenses}
+                              onChange={(e) => handleInputChange(row.branch, "other_expenses", e.target.value)}
+                              className="w-full bg-background border border-border rounded-lg px-2 py-1 text-sm font-semibold focus:outline-none focus:ring-1 focus:ring-primary"
+                              placeholder="0.00"
+                            />
+                          </div>
+                        </td>
+                        <td className="py-4 px-4 font-mono font-medium text-muted-foreground">
+                          ₹{totalExp.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className={`py-4 px-4 font-mono font-bold ${isProfit ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
+                          {isProfit ? "+" : ""}₹{netPL.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="py-4 px-4">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold ${
+                            isProfit 
+                              ? "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900/30" 
+                              : "bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-400 border border-rose-100 dark:border-rose-900/30"
+                          }`}>
+                            {margin}%
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          <Button
+                            size="sm"
+                            variant="brand"
+                            icon={Save}
+                            disabled={savingBranch === row.branch}
+                            onClick={() => handleSaveFinancials(row.branch, currentEdit.revenue, currentEdit.other_expenses, row.id)}
+                          >
+                            {savingBranch === row.branch ? "Saving..." : "Save"}
+                          </Button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
