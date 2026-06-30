@@ -6,6 +6,7 @@ import DataTable from "../ui/DataTable";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
+import GreetingHeader from "../ui/GreetingHeader";
 import {
   Dialog,
   DialogContent,
@@ -586,6 +587,7 @@ export default function TaskManagement() {
 
   return (
     <div className="space-y-6">
+      <GreetingHeader subtitle="Track your tasks, checklists, and activity log feeds in real-time." />
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card/40 backdrop-blur border border-border rounded-3xl p-6 shadow-sm">
         <div>
