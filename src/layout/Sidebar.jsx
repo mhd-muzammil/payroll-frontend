@@ -15,7 +15,8 @@ import {
   Sparkles,
   X,
   ClipboardList,
-  TrendingUp
+  TrendingUp,
+  UserCheck
 } from "lucide-react";
 import { useState } from "react";
 import { ROLES, clearAuth, getUserRole, normalizeRole } from "@/auth/rbac";
@@ -23,6 +24,7 @@ import { ROLES, clearAuth, getUserRole, normalizeRole } from "@/auth/rbac";
 const nav = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: [ROLES.SUPER_ADMIN, ROLES.ADMIN] },
   { to: "/users", label: "Users", icon: Users, roles: [ROLES.SUPER_ADMIN, ROLES.ADMIN] },
+  { to: "/hiring", label: "Hiring Portal", icon: UserCheck, roles: [ROLES.SUPER_ADMIN, ROLES.ADMIN] },
   { to: "/onboarding", label: "Onboarding", icon: UserPlus, roles: [ROLES.SUPER_ADMIN, ROLES.ADMIN] },
   { to: "/employees", label: "Employees", icon: Users },
   { to: "/tasks", label: "Tasks", icon: ClipboardList },

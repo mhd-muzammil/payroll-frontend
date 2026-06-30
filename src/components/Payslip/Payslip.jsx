@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import PageHeader from "../ui/PageHeader";
 import Toolbar from "../ui/Toolbar";
 import DataTable from "../ui/DataTable";
-import { Download, Eye, Sparkles, Loader2, Printer, MapPin, Users } from "lucide-react";
+import { Download, Eye, Sparkles, Loader2, Printer, MapPin, Users, Mail } from "lucide-react";
 import { api } from "@/api/Api";
 import {
   Dialog,
@@ -130,6 +130,30 @@ const PayslipsPage = () => {
       minimumFractionDigits: 2, 
       maximumFractionDigits: 2 
     });
+  };
+
+  const [emailingSlipId, setEmailingSlipId] = useState(null);
+
+  const handleEmailPayslip = async (slip) => {
+    if (!slip?.employee_details?.email) {
+      alert("This employee does not have a registered email address. Please edit their profile first.");
+      return;
+    }
+    
+    if (!window.confirm(`Are you sure you want to send the payslip email to ${slip.employee_details.employee_name} (${slip.employee_details.email})?`)) {
+      return;
+    }
+    
+    setEmailingSlipId(slip.id);
+    try {
+      await api.post(`/api/payslips/${slip.id}/email_payslip/`);
+      alert(`Payslip successfully sent to ${slip.employee_details.email}!`);
+    } catch (err) {
+      console.error("Failed to email payslip:", err);
+      alert(err.response?.data?.error || "Failed to email payslip. Please try again later.");
+    } finally {
+      setEmailingSlipId(null);
+    }
   };
 
   // Bulletproof Direct Print Engine: Clones target HTML inside a hidden iframe and triggers browser printing.
@@ -416,6 +440,18 @@ const PayslipsPage = () => {
                     <Eye className="h-4 w-4 text-muted-foreground" />
                   </button>
                   <button 
+                    onClick={() => handleEmailPayslip(s)}
+                    disabled={emailingSlipId === s.id}
+                    title="Send Email" 
+                    className="grid h-8 w-8 place-items-center rounded-lg border border-border hover:bg-muted transition-colors cursor-pointer disabled:opacity-50"
+                  >
+                    {emailingSlipId === s.id ? (
+                      <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                    ) : (
+                      <Mail className="h-4 w-4 text-muted-foreground" />
+                    )}
+                  </button>
+                  <button 
                     onClick={() => setSelectedSlip(s)}
                     title="Download/Print" 
                     className="grid h-8 w-8 place-items-center rounded-lg border border-border hover:bg-muted transition-colors cursor-pointer"
@@ -441,6 +477,15 @@ const PayslipsPage = () => {
                   <p className="text-xs text-muted-foreground">{selectedSlip.employee_details?.employee_name} - {getMonthLabel(selectedSlip.month)} {selectedSlip.year}</p>
                 </div>
                 <div className="flex items-center gap-3 pr-8">
+                  <Button 
+                    variant="brand" 
+                    size="sm" 
+                    icon={emailingSlipId === selectedSlip.id ? Loader2 : Mail} 
+                    disabled={emailingSlipId === selectedSlip.id}
+                    onClick={() => handleEmailPayslip(selectedSlip)}
+                  >
+                    {emailingSlipId === selectedSlip.id ? "Sending..." : "Send Email"}
+                  </Button>
                   <Button variant="brand" size="sm" icon={Printer} onClick={handlePrintIframe}>
                     Download / Print PDF
                   </Button>

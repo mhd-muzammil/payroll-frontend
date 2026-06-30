@@ -11,6 +11,7 @@ import LeavePage from './pages/LeavePage';
 import LoginPage from './pages/Login';
 import UserManagementPage from './pages/UserManagementPage';
 import OnboardingPage from './pages/OnboardingPage';
+import HiringPage from './pages/HiringPage';
 import TasksPage from './pages/TasksPage';
 import PerformancePage from './pages/PerformancePage';
 import ProtectedRoute from './components/auth/ProtectedRoute';
@@ -36,6 +37,7 @@ function App() {
         <Route element={<ProtectedRoute allowedRoles={[ROLES.SUPER_ADMIN, ROLES.ADMIN]} />}>
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/users" element={<UserManagementPage />} />
+          <Route path="/hiring" element={<HiringPage />} />
           <Route path="/onboarding" element={<OnboardingPage />} />
           <Route path="/employees" element={<EmployeePage />} />
           <Route path="/payroll" element={<PayrollPage />} />
