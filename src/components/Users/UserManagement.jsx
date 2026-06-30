@@ -109,11 +109,7 @@ const UserManagement = () => {
   };
 
   const load = async () => {
-    await fetchAll({
-      ...(query ? { q: query } : {}),
-      ...(roleFilter ? { role: roleFilter } : {}),
-      ...(statusFilter ? { is_active: statusFilter } : {}),
-    });
+    await fetchAll();
   };
 
   useEffect(() => {
@@ -146,12 +142,43 @@ const UserManagement = () => {
   };
 
   const rows = useMemo(() => {
-    if (!selectedRegion) return records;
-    return records.filter((u) => {
-      const branch = u.branch || "Not Assigned";
-      return branch.toLowerCase() === selectedRegion.toLowerCase();
-    });
-  }, [records, selectedRegion]);
+    let list = records;
+    if (selectedRegion) {
+      list = list.filter((u) => {
+        const branch = u.branch || "Not Assigned";
+        return branch.toLowerCase() === selectedRegion.toLowerCase();
+      });
+    }
+    if (roleFilter) {
+      list = list.filter((u) => u.role === roleFilter);
+    }
+    if (statusFilter !== "") {
+      const isActive = statusFilter === "true";
+      list = list.filter((u) => u.is_active === isActive);
+    }
+    if (query.trim()) {
+      const q = query.toLowerCase().trim();
+      list = list.filter((u) => {
+        const username = (u.username || "").toLowerCase();
+        const email = (u.email || "").toLowerCase();
+        const firstName = (u.first_name || "").toLowerCase();
+        const lastName = (u.last_name || "").toLowerCase();
+        const phone = (u.phone_number || "").toLowerCase();
+        const branch = (u.branch || "").toLowerCase();
+        const fullName = `${firstName} ${lastName}`.toLowerCase();
+        return (
+          username.includes(q) ||
+          email.includes(q) ||
+          firstName.includes(q) ||
+          lastName.includes(q) ||
+          fullName.includes(q) ||
+          phone.includes(q) ||
+          branch.includes(q)
+        );
+      });
+    }
+    return list;
+  }, [records, selectedRegion, roleFilter, statusFilter, query]);
 
   const regionStats = useMemo(() => {
     const regions = ["Chennai", "Vellore", "Salem", "Kanchipuram", "Hosur"];
@@ -258,7 +285,7 @@ const UserManagement = () => {
           <option value="false">Inactive</option>
         </select>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={load} disabled={loading}>{loading ? "Loading..." : "Apply"}</Button>
+          <Button variant="outline" onClick={load} disabled={loading}>{loading ? "Loading..." : "Refresh"}</Button>
           <Button variant="outline" onClick={() => { setQuery(""); setRoleFilter(""); setStatusFilter(""); setSelectedRegion(""); clearMessages(); fetchAll(); }}>Reset</Button>
         </div>
       </div>

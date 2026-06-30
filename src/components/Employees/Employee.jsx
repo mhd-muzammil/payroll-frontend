@@ -73,6 +73,7 @@ const EmployeesPage = () => {
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [activeTab, setActiveTab] = useState("working"); // working | separated
   const [selectedRegion, setSelectedRegion] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     fetchAll();
@@ -124,8 +125,29 @@ const EmployeesPage = () => {
     if (selectedRegion) {
       list = list.filter((e) => (e.branch || "Chennai").toLowerCase() === selectedRegion.toLowerCase());
     }
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      list = list.filter((e) => {
+        const name = (e.employee_name || "").toLowerCase();
+        const email = (e.email || "").toLowerCase();
+        const role = (e.role || "").toLowerCase();
+        const dept = (e.department || "").toLowerCase();
+        const code = (e.emp_code || "").toLowerCase();
+        const phone = (e.phone || "").toLowerCase();
+        const branch = (e.branch || "").toLowerCase();
+        return (
+          name.includes(q) ||
+          email.includes(q) ||
+          role.includes(q) ||
+          dept.includes(q) ||
+          code.includes(q) ||
+          phone.includes(q) ||
+          branch.includes(q)
+        );
+      });
+    }
     return list;
-  }, [employeeRows, activeTab, selectedRegion]);
+  }, [employeeRows, activeTab, selectedRegion, searchQuery]);
 
   const employeeStats = useMemo(() => {
     let list = employeeRows;
@@ -304,6 +326,8 @@ const EmployeesPage = () => {
       </div>
 
       <Toolbar
+        searchValue={searchQuery}
+        onSearchChange={setSearchQuery}
         onAdd={() => {
           setEditingRecord(null);
           setShowForm(true);
