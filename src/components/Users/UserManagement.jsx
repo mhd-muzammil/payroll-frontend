@@ -460,8 +460,9 @@ const UserManagement = () => {
                         </div>
                         {isAllowed && (
                           <div className="flex flex-wrap gap-1 mt-1 pl-5">
-                            {["All", "Chennai", "Vellore", "Salem", "Kanchipuram", "Hosur"].map((branch) => {
+                            {["All", "Chennai", "Vellore", "Salem", "Kanchipuram", "Hosur", "Own"].map((branch) => {
                               const isActive = selectedBranches.includes(branch);
+                              const buttonLabel = branch === "Own" ? "Only My Data" : branch;
                               return (
                                 <button
                                   type="button"
@@ -471,8 +472,10 @@ const UserManagement = () => {
                                     let nextBranches = [...(current[sec.key] || [])];
                                     if (branch === "All") {
                                       nextBranches = ["All"];
+                                    } else if (branch === "Own") {
+                                      nextBranches = ["Own"];
                                     } else {
-                                      nextBranches = nextBranches.filter(b => b !== "All");
+                                      nextBranches = nextBranches.filter(b => b !== "All" && b !== "Own");
                                       if (isActive) {
                                         nextBranches = nextBranches.filter(b => b !== branch);
                                         if (nextBranches.length === 0) nextBranches = ["All"];
@@ -489,7 +492,7 @@ const UserManagement = () => {
                                       : "bg-background text-muted-foreground border-border hover:bg-muted"
                                   }`}
                                 >
-                                  {branch}
+                                  {buttonLabel}
                                 </button>
                               );
                             })}
