@@ -35,6 +35,8 @@ import {
   User,
   History,
   Send,
+  FileText,
+  Paperclip,
 } from "lucide-react";
 
 export default function TaskManagement() {
@@ -78,6 +80,7 @@ export default function TaskManagement() {
     due_date: "",
     employee_notes: "",
     checklist: [],
+    attachments: [],
   });
 
   // Checklist management state (temp input inside creation dialog)
@@ -116,12 +119,13 @@ export default function TaskManagement() {
     setFormData({
       title: "",
       description: "",
-      assigned_to: employees[0]?.id || "",
+      assigned_to: "",
       status: "pending",
       priority: "medium",
       due_date: new Date().toISOString().split("T")[0],
       employee_notes: "",
       checklist: [],
+      attachments: [],
     });
     setNewSubtaskText("");
     setIsDialogOpen(true);
@@ -138,6 +142,7 @@ export default function TaskManagement() {
       due_date: task.due_date,
       employee_notes: task.employee_notes || "",
       checklist: task.checklist || [],
+      attachments: task.attachments || [],
     });
     setNewSubtaskText("");
     setIsDialogOpen(true);
@@ -149,6 +154,28 @@ export default function TaskManagement() {
     setDetailsNotes(task.employee_notes || "");
     setNewComment("");
     setIsDetailsOpen(true);
+
+    try {
+      const seenTimestamps = JSON.parse(localStorage.getItem("task_seen_timestamps") || "{}");
+      seenTimestamps[task.id] = new Date().toISOString();
+      localStorage.setItem("task_seen_timestamps", JSON.stringify(seenTimestamps));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const hasUnreadComments = (task) => {
+    try {
+      const seenTimestamps = JSON.parse(localStorage.getItem("task_seen_timestamps") || "{}");
+      const lastSeen = seenTimestamps[task.id];
+      if (!lastSeen) return (task.activity_log || []).length > 0;
+      
+      return (task.activity_log || []).some(
+        (log) => new Date(log.timestamp) > new Date(lastSeen) && log.user !== displayName
+      );
+    } catch (e) {
+      return false;
+    }
   };
 
   // Add subtask to forms (Creation/Editing)
@@ -258,6 +285,84 @@ export default function TaskManagement() {
     }
   };
 
+  const handleFileChange = (e, isDetails = false) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      alert("File size exceeds 5MB limit.");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const base64Data = reader.result;
+      const newAttachment = {
+        id: Date.now().toString(),
+        name: file.name,
+        type: file.type,
+        size: file.size,
+        data: base64Data,
+        uploaded_by: displayName,
+        uploaded_at: new Date().toISOString()
+      };
+
+      if (isDetails) {
+        const updatedAttachments = [...(detailsTask.attachments || []), newAttachment];
+        const logEntry = {
+          user: displayName,
+          text: `Uploaded attachment: "${file.name}"`,
+          timestamp: new Date().toISOString(),
+        };
+        try {
+          const data = await taskService.patch(detailsTask.id, {
+            attachments: updatedAttachments,
+            activity_log: [...(detailsTask.activity_log || []), logEntry]
+          });
+          setDetailsTask(data);
+          setTasks(tasks.map((t) => (t.id === detailsTask.id ? data : t)));
+        } catch (err) {
+          console.error(err);
+          setError("Failed to upload attachment to task.");
+        }
+      } else {
+        setFormData(prev => ({
+          ...prev,
+          attachments: [...(prev.attachments || []), newAttachment]
+        }));
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveAttachment = async (attachmentId, isDetails = false) => {
+    if (isDetails) {
+      const targetName = detailsTask.attachments.find(a => a.id === attachmentId)?.name || "";
+      const updatedAttachments = detailsTask.attachments.filter(a => a.id !== attachmentId);
+      const logEntry = {
+        user: displayName,
+        text: `Removed attachment: "${targetName}"`,
+        timestamp: new Date().toISOString(),
+      };
+      try {
+        const data = await taskService.patch(detailsTask.id, {
+          attachments: updatedAttachments,
+          activity_log: [...(detailsTask.activity_log || []), logEntry]
+        });
+        setDetailsTask(data);
+        setTasks(tasks.map((t) => (t.id === detailsTask.id ? data : t)));
+      } catch (err) {
+        console.error(err);
+        setError("Failed to remove attachment.");
+      }
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        attachments: prev.attachments.filter(a => a.id !== attachmentId)
+      }));
+    }
+  };
+
   // Comments feed submission
   const handleAddComment = async (e) => {
     e.preventDefault();
@@ -317,7 +422,8 @@ export default function TaskManagement() {
       fetchData();
     } catch (err) {
       console.error(err);
-      setError("Failed to save task. Please verify your details.");
+      const serverErr = err.response?.data ? JSON.stringify(err.response.data) : err.message;
+      setError(`Failed to save task: ${serverErr}`);
     }
   };
 
@@ -570,8 +676,14 @@ export default function TaskManagement() {
       className: "text-right",
       render: (row) => (
         <div className="flex justify-end items-center gap-2">
-          <Button variant="outline" size="sm" className="h-8 text-xs font-semibold gap-1" onClick={() => handleOpenDetails(row)}>
+          <Button variant="outline" size="sm" className="h-8 text-xs font-semibold gap-1 relative" onClick={() => handleOpenDetails(row)}>
             <ExternalLink className="h-3.5 w-3.5" /> Details
+            {hasUnreadComments(row) && (
+              <span className="absolute -top-1 -right-1 flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+              </span>
+            )}
           </Button>
           {canEditTask(row) && (
             <>
@@ -857,6 +969,11 @@ export default function TaskManagement() {
                             </div>
                             <div className="flex items-center gap-1.5 mt-0.5">
                               {getDueDateBadge(task.due_date, task.status)}
+                              {hasUnreadComments(task) && (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold text-rose-600 dark:text-rose-400 bg-rose-100 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/30 animate-pulse">
+                                  <MessageSquare className="h-2.5 w-2.5 fill-current" /> New
+                                </span>
+                              )}
                             </div>
                           </div>
                           <p className="text-xs text-muted-foreground line-clamp-3 leading-relaxed">{task.description}</p>
@@ -902,8 +1019,14 @@ export default function TaskManagement() {
                                   </Button>
                                 </>
                               )}
-                              <Button variant="outline" size="sm" className="h-8 text-[11px] font-semibold gap-1 hover:bg-primary hover:text-white" onClick={() => handleOpenDetails(task)}>
+                              <Button variant="outline" size="sm" className="h-8 text-[11px] font-semibold gap-1 relative hover:bg-primary hover:text-white" onClick={() => handleOpenDetails(task)}>
                                 Details
+                                {hasUnreadComments(task) && (
+                                  <span className="absolute -top-1 -right-1 flex h-2 w-2">
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                                  </span>
+                                )}
                               </Button>
                             </div>
                           </div>
@@ -966,6 +1089,7 @@ export default function TaskManagement() {
                   onChange={(e) => setFormData({ ...formData, assigned_to: e.target.value })}
                   className="w-full h-11 px-3 bg-background/50 border border-input rounded-xl text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                 >
+                  <option value="" disabled>-- Select Employee --</option>
                   {employees.map((emp) => (
                     <option key={emp.id} value={emp.id}>
                       {emp.employee_name}
@@ -1045,6 +1169,45 @@ export default function TaskManagement() {
                   ))
                 )}
               </div>
+            </div>
+
+            {/* Attachments Section in Creation Form */}
+            <div className="space-y-2 border-t pt-3 border-border/80">
+              <Label className="text-sm font-semibold text-foreground block">Attachments (Photos/PDFs)</Label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="file"
+                  id="form-attachment-upload"
+                  accept="image/*,application/pdf"
+                  onChange={(e) => handleFileChange(e, false)}
+                  className="hidden"
+                />
+                <Button
+                  type="button"
+                  onClick={() => document.getElementById("form-attachment-upload").click()}
+                  variant="outline"
+                  className="h-10 text-xs px-4 rounded-xl gap-2 w-full border-dashed"
+                >
+                  <PlusCircle className="h-4 w-4 text-indigo-500" /> Upload File (Max 5MB)
+                </Button>
+              </div>
+
+              {formData.attachments && formData.attachments.length > 0 && (
+                <div className="space-y-1.5 mt-2 max-h-28 overflow-y-auto scrollbar-thin">
+                  {formData.attachments.map((file) => (
+                    <div key={file.id} className="flex justify-between items-center bg-muted/40 px-3 py-1.5 rounded-xl border border-border/50 text-[11px]">
+                      <span className="font-semibold text-foreground truncate max-w-[250px]">{file.name}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveAttachment(file.id, false)}
+                        className="text-destructive hover:scale-105 transition ml-2"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <DialogFooter className="mt-6 flex gap-3 justify-end">
@@ -1144,6 +1307,84 @@ export default function TaskManagement() {
                   </div>
                 </div>
 
+                {/* Task Attachments (Photos/PDFs) */}
+                <div className="space-y-3 pt-3 border-t border-border/80">
+                  <h4 className="text-xs font-bold uppercase text-muted-foreground tracking-wider flex items-center gap-1.5">
+                    <Paperclip className="h-4 w-4 text-indigo-500" />
+                    Task Attachments
+                  </h4>
+                  
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="file"
+                      id="details-attachment-upload"
+                      accept="image/*,application/pdf"
+                      onChange={(e) => handleFileChange(e, true)}
+                      className="hidden"
+                    />
+                    <Button
+                      type="button"
+                      onClick={() => document.getElementById("details-attachment-upload").click()}
+                      variant="outline"
+                      className="h-10 text-xs px-3 rounded-xl gap-2 w-full border-dashed"
+                    >
+                      <PlusCircle className="h-4 w-4 text-indigo-500" /> Upload Photo or PDF (Max 5MB)
+                    </Button>
+                  </div>
+
+                  {detailsTask.attachments && detailsTask.attachments.length > 0 ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2 max-h-56 overflow-y-auto scrollbar-thin p-1">
+                      {detailsTask.attachments.map((file) => {
+                        const isImage = file.type && file.type.startsWith("image/");
+                        if (isImage) {
+                          return (
+                            <div key={file.id} className="relative group overflow-hidden rounded-xl border border-border bg-muted/20 p-2 flex flex-col gap-2">
+                              <img src={file.data} alt={file.name} className="h-24 w-full object-cover rounded-lg border" />
+                              <div className="flex justify-between items-center text-[10px]">
+                                <span className="font-semibold truncate flex-1 pr-2 text-[10px]">{file.name}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveAttachment(file.id, true)}
+                                  className="text-destructive hover:scale-105 transition shrink-0"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        } else {
+                          return (
+                            <div key={file.id} className="rounded-xl border border-border bg-muted/20 p-3 flex justify-between items-center text-[10px] gap-2">
+                              <div className="flex items-center gap-2 overflow-hidden flex-1">
+                                <FileText className="h-6 w-6 text-indigo-500 shrink-0" />
+                                <div className="flex flex-col overflow-hidden">
+                                  <span className="font-semibold text-foreground truncate">{file.name}</span>
+                                  <span className="text-[8px] text-muted-foreground">PDF Document</span>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2 shrink-0">
+                                <a href={file.data} download={file.name} className="p-1 hover:bg-muted rounded-md text-indigo-500" title="Download">
+                                  <ExternalLink className="h-3.5 w-3.5" />
+                                </a>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveAttachment(file.id, true)}
+                                  className="p-1 hover:bg-muted rounded-md text-destructive"
+                                  title="Delete"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        }
+                      })}
+                    </div>
+                  ) : (
+                    <span className="text-xs text-muted-foreground italic pl-1 block">No attachments uploaded yet.</span>
+                  )}
+                </div>
+
                 {/* Progress Notes Form */}
                 <form onSubmit={handleUpdateStatusAndNotes} className="space-y-3 pt-3 border-t border-border/80">
                   <h4 className="text-xs font-bold uppercase text-muted-foreground tracking-wider">Update Progress & Notes</h4>
@@ -1163,13 +1404,14 @@ export default function TaskManagement() {
                     </div>
                     <div className="md:col-span-2 flex gap-2">
                       <div className="flex-1">
-                        <Label htmlFor="details_notes" className="text-xs text-muted-foreground font-semibold mb-1 block">Progress Notes</Label>
-                        <Input
+                        <Label htmlFor="details_notes" className="text-xs text-muted-foreground font-semibold mb-1 block">Task Notes / Progress Notes</Label>
+                        <textarea
                           id="details_notes"
                           value={detailsNotes}
                           onChange={(e) => setDetailsNotes(e.target.value)}
-                          placeholder="e.g. Completed initial design drafting..."
-                          className="h-11 bg-background/50 rounded-xl text-xs"
+                          placeholder="Type notes, progress details, or quick reminders here..."
+                          rows={2}
+                          className="w-full bg-background/50 border border-input rounded-xl px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-ring min-h-[60px] resize-none"
                         />
                       </div>
                       <Button type="submit" className="gradient-brand text-white font-semibold h-11 rounded-xl px-4 mt-auto">
