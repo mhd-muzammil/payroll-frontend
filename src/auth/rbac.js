@@ -115,7 +115,7 @@ export function getAllowedSections() {
   if (!claims) return [];
   const role = getRoleFromClaims(claims) || normalizeRole(localStorage.getItem(ROLE_KEY));
   if (role === ROLES.SUPER_ADMIN || role === ROLES.ADMIN) {
-    return ["dashboard", "users", "hiring", "onboarding", "employees", "tasks", "attendance", "payroll", "payslips", "leaves", "performance", "reports"];
+    return ["dashboard", "users", "hiring", "onboarding", "employees", "tasks", "attendance", "payroll", "payslips", "leaves", "performance", "reports", "assets"];
   }
   const allowed = claims.allowed_sections || {};
   if (Array.isArray(allowed)) return allowed;

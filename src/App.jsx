@@ -14,6 +14,7 @@ import OnboardingPage from './pages/OnboardingPage';
 import HiringPage from './pages/HiringPage';
 import TasksPage from './pages/TasksPage';
 import PerformancePage from './pages/PerformancePage';
+import AssetsPage from './pages/AssetsPage';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import { ROLES, getDefaultRouteByRole, getUserRole, isAuthenticated } from './auth/rbac';
 import { ErrorBoundary } from './components/ui/ErrorBoundary';
@@ -45,6 +46,7 @@ function App() {
           <Route path="/onboarding" element={<OnboardingPage />} />
           <Route path="/employees" element={<EmployeePage />} />
           <Route path="/payroll" element={<PayrollPage />} />
+          <Route path="/assets" element={<AssetsPage />} />
         </Route>
 
         <Route element={<ProtectedRoute allowedRoles={[ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.HR, ROLES.EMPLOYEE]} />}>

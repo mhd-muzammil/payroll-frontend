@@ -16,7 +16,8 @@ import {
   X,
   ClipboardList,
   TrendingUp,
-  UserCheck
+  UserCheck,
+  Laptop
 } from "lucide-react";
 import { useState } from "react";
 import { ROLES, clearAuth, getUserRole, normalizeRole, canAccessSection } from "@/auth/rbac";
@@ -33,6 +34,7 @@ const nav = [
   { to: "/payslips", label: "Payslips", icon: FileText },
   { to: "/leaves", label: "Leave & Permissions", icon: CalendarDays },
   { to: "/performance", label: "Performance", icon: TrendingUp },
+  { to: "/assets", label: "Assets", icon: Laptop },
   // { to: "/calendar", label: "Calendar", icon: CalendarDays },
   { to: "/reports", label: "Reports", icon: BarChart3, roles: [ROLES.SUPER_ADMIN, ROLES.ADMIN] },
   // { to: "/compliance", label: "Tax & Compliance", icon: ShieldCheck },
