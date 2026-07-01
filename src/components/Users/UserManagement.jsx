@@ -18,7 +18,9 @@ const defaultAllowedSections = {
   payroll: ["All"],
   payslips: ["All"],
   leaves: ["All"],
-  performance: ["All"]
+  performance: ["All"],
+  reports: ["All"],
+  assets: ["All"]
 };
 
 const emptyForm = {
@@ -30,7 +32,7 @@ const emptyForm = {
   role: "employee",
   is_active: true,
   password: "",
-  allowed_sections: defaultAllowedSections,
+  allowed_sections: {},
   assigned_branch: "",
 };
 
@@ -138,7 +140,17 @@ const UserManagement = () => {
   };
 
   const openEdit = (u) => {
-    let allowed = u.allowed_sections || defaultAllowedSections;
+    let allowed = u.allowed_sections;
+    if (typeof allowed === "string") {
+      try {
+        allowed = JSON.parse(allowed);
+      } catch (e) {
+        allowed = {};
+      }
+    }
+    if (!allowed) {
+      allowed = {};
+    }
     if (Array.isArray(allowed)) {
       const dict = {};
       allowed.forEach(k => { dict[k] = ["All"]; });
@@ -403,6 +415,7 @@ const UserManagement = () => {
                 <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Allowed Sections & Region Scope</label>
                 <div className="space-y-3 bg-muted/20 border border-border/80 rounded-xl p-3 max-h-[220px] overflow-y-auto">
                   {[
+                    { key: "dashboard", label: "Dashboard" },
                     { key: "hiring", label: "Hiring Portal" },
                     { key: "onboarding", label: "Onboarding" },
                     { key: "employees", label: "Employees List" },
@@ -412,6 +425,8 @@ const UserManagement = () => {
                     { key: "leaves", label: "Leave & Permissions" },
                     { key: "performance", label: "Performance" },
                     { key: "tasks", label: "Tasks Section" },
+                    { key: "reports", label: "Reports" },
+                    { key: "assets", label: "Assets Management" },
                   ].map((sec) => {
                     const allowedDict = form.allowed_sections || {};
                     const isAllowed = !!allowedDict[sec.key];

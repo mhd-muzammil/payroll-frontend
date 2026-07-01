@@ -23,10 +23,10 @@ import { useState } from "react";
 import { ROLES, clearAuth, getUserRole, normalizeRole, canAccessSection } from "@/auth/rbac";
 
 const nav = [
-  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: [ROLES.SUPER_ADMIN, ROLES.ADMIN] },
+  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/users", label: "Users", icon: Users, roles: [ROLES.SUPER_ADMIN, ROLES.ADMIN] },
-  { to: "/hiring", label: "Hiring Portal", icon: UserCheck, roles: [ROLES.SUPER_ADMIN, ROLES.ADMIN] },
-  { to: "/onboarding", label: "Onboarding", icon: UserPlus, roles: [ROLES.SUPER_ADMIN, ROLES.ADMIN] },
+  { to: "/hiring", label: "Hiring Portal", icon: UserCheck },
+  { to: "/onboarding", label: "Onboarding", icon: UserPlus },
   { to: "/employees", label: "Employees", icon: Users },
   { to: "/tasks", label: "Tasks", icon: ClipboardList },
   { to: "/attendance", label: "Attendance", icon: CalendarCheck },
