@@ -64,6 +64,7 @@ export default function TaskManagement() {
   const [priorityFilter, setPriorityFilter] = useState("all");
   const [assigneeFilter, setAssigneeFilter] = useState("all");
   const [dateFilter, setDateFilter] = useState("all");
+  const [assignmentFilter, setAssignmentFilter] = useState("all");
 
   // Create/Edit Task dialog state
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -399,8 +400,19 @@ export default function TaskManagement() {
     return null;
   };
 
-  // Filter Tasks
-  const filteredTasks = tasks.filter((task) => {
+  // Filter by Assignment Type (Overall, Assigned to me, Assigned by me)
+  const activeTabTasks = tasks.filter((task) => {
+    if (assignmentFilter === "assigned_to_me") {
+      return String(task.assigned_to) === String(claims.employee_id);
+    }
+    if (assignmentFilter === "assigned_by_me") {
+      return task.assigned_by_name === currentUsername;
+    }
+    return true; // "all"
+  });
+
+  // Filter Tasks further by search and dropdowns
+  const filteredTasks = activeTabTasks.filter((task) => {
     const matchesSearch =
       task.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
       task.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -432,14 +444,14 @@ export default function TaskManagement() {
   });
 
   const getStats = () => {
-    const total = tasks.length;
-    const pending = tasks.filter((t) => t.status === "pending").length;
-    const inProgress = tasks.filter((t) => t.status === "in_progress").length;
-    const completed = tasks.filter((t) => t.status === "completed").length;
+    const total = activeTabTasks.length;
+    const pending = activeTabTasks.filter((t) => t.status === "pending").length;
+    const inProgress = activeTabTasks.filter((t) => t.status === "in_progress").length;
+    const completed = activeTabTasks.filter((t) => t.status === "completed").length;
     
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const overdue = tasks.filter((t) => {
+    const overdue = activeTabTasks.filter((t) => {
       if (t.status === "completed") return false;
       const due = new Date(t.due_date);
       due.setHours(0, 0, 0, 0);
@@ -636,6 +648,60 @@ export default function TaskManagement() {
           <span className="text-sm font-medium">{error}</span>
         </div>
       )}
+
+      {/* Task Assignment Category Switcher */}
+      <div className="flex flex-wrap bg-muted/40 p-1 rounded-2xl border border-border/80 w-fit gap-1">
+        <button
+          type="button"
+          onClick={() => setAssignmentFilter("all")}
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs md:text-sm font-bold rounded-xl transition ${
+            assignmentFilter === "all"
+              ? "bg-card text-foreground shadow-sm border border-border/80"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          <span>Overall Tasks</span>
+          <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+            assignmentFilter === "all" ? "bg-indigo-500/15 text-indigo-500 dark:text-indigo-400" : "bg-muted text-muted-foreground"
+          }`}>
+            {tasks.length}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setAssignmentFilter("assigned_to_me")}
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs md:text-sm font-bold rounded-xl transition ${
+            assignmentFilter === "assigned_to_me"
+              ? "bg-card text-foreground shadow-sm border border-border/80"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          <span>Assigned to Me</span>
+          <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+            assignmentFilter === "assigned_to_me" ? "bg-indigo-500/15 text-indigo-500 dark:text-indigo-400" : "bg-muted text-muted-foreground"
+          }`}>
+            {tasks.filter(t => String(t.assigned_to) === String(claims.employee_id)).length}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setAssignmentFilter("assigned_by_me")}
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs md:text-sm font-bold rounded-xl transition ${
+            assignmentFilter === "assigned_by_me"
+              ? "bg-card text-foreground shadow-sm border border-border/80"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          <span>Assigned by Me</span>
+          <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+            assignmentFilter === "assigned_by_me" ? "bg-indigo-500/15 text-indigo-500 dark:text-indigo-400" : "bg-muted text-muted-foreground"
+          }`}>
+            {tasks.filter(t => t.assigned_by_name === currentUsername).length}
+          </span>
+        </button>
+      </div>
 
       {/* Analytics Dashboard Grid */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
