@@ -1,26 +1,25 @@
 // pages/Attendance.jsx
 import { useEffect, useState, useMemo, useCallback } from "react";
-import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { 
   Clock, CheckCircle2, AlertCircle, Timer, 
-  ChevronLeft, ChevronRight, Plus, Pencil, Trash2, X, Check,
+  ChevronLeft, ChevronRight, Plus, Trash2, X, Check,
   Upload, FileText, Loader2
 } from "lucide-react";
 import PageHeader from "../ui/PageHeader";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "../ui/dialog";
 import GreetingHeader from "../ui/GreetingHeader";
 import StatsCard from "../ui/StatsCard";
-import DataTable from "../ui/DataTable";
 import { useAttendance } from "../../customHook/useAttendance";
 import AttendanceForm from "./AttendanceForm";
+import AttendanceGroupedTable from "./AttendanceGroupedTable";
 import { ROLES, getTokenClaims, getUserRole, normalizeRole } from "@/auth/rbac";
 import {
-  formatTime, 
+  formatTime,
+  formatDayLabel,
   calculateHours,
   calculateOvertime,
-  calculateRemainingWorkingHours,
   getStatusDisplay,
   getStatusVariant,
   calculateStats,
@@ -324,7 +323,17 @@ const Attendance = () => {
     setEmployeeOuttime("");
   };
 
-  const stats = useMemo(() => calculateStats(filteredRecords), [filteredRecords]);
+  // Live headcount snapshot anchors on today; calculateStats falls back to the
+  // latest day with data when today is outside the selected cycle.
+  const stats = useMemo(
+    () => calculateStats(filteredRecords, formatLocalDate(new Date())),
+    [filteredRecords]
+  );
+
+  const snapshotDayLabel = useMemo(
+    () => (stats.snapshotDate ? formatDayLabel(stats.snapshotDate) : null),
+    [stats.snapshotDate]
+  );
 
   const selectedDateLabel = useMemo(() => {
     const formatRangeDate = (dStr) => {
@@ -374,129 +383,6 @@ const Attendance = () => {
     const nextStatus = currentStatus === "Present" ? "Absent" : "Present";
     await patchRecord(id, { status: nextStatus });
   };
-
-  const tableColumns = useMemo(() => {
-    const baseColumns = [
-      {
-        key: "employee",
-        label: "Employee",
-        render: ({ employee_name, department }) => (
-          <div className="flex items-center gap-3">
-            <Avatar name={employee_name} />
-            <div>
-              <div className="text-sm font-medium">{employee_name}</div>
-              <div className="text-xs text-muted-foreground">{department}</div>
-            </div>
-          </div>
-        ),
-      },
-      {
-        key: "role",
-        label: "Role",
-        render: ({ role }) => (
-          <span className="text-sm text-muted-foreground">{role}</span>
-        ),
-      },
-      {
-        key: "branch",
-        label: "Region",
-        render: ({ branch }) => (
-          <Badge variant="outline" className="capitalize border-border/80 text-foreground">
-            {branch || "Chennai"}
-          </Badge>
-        ),
-      },
-      {
-        key: "clockIn",
-        label: "Clock In",
-        render: ({ intime }) => (
-          <span className="text-sm">{formatTime(intime)}</span>
-        ),
-      },
-      {
-        key: "clockOut",
-        label: "Clock Out",
-        render: ({ outtime }) => (
-          <span className="text-sm">{formatTime(outtime)}</span>
-        ),
-      },
-      {
-        key: "hours",
-        label: "Total Hours",
-        render: ({ intime, outtime }) => (
-          <span className="text-sm font-medium">
-            {calculateHours(intime, outtime)}h
-          </span>
-        ),
-      },
-      {
-        key: "remaining",
-        label: "Remaining",
-        render: ({ intime, outtime }) => (
-          <span className="text-sm font-medium text-primary">
-            {calculateRemainingWorkingHours(intime, outtime)}h
-          </span>
-        ),
-      },
-      {
-        key: "overtime",
-        label: "Overtime",
-        render: ({ intime, outtime }) => {
-          const overtime = calculateOvertime(intime, outtime);
-          return Number(overtime) > 0 ? (
-            <Badge variant="info">+{overtime}h</Badge>
-          ) : (
-            <span className="text-xs text-muted-foreground">—</span>
-          );
-        },
-      },
-      {
-        key: "status",
-        label: "Status",
-        render: (record) => (
-          <button
-            onClick={() => {
-              if (!isEmployee) handleQuickStatusUpdate(record.id, record.status);
-            }}
-            className={isEmployee ? "cursor-not-allowed" : "cursor-pointer"}
-            title={isEmployee ? "Status updates are disabled for employees" : "Click to toggle status"}
-            disabled={isEmployee}
-          >
-            <Badge variant={getStatusVariant(record.status)}>
-              {getStatusDisplay(record.status)}
-            </Badge>
-          </button>
-        ),
-      },
-      !isEmployee && {
-        key: "actions",
-        label: "Actions",
-        className: "w-[120px]",
-        render: (record) => (
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => setEditingRecord(record)}
-              disabled={isEmployee}
-              className="grid h-8 w-8 place-items-center rounded-lg border border-border hover:bg-muted"
-              title="Edit"
-            >
-              <Pencil className="h-4 w-4" />
-            </button>
-            <button
-              onClick={() => setDeleteConfirm(record.id)}
-              disabled={isEmployee}
-              className="grid h-8 w-8 place-items-center rounded-lg border border-border hover:bg-red-50 hover:text-red-500"
-              title="Delete"
-            >
-              <Trash2 className="h-4 w-4" />
-            </button>
-          </div>
-        ),
-      },
-    ];
-
-    return baseColumns.filter(Boolean);
-  }, [isEmployee]);
 
   if (loading && safeRecords.length === 0) {
     return (
@@ -641,30 +527,35 @@ const Attendance = () => {
         <StatsCard
           label="Present"
           value={stats.presentToday.toString()}
+          subtitle={snapshotDayLabel ? `Live · ${snapshotDayLabel}` : "Live headcount"}
           icon={CheckCircle2}
           accent="success"
         />
         <StatsCard
           label="On Leave"
           value={stats.onLeave.toString()}
+          subtitle={snapshotDayLabel ? `Live · ${snapshotDayLabel}` : "Live headcount"}
           icon={Timer}
           accent="warning"
         />
         <StatsCard
           label="Absent"
           value={stats.absent.toString()}
+          subtitle={snapshotDayLabel ? `Live · ${snapshotDayLabel}` : "Live headcount"}
           icon={AlertCircle}
           accent="danger"
         />
         <StatsCard
           label="Overtime Hours"
           value={`${stats.overtimeHours}h`}
+          subtitle="This cycle"
           icon={Clock}
           accent="info"
         />
         <StatsCard
-          label="Remaining Hours"
-          value={`${stats.remainingWorkingHours}h`}
+          label="Total Hours"
+          value={`${stats.totalWorkedHours}h`}
+          subtitle="Worked this cycle"
           icon={Timer}
           accent="primary"
         />
@@ -673,10 +564,17 @@ const Attendance = () => {
       {/* Region-Wise Breakdown */}
       {!isEmployee && stats.regionBreakdown && (
         <div className="mb-6 bg-card border border-border rounded-3xl p-6 shadow-sm">
-          <h3 className="text-base font-bold tracking-tight mb-4 flex items-center gap-2">
-            <Clock className="h-5 w-5 text-primary" />
-            Region-Wise Live Attendance Summary
-          </h3>
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+            <h3 className="text-base font-bold tracking-tight flex items-center gap-2">
+              <Clock className="h-5 w-5 text-primary" />
+              Region-Wise Live Attendance Summary
+            </h3>
+            <span className="text-xs text-muted-foreground">
+              {snapshotDayLabel
+                ? `Live headcount · one count per employee · as of ${snapshotDayLabel}`
+                : "Live headcount · one count per employee"}
+            </span>
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
             {Object.entries(stats.regionBreakdown).map(([region, data]) => (
               <div key={region} className="bg-muted/30 border border-border/50 rounded-2xl p-4 flex flex-col justify-between">
@@ -808,8 +706,14 @@ const Attendance = () => {
         </div>
       </div>
 
-      {/* Data Table */}
-      <DataTable data={filteredRecords} columns={tableColumns} />
+      {/* Grouped Attendance (one collapsible card per employee) */}
+      <AttendanceGroupedTable
+        data={filteredRecords}
+        isEmployee={isEmployee}
+        onEdit={setEditingRecord}
+        onDelete={setDeleteConfirm}
+        onToggleStatus={handleQuickStatusUpdate}
+      />
 
       {filteredRecords.length === 0 && (
         <div className="mt-4 rounded-2xl border border-border bg-card px-4 py-3 text-sm text-muted-foreground">

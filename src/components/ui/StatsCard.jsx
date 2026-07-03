@@ -1,11 +1,4 @@
-const accentMap = {
-  primary: "from-[#7C4DFF] to-[#8B5CF6]",
-  success: "from-emerald-400 to-emerald-600",
-  warning: "from-amber-400 to-orange-500",
-  info: "from-cyan-400 to-blue-500",
-};
-
-const StatsCard = ({ label, value, delta, deltaType = "up", icon: Icon, accent = "primary" }) => {
+const StatsCard = ({ label, value, subtitle, delta, deltaType = "up", icon: Icon, accent = "primary" }) => {
   const accentMap = {
     primary: "bg-primary-glow/10 text-primary-glow",
     success: "bg-success/10 text-success",
@@ -24,6 +17,9 @@ const StatsCard = ({ label, value, delta, deltaType = "up", icon: Icon, accent =
         </div>
       </div>
       <div className="mt-4 text-3xl font-semibold tracking-tight">{value}</div>
+      {subtitle && (
+        <div className="mt-1 text-xs text-muted-foreground">{subtitle}</div>
+      )}
       {delta && (
         <div className="mt-2 flex items-center gap-2 text-xs">
           <span className={`rounded-full px-2 py-0.5 font-medium ${
