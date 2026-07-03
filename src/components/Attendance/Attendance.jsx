@@ -114,7 +114,7 @@ const Attendance = () => {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.setAttribute("href", url);
-    link.setAttribute("download", `Attendance_Report_${selectedDate}.csv`);
+    link.setAttribute("download", `Attendance_Report_${fromDate}_to_${toDate}.csv`);
     link.style.visibility = "hidden";
     document.body.appendChild(link);
     link.click();
@@ -178,9 +178,27 @@ const Attendance = () => {
   }, [checkOutGeo]);
   const [editingRecord, setEditingRecord] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
-  const [selectedDate, setSelectedDate] = useState(() => {
-    return formatLocalDate(new Date());
-  });
+
+  // Helper to calculate default cycle dates (from 25th of prev month to 24th of current month)
+  const getDefaultCycleDates = useCallback(() => {
+    const today = new Date();
+    let fromDate, toDate;
+    if (today.getDate() >= 25) {
+      fromDate = new Date(today.getFullYear(), today.getMonth(), 25);
+      toDate = new Date(today.getFullYear(), today.getMonth() + 1, 24);
+    } else {
+      fromDate = new Date(today.getFullYear(), today.getMonth() - 1, 25);
+      toDate = new Date(today.getFullYear(), today.getMonth(), 24);
+    }
+    return {
+      from: formatLocalDate(fromDate),
+      to: formatLocalDate(toDate)
+    };
+  }, []);
+
+  const [fromDate, setFromDate] = useState(() => getDefaultCycleDates().from);
+  const [toDate, setToDate] = useState(() => getDefaultCycleDates().to);
+
   const [employeeIntime, setEmployeeIntime] = useState("");
   const [employeeOuttime, setEmployeeOuttime] = useState("");
   const role = normalizeRole(getUserRole());
@@ -204,9 +222,6 @@ const Attendance = () => {
   const safeRecords = Array.isArray(records) ? records : [];
 
   const filteredRecords = useMemo(() => {
-    const [year, month, day] = selectedDate.split("-").map(Number);
-    const selected = new Date(year, month - 1, day);
-
     return safeRecords.filter((record) => {
       if (isEmployee) {
         if (employeeId && Number(record.employee_id) !== employeeId) return false;
@@ -237,14 +252,10 @@ const Attendance = () => {
 
       const recordDate = record.intime || record.outtime;
       if (!recordDate) return false;
-      const current = new Date(recordDate);
-      return (
-        current.getFullYear() === selected.getFullYear() &&
-        current.getMonth() === selected.getMonth() &&
-        current.getDate() === selected.getDate()
-      );
+      const recordDateStr = getDatePart(recordDate);
+      return recordDateStr >= fromDate && recordDateStr <= toDate;
     });
-  }, [records, selectedDate, isEmployee, username, employeeId, searchQuery, selectedRegion]);
+  }, [records, fromDate, toDate, isEmployee, username, employeeId, searchQuery, selectedRegion]);
 
   const employeeFixedValues = useMemo(() => {
     if (!isEmployee) return {};
@@ -264,6 +275,7 @@ const Attendance = () => {
 
   const employeeSelectedDateRecord = useMemo(() => {
     if (!isEmployee) return null;
+    const todayStr = formatLocalDate(new Date());
     return safeRecords.find((record) => {
       const matchesUser =
         employeeId
@@ -272,9 +284,9 @@ const Attendance = () => {
       const dateSource = record.intime || record.outtime;
       if (!matchesUser || !dateSource) return false;
       const d = new Date(dateSource);
-      return formatLocalDate(d) === selectedDate;
+      return formatLocalDate(d) === todayStr;
     }) || null;
-  }, [isEmployee, records, username, employeeId, selectedDate]);
+  }, [isEmployee, records, username, employeeId]);
   const hasInTimeToday = Boolean(employeeSelectedDateRecord?.intime);
   const hasOutTimeToday = Boolean(employeeSelectedDateRecord?.outtime);
 
@@ -315,22 +327,29 @@ const Attendance = () => {
   const stats = useMemo(() => calculateStats(filteredRecords), [filteredRecords]);
 
   const selectedDateLabel = useMemo(() => {
-    const [year, month, day] = selectedDate.split("-").map(Number);
-    const date = new Date(year, month - 1, day);
-    return date.toLocaleDateString("en-US", {
-      weekday: "long",
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    });
-  }, [selectedDate]);
+    const formatRangeDate = (dStr) => {
+      if (!dStr) return "";
+      const [year, month, day] = dStr.split("-").map(Number);
+      const d = new Date(year, month - 1, day);
+      return d.toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      });
+    };
+    return `${formatRangeDate(fromDate)} to ${formatRangeDate(toDate)}`;
+  }, [fromDate, toDate]);
 
-  const moveSelectedDate = useCallback((days) => {
-    setSelectedDate((current) => {
-      const [year, month, day] = current.split("-").map(Number);
-      const next = new Date(year, month - 1, day);
-      next.setDate(next.getDate() + days);
-      return formatLocalDate(next);
+  const moveSelectedDate = useCallback((monthsOffset) => {
+    setFromDate((currentFrom) => {
+      const [y, m, d] = currentFrom.split("-").map(Number);
+      const nextFrom = new Date(y, m - 1 + monthsOffset, d);
+      return formatLocalDate(nextFrom);
+    });
+    setToDate((currentTo) => {
+      const [y, m, d] = currentTo.split("-").map(Number);
+      const nextTo = new Date(y, m - 1 + monthsOffset, d);
+      return formatLocalDate(nextTo);
     });
   }, []);
 
@@ -701,22 +720,40 @@ const Attendance = () => {
         <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => moveSelectedDate(-1)}
+            title="Previous Cycle Month"
             className="grid h-9 w-9 place-items-center rounded-lg border border-border hover:bg-muted"
             type="button"
           >
             <ChevronLeft className="h-4 w-4" />
           </button>
-          <input
-            type="date"
-            value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
-            className="h-9 rounded-xl border border-border bg-card px-3 text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
-          />
-          <div className="rounded-xl border border-border bg-card px-4 h-9 flex items-center text-sm font-medium">
+          
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs font-semibold text-muted-foreground">From:</span>
+            <input
+              type="date"
+              value={fromDate}
+              onChange={(e) => setFromDate(e.target.value)}
+              className="h-9 rounded-xl border border-border bg-card px-3 text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+            />
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs font-semibold text-muted-foreground">To:</span>
+            <input
+              type="date"
+              value={toDate}
+              onChange={(e) => setToDate(e.target.value)}
+              className="h-9 rounded-xl border border-border bg-card px-3 text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+            />
+          </div>
+
+          <div className="rounded-xl border border-border bg-card px-4 h-9 flex items-center text-sm font-medium text-primary font-mono">
             {selectedDateLabel}
           </div>
+          
           <button
             onClick={() => moveSelectedDate(1)}
+            title="Next Cycle Month"
             className="grid h-9 w-9 place-items-center rounded-lg border border-border hover:bg-muted"
             type="button"
           >
@@ -751,10 +788,14 @@ const Attendance = () => {
         <div className="flex items-center gap-2">
           <Button
             variant="outline"
-            onClick={() => setSelectedDate(formatLocalDate(new Date()))}
+            onClick={() => {
+              const cycle = getDefaultCycleDates();
+              setFromDate(cycle.from);
+              setToDate(cycle.to);
+            }}
             type="button"
           >
-            Today
+            Current Cycle
           </Button>
           <Button variant="outline" onClick={fetchAll} disabled={loading}>
             {loading ? "Refreshing..." : "Refresh"}

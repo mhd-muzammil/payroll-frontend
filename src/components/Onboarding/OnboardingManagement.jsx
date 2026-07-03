@@ -210,6 +210,7 @@ const OnboardingManagement = () => {
           department: formData.department,
           salary: "0.00", // Default salary required by model
           status: "active",
+          emp_code: formData.employeeId || null,
         };
         await employeeService.create(empPayload);
       } catch (empErr) {
