@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import PageHeader from "../ui/PageHeader";
 import Toolbar from "../ui/Toolbar";
 import DataTable from "../ui/DataTable";
-import { Download, Eye, Sparkles, Loader2, Printer, MapPin, Users, Mail } from "lucide-react";
+import { Download, Eye, Sparkles, Loader2, Printer, MapPin, Users, Mail, Search, Play, RefreshCw, Calendar } from "lucide-react";
 import { api } from "@/api/Api";
 import {
   Dialog,
@@ -66,6 +66,59 @@ const PayslipsPage = () => {
   const [selectedSlip, setSelectedSlip] = useState(null);
   const [selectedRegion, setSelectedRegion] = useState("");
 
+  // New States for Employee List and Month/Year generation
+  const [activeTab, setActiveTab] = useState("generate"); // "generate" | "history"
+  const [employees, setEmployees] = useState([]);
+  const [employeesLoading, setEmployeesLoading] = useState(true);
+  const [monthSlips, setMonthSlips] = useState([]);
+  const [monthSlipsLoading, setMonthSlipsLoading] = useState(false);
+  
+  const [genMonth, setGenMonth] = useState(() => new Date().getMonth() + 1);
+  const [genYear, setGenYear] = useState(() => new Date().getFullYear());
+  const [query, setQuery] = useState("");
+  const [historyQuery, setHistoryQuery] = useState("");
+
+  const monthsList = [
+    { value: 1, label: "January" },
+    { value: 2, label: "February" },
+    { value: 3, label: "March" },
+    { value: 4, label: "April" },
+    { value: 5, label: "May" },
+    { value: 6, label: "June" },
+    { value: 7, label: "July" },
+    { value: 8, label: "August" },
+    { value: 9, label: "September" },
+    { value: 10, label: "October" },
+    { value: 11, label: "November" },
+    { value: 12, label: "December" }
+  ];
+
+  const yearsList = [2025, 2026, 2027, 2028];
+
+  const fetchEmployees = async () => {
+    setEmployeesLoading(true);
+    try {
+      const res = await api.get("/api/employees/");
+      setEmployees(extractArray(res.data));
+    } catch (err) {
+      console.error("Failed to fetch employees:", err);
+    } finally {
+      setEmployeesLoading(false);
+    }
+  };
+
+  const fetchMonthSlips = async (m = genMonth, y = genYear) => {
+    setMonthSlipsLoading(true);
+    try {
+      const res = await api.get(`/api/payslips/?month=${m}&year=${y}`);
+      setMonthSlips(extractArray(res.data));
+    } catch (err) {
+      console.error("Failed to fetch month payslips:", err);
+    } finally {
+      setMonthSlipsLoading(false);
+    }
+  };
+
   const fetchPayslips = async () => {
     setLoading(true);
     try {
@@ -79,19 +132,52 @@ const PayslipsPage = () => {
   };
 
   useEffect(() => {
-    fetchPayslips();
+    fetchEmployees();
   }, []);
 
-  const handleGenerateAll = async () => {
+  useEffect(() => {
+    if (activeTab === "generate") {
+      fetchMonthSlips(genMonth, genYear);
+    } else {
+      fetchPayslips();
+    }
+  }, [genMonth, genYear, activeTab]);
+
+  const handleGenerateSpecific = async (employeeId, employeeName) => {
     if (generating) return;
     setGenerating(true);
     try {
-      const res = await api.post("/api/payslips/generate_all/");
-      alert(res.data?.message || "Successfully processed payslips!");
-      fetchPayslips();
+      const res = await api.post("/api/payslips/generate_all/", {
+        month: genMonth,
+        year: genYear,
+        employee_id: employeeId
+      });
+      alert(res.data?.message || `Successfully processed payslip for ${employeeName}!`);
+      fetchMonthSlips(genMonth, genYear);
+    } catch (err) {
+      console.error("Failed to generate payslip:", err);
+      alert(err.response?.data?.error || "Failed to generate payslip. Please try again.");
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const handleGenerateBulk = async () => {
+    if (generating) return;
+    if (!window.confirm(`Are you sure you want to generate payslips for all active employees for ${getMonthLabel(genMonth)} ${genYear}?`)) {
+      return;
+    }
+    setGenerating(true);
+    try {
+      const res = await api.post("/api/payslips/generate_all/", {
+        month: genMonth,
+        year: genYear
+      });
+      alert(res.data?.message || "Successfully generated all payslips!");
+      fetchMonthSlips(genMonth, genYear);
     } catch (err) {
       console.error("Failed to generate payslips:", err);
-      alert("Failed to generate payslips. Please ensure active employees exist.");
+      alert(err.response?.data?.error || "Failed to bulk generate payslips.");
     } finally {
       setGenerating(false);
     }
@@ -274,6 +360,7 @@ const PayslipsPage = () => {
   };
 
   const regionStats = useMemo(() => {
+    const listToUse = activeTab === "generate" ? employees : slips;
     const regions = ["Chennai", "Vellore", "Salem", "Kanchipuram", "Hosur"];
     const stats = {
       Chennai: 0,
@@ -283,8 +370,8 @@ const PayslipsPage = () => {
       Hosur: 0,
       "Not Assigned": 0,
     };
-    slips.forEach((s) => {
-      const branch = s.employee_details?.branch;
+    listToUse.forEach((item) => {
+      const branch = activeTab === "generate" ? item.branch : item.employee_details?.branch;
       if (branch) {
         const matched = regions.find((reg) => reg.toLowerCase() === branch.trim().toLowerCase());
         if (matched) {
@@ -297,40 +384,83 @@ const PayslipsPage = () => {
       }
     });
     return stats;
-  }, [slips]);
+  }, [employees, slips, activeTab]);
 
   const filteredSlips = useMemo(() => {
-    if (!selectedRegion) return slips;
-    return slips.filter((s) => {
-      const branch = s.employee_details?.branch || "Not Assigned";
-      return branch.toLowerCase() === selectedRegion.toLowerCase();
-    });
-  }, [slips, selectedRegion]);
+    let list = slips;
+    if (selectedRegion) {
+      list = list.filter((s) => {
+        const branch = s.employee_details?.branch || "Not Assigned";
+        return branch.toLowerCase() === selectedRegion.toLowerCase();
+      });
+    }
+    if (historyQuery.trim() !== "") {
+      const q = historyQuery.toLowerCase();
+      list = list.filter(
+        (s) =>
+          (s.employee_details?.employee_name && s.employee_details.employee_name.toLowerCase().includes(q)) ||
+          (s.employee_details?.emp_code && s.employee_details.emp_code.toLowerCase().includes(q)) ||
+          getMonthLabel(s.month).toLowerCase().includes(q)
+      );
+    }
+    return list;
+  }, [slips, selectedRegion, historyQuery]);
+
+  const filteredEmployees = useMemo(() => {
+    let list = employees;
+    if (selectedRegion) {
+      list = list.filter(e => e.branch?.toLowerCase() === selectedRegion.toLowerCase());
+    }
+    if (query.trim() !== "") {
+      const q = query.toLowerCase();
+      list = list.filter(
+        e => 
+          (e.employee_name && e.employee_name.toLowerCase().includes(q)) || 
+          (e.emp_code && e.emp_code.toLowerCase().includes(q)) || 
+          (e.role && e.role.toLowerCase().includes(q))
+      );
+    }
+    return list;
+  }, [employees, selectedRegion, query]);
 
   return (
-    <div>
+    <div className="space-y-6">
       <PageHeader
         title="Payslips"
-        description="Generate, preview and distribute payslips."
-        actions={
-          <Button 
-            icon={generating ? Loader2 : Sparkles} 
-            onClick={handleGenerateAll}
-            disabled={generating}
-            className={generating ? "opacity-80 pointer-events-none" : ""}
-          >
-            {generating ? "Generating..." : "Generate all"}
-          </Button>
-        }
+        description="Generate, preview and distribute employee payslips."
       />
 
-      <Toolbar />
+      {/* Tab Switcher */}
+      <div className="flex rounded-2xl overflow-hidden bg-muted/40 p-1.5 max-w-md border border-border flex-1 min-w-[280px]">
+        <button
+          onClick={() => setActiveTab("generate")}
+          className={`flex-1 py-2 text-center rounded-xl text-sm font-medium transition-all duration-200 ${
+            activeTab === "generate"
+              ? "bg-card text-foreground shadow-sm border border-border/50"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          Generate Payslips
+        </button>
+        <button
+          onClick={() => setActiveTab("history")}
+          className={`flex-1 py-2 text-center rounded-xl text-sm font-medium transition-all duration-200 ${
+            activeTab === "history"
+              ? "bg-card text-foreground shadow-sm border border-border/50"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          Payslip History
+        </button>
+      </div>
 
-      {/* Region-Wise Payslip Distribution */}
-      <div className="bg-card border border-border/60 rounded-3xl p-6 shadow-xs mb-6">
+      {/* Region-Wise Payslip/Employee Distribution */}
+      <div className="bg-card border border-border/60 rounded-3xl p-6 shadow-xs">
         <div className="flex items-center gap-2 mb-4">
           <MapPin className="h-5 w-5 text-primary" />
-          <span className="text-base font-bold tracking-tight text-foreground">Region-Wise Payslip Distribution</span>
+          <span className="text-base font-bold tracking-tight text-foreground">
+            {activeTab === "generate" ? "Region-Wise Staff Distribution" : "Region-Wise Payslip Distribution"}
+          </span>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-4">
           <button
@@ -343,8 +473,12 @@ const PayslipsPage = () => {
           >
             <span className="font-bold text-xs md:text-sm tracking-tight text-indigo-700">All Regions</span>
             <div className="flex items-baseline gap-1.5 mt-3">
-              <span className="text-2xl md:text-3xl font-black tracking-tight text-foreground">{slips.length}</span>
-              <span className="text-xs font-semibold text-muted-foreground">slips</span>
+              <span className="text-2xl md:text-3xl font-black tracking-tight text-foreground">
+                {activeTab === "generate" ? employees.length : slips.length}
+              </span>
+              <span className="text-xs font-semibold text-muted-foreground">
+                {activeTab === "generate" ? "staff" : "slips"}
+              </span>
             </div>
           </button>
           {Object.entries(regionStats).map(([region, count]) => {
@@ -368,7 +502,9 @@ const PayslipsPage = () => {
                 <span className={`font-bold text-xs md:text-sm tracking-tight ${style.text}`}>{region}</span>
                 <div className="flex items-baseline gap-1.5 mt-3">
                   <span className="text-2xl md:text-3xl font-black tracking-tight text-foreground">{count}</span>
-                  <span className="text-xs font-semibold text-muted-foreground">slips</span>
+                  <span className="text-xs font-semibold text-muted-foreground">
+                    {activeTab === "generate" ? "staff" : "slips"}
+                  </span>
                 </div>
               </button>
             );
@@ -376,93 +512,274 @@ const PayslipsPage = () => {
         </div>
       </div>
 
-      {loading ? (
-        <div className="flex h-64 w-full flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          <p className="text-sm text-muted-foreground">Retrieving employee records...</p>
-        </div>
+      {activeTab === "generate" ? (
+        <>
+          {/* Controls Bar for Generate Payslips */}
+          <div className="flex flex-wrap items-center justify-between gap-4 bg-card border border-border/60 rounded-3xl p-5 shadow-xs">
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2">
+                <Calendar className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-semibold text-foreground">Calculation Period:</span>
+              </div>
+              
+              <select
+                value={genMonth}
+                onChange={(e) => setGenMonth(parseInt(e.target.value))}
+                className="h-10 rounded-xl border border-border bg-background px-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                {monthsList.map(m => (
+                  <option key={m.value} value={m.value}>{m.label}</option>
+                ))}
+              </select>
+
+              <select
+                value={genYear}
+                onChange={(e) => setGenYear(parseInt(e.target.value))}
+                className="h-10 rounded-xl border border-border bg-background px-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                {yearsList.map(y => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
+              
+              <span className="text-xs text-muted-foreground font-mono bg-muted/60 px-2.5 py-1.5 rounded-lg border border-border">
+                Cycle: {getPeriodDates(genMonth, genYear)}
+              </span>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 flex-grow sm:flex-grow-0 justify-end">
+              <div className="relative w-full sm:w-[220px]">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <input
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Search staff name/code..."
+                  className="h-10 w-full rounded-xl border border-border bg-background pl-9 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+              
+              <Button
+                icon={generating ? Loader2 : Sparkles}
+                disabled={generating}
+                onClick={handleGenerateBulk}
+                variant="brand"
+              >
+                {generating ? "Generating..." : `Bulk Generate ${getMonthLabel(genMonth).substring(0,3)} Payslips`}
+              </Button>
+            </div>
+          </div>
+
+          {/* DataTable for Employee List */}
+          {employeesLoading || monthSlipsLoading ? (
+            <div className="flex h-64 w-full flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border bg-card">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <p className="text-sm text-muted-foreground">Syncing employee payroll status...</p>
+            </div>
+          ) : (
+            <DataTable
+              data={filteredEmployees}
+              emptyMessage="No active employees found for this search/region criteria."
+              columns={[
+                {
+                  key: "name", 
+                  label: "Employee",
+                  render: (emp) => (
+                    <div className="flex items-center gap-3">
+                      <Avatar name={emp.employee_name || "Emp"} />
+                      <div>
+                        <div className="text-sm font-medium">{emp.employee_name || "Unknown"}</div>
+                        <div className="text-xs text-muted-foreground font-mono">{emp.emp_code || `ID: ${emp.id}`} - {emp.role || "N/A"}</div>
+                      </div>
+                    </div>
+                  ),
+                },
+                { 
+                  key: "region", 
+                  label: "Region/Branch", 
+                  render: (emp) => <span className="text-sm font-medium text-foreground">{emp.branch || "Not Assigned"}</span> 
+                },
+                { 
+                  key: "salary", 
+                  label: "Base Salary", 
+                  render: (emp) => (
+                    <span className="text-sm font-medium font-mono text-muted-foreground">
+                      ₹{parseFloat(emp.salary).toLocaleString("en-IN")}
+                    </span>
+                  ) 
+                },
+                {
+                  key: "status", 
+                  label: "Payslip Status",
+                  render: (emp) => {
+                    const matchingSlip = monthSlips.find(s => s.employee === emp.id);
+                    if (matchingSlip) {
+                      return (
+                        <div className="flex items-center gap-2">
+                          <Badge variant="success">Generated</Badge>
+                          <span className="text-xs font-bold font-mono text-emerald-600 dark:text-emerald-400">
+                            ₹{parseFloat(matchingSlip.net_salary).toLocaleString("en-IN")}
+                          </span>
+                        </div>
+                      );
+                    }
+                    return <Badge variant="secondary">Not Generated</Badge>;
+                  },
+                },
+                {
+                  key: "act", 
+                  label: "Actions",
+                  render: (emp) => {
+                    const matchingSlip = monthSlips.find(s => s.employee === emp.id);
+                    if (matchingSlip) {
+                      return (
+                        <div className="flex items-center gap-2">
+                          <button 
+                            onClick={() => setSelectedSlip(matchingSlip)}
+                            title="View Payslip" 
+                            className="inline-flex items-center justify-center gap-1.5 h-8 px-3 rounded-lg border border-border hover:bg-muted text-xs font-medium transition-colors cursor-pointer"
+                          >
+                            <Eye className="h-3.5 w-3.5" />
+                            View
+                          </button>
+                          <button 
+                            onClick={() => handleGenerateSpecific(emp.id, emp.employee_name)}
+                            disabled={generating}
+                            title="Regenerate Payslip" 
+                            className="inline-flex items-center justify-center gap-1.5 h-8 px-3 rounded-lg border border-border hover:bg-muted text-xs font-medium text-amber-600 hover:text-amber-700 transition-colors cursor-pointer disabled:opacity-50"
+                          >
+                            <RefreshCw className={`h-3.5 w-3.5 ${generating ? "animate-spin" : ""}`} />
+                            Regenerate
+                          </button>
+                        </div>
+                      );
+                    }
+                    return (
+                      <button 
+                        onClick={() => handleGenerateSpecific(emp.id, emp.employee_name)}
+                        disabled={generating}
+                        className="inline-flex items-center justify-center gap-1.5 h-8 px-3 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-bold transition-colors cursor-pointer disabled:opacity-50"
+                      >
+                        <Play className="h-3.5 w-3.5 fill-current" />
+                        Generate
+                      </button>
+                    );
+                  },
+                },
+              ]}
+            />
+          )}
+        </>
       ) : (
-        <DataTable
-          data={filteredSlips}
-          columns={[
-            {
-              key: "name", 
-              label: "Employee",
-              render: (s) => (
-                <div className="flex items-center gap-3">
-                  <Avatar name={s.employee_details?.employee_name || "Emp"} />
-                  <div>
-                    <div className="text-sm font-medium">{s.employee_details?.employee_name || "Unknown"}</div>
-                    <div className="text-xs text-muted-foreground">{s.employee_details?.role || "N/A"}</div>
-                  </div>
-                </div>
-              ),
-            },
-            { 
-              key: "period", 
-              label: "Period", 
-              render: (s) => <span className="text-sm font-medium">{getMonthLabel(s.month).substring(0, 3)} {s.year}</span> 
-            },
-            { 
-              key: "region", 
-              label: "Region", 
-              render: (s) => <span className="text-sm font-medium text-foreground">{s.employee_details?.branch || "Not Assigned"}</span> 
-            },
-            { 
-              key: "amount", 
-              label: "Net Salary", 
-              render: (s) => (
-                <span className="text-sm font-bold tracking-tight text-foreground">
-                  ₹{parseFloat(s.net_salary).toLocaleString("en-IN")}
-                </span>
-              ) 
-            },
-            {
-              key: "status", 
-              label: "Status",
-              render: (s) => {
-                let variant = "warning";
-                if (s.status === "Generated") variant = "success";
-                if (s.status === "Paid") variant = "info";
-                return <Badge variant={variant}>{s.status}</Badge>;
-              },
-            },
-            {
-              key: "act", 
-              label: "",
-              render: (s) => (
-                <div className="flex items-center justify-end gap-2">
-                  <button 
-                    onClick={() => setSelectedSlip(s)}
-                    title="View Details" 
-                    className="grid h-8 w-8 place-items-center rounded-lg border border-border hover:bg-muted transition-colors cursor-pointer"
-                  >
-                    <Eye className="h-4 w-4 text-muted-foreground" />
-                  </button>
-                  <button 
-                    onClick={() => handleEmailPayslip(s)}
-                    disabled={emailingSlipId === s.id}
-                    title="Send Email" 
-                    className="grid h-8 w-8 place-items-center rounded-lg border border-border hover:bg-muted transition-colors cursor-pointer disabled:opacity-50"
-                  >
-                    {emailingSlipId === s.id ? (
-                      <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                    ) : (
-                      <Mail className="h-4 w-4 text-muted-foreground" />
-                    )}
-                  </button>
-                  <button 
-                    onClick={() => setSelectedSlip(s)}
-                    title="Download/Print" 
-                    className="grid h-8 w-8 place-items-center rounded-lg border border-border hover:bg-muted transition-colors cursor-pointer"
-                  >
-                    <Download className="h-4 w-4 text-muted-foreground" />
-                  </button>
-                </div>
-              ),
-            },
-          ]}
-        />
+        <>
+          {/* Controls Bar for Payslip History */}
+          <div className="flex flex-wrap items-center justify-between gap-4 bg-card border border-border/60 rounded-3xl p-5 shadow-xs">
+            <div className="flex items-center gap-2">
+              <Users className="h-5 w-5 text-muted-foreground" />
+              <span className="text-sm font-semibold text-foreground">Historical Payroll Records</span>
+            </div>
+
+            <div className="relative w-full sm:w-[260px]">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <input
+                value={historyQuery}
+                onChange={(e) => setHistoryQuery(e.target.value)}
+                placeholder="Search history by name/code/month..."
+                className="h-10 w-full rounded-xl border border-border bg-background pl-9 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
+          </div>
+
+          {/* DataTable for Historical Records */}
+          {loading ? (
+            <div className="flex h-64 w-full flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border bg-card">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <p className="text-sm text-muted-foreground">Loading payslip history...</p>
+            </div>
+          ) : (
+            <DataTable
+              data={filteredSlips}
+              emptyMessage="No payslip history found."
+              columns={[
+                {
+                  key: "name", 
+                  label: "Employee",
+                  render: (s) => (
+                    <div className="flex items-center gap-3">
+                      <Avatar name={s.employee_details?.employee_name || "Emp"} />
+                      <div>
+                        <div className="text-sm font-medium">{s.employee_details?.employee_name || "Unknown"}</div>
+                        <div className="text-xs text-muted-foreground">{s.employee_details?.role || "N/A"}</div>
+                      </div>
+                    </div>
+                  ),
+                },
+                { 
+                  key: "period", 
+                  label: "Period", 
+                  render: (s) => <span className="text-sm font-medium">{getMonthLabel(s.month).substring(0, 3)} {s.year}</span> 
+                },
+                { 
+                  key: "region", 
+                  label: "Region", 
+                  render: (s) => <span className="text-sm font-medium text-foreground">{s.employee_details?.branch || "Not Assigned"}</span> 
+                },
+                { 
+                  key: "amount", 
+                  label: "Net Salary", 
+                  render: (s) => (
+                    <span className="text-sm font-bold tracking-tight text-foreground font-mono">
+                      ₹{parseFloat(s.net_salary).toLocaleString("en-IN")}
+                    </span>
+                  ) 
+                },
+                {
+                  key: "status", 
+                  label: "Status",
+                  render: (s) => {
+                    let variant = "warning";
+                    if (s.status === "Generated") variant = "success";
+                    if (s.status === "Paid") variant = "info";
+                    return <Badge variant={variant}>{s.status}</Badge>;
+                  },
+                },
+                {
+                  key: "act", 
+                  label: "",
+                  render: (s) => (
+                    <div className="flex items-center justify-end gap-2 text-right">
+                      <button 
+                        onClick={() => setSelectedSlip(s)}
+                        title="View Details" 
+                        className="grid h-8 w-8 place-items-center rounded-lg border border-border hover:bg-muted transition-colors cursor-pointer"
+                      >
+                        <Eye className="h-4 w-4 text-muted-foreground" />
+                      </button>
+                      <button 
+                        onClick={() => handleEmailPayslip(s)}
+                        disabled={emailingSlipId === s.id}
+                        title="Send Email" 
+                        className="grid h-8 w-8 place-items-center rounded-lg border border-border hover:bg-muted transition-colors cursor-pointer disabled:opacity-50"
+                      >
+                        {emailingSlipId === s.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                        ) : (
+                          <Mail className="h-4 w-4 text-muted-foreground" />
+                        )}
+                      </button>
+                      <button 
+                        onClick={() => setSelectedSlip(s)}
+                        title="Download/Print" 
+                        className="grid h-8 w-8 place-items-center rounded-lg border border-border hover:bg-muted transition-colors cursor-pointer"
+                      >
+                        <Download className="h-4 w-4 text-muted-foreground" />
+                      </button>
+                    </div>
+                  ),
+                },
+              ]}
+            />
+          )}
+        </>
       )}
 
       {/* Full-Width Landscape Dialog Panel */}
