@@ -59,30 +59,58 @@ const Attendance = () => {
   const [showForm, setShowForm] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [showDeleteAllConfirm, setShowDeleteAllConfirm] = useState(false);
-  const [selectedFile, setSelectedFile] = useState(null);
+  const [selectedFiles, setSelectedFiles] = useState([]);
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState(null);
   const [importError, setImportError] = useState(null);
+  const [importProgress, setImportProgress] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedRegion, setSelectedRegion] = useState("");
 
   const handleImportSubmit = async (e) => {
     e.preventDefault();
-    if (!selectedFile) return;
+    if (!selectedFiles.length) return;
 
     setImporting(true);
     setImportError(null);
     setImportResult(null);
+    setImportProgress(null);
+
+    const aggregate = { employees_created: 0, records_saved: 0, files_imported: 0 };
+    const failedFiles = [];
 
     try {
-      const res = await importSheet(selectedFile);
-      setImportResult(res);
-      setSelectedFile(null);
-    } catch (err) {
-      console.error(err);
-      setImportError(err.response?.data?.detail || err.message || "Failed to import attendance sheet.");
+      for (let i = 0; i < selectedFiles.length; i++) {
+        const file = selectedFiles[i];
+        setImportProgress({ current: i + 1, total: selectedFiles.length, name: file.name });
+        try {
+          const res = await importSheet(file);
+          aggregate.employees_created += Number(res?.employees_created) || 0;
+          aggregate.records_saved += Number(res?.records_saved) || 0;
+          aggregate.files_imported += 1;
+        } catch (err) {
+          console.error(`Import failed for ${file.name}:`, err);
+          failedFiles.push(file.name);
+        }
+      }
+
+      if (aggregate.files_imported === 0) {
+        setImportError(
+          `Failed to import ${failedFiles.length === 1 ? "the file" : "all files"}. Please check the file format and try again.`
+        );
+      } else {
+        setImportResult({
+          ...aggregate,
+          message:
+            failedFiles.length > 0
+              ? `Imported ${aggregate.files_imported} of ${selectedFiles.length} files. Failed: ${failedFiles.join(", ")}`
+              : `${aggregate.files_imported} file${aggregate.files_imported > 1 ? "s" : ""} imported successfully.`,
+        });
+        setSelectedFiles([]);
+      }
     } finally {
       setImporting(false);
+      setImportProgress(null);
     }
   };
 
@@ -831,7 +859,7 @@ const Attendance = () => {
         <Dialog open={showImportModal} onOpenChange={(open) => {
           if (!open) {
             setShowImportModal(false);
-            setSelectedFile(null);
+            setSelectedFiles([]);
             setImportResult(null);
             setImportError(null);
           }
@@ -840,7 +868,7 @@ const Attendance = () => {
             <DialogHeader className="mb-4">
               <DialogTitle className="text-xl font-bold tracking-tight">Import Attendance Sheet</DialogTitle>
               <DialogDescription className="text-sm text-muted-foreground mt-1">
-                Upload your company attendance Excel spreadsheet. The system will automatically register new profiles for unrecognized employee codes and write their daily logs.
+                Upload one or more attendance Excel spreadsheets (e.g. April, May, June). The system will automatically register new profiles for unrecognized employees and write their daily logs.
               </DialogDescription>
             </DialogHeader>
 
@@ -850,10 +878,22 @@ const Attendance = () => {
                   <input
                     type="file"
                     accept=".xlsx"
+                    multiple
                     onChange={(e) => {
                       if (e.target.files?.length) {
-                        setSelectedFile(e.target.files[0]);
+                        setSelectedFiles((prev) => {
+                          const incoming = Array.from(e.target.files);
+                          const merged = [...prev];
+                          incoming.forEach((f) => {
+                            if (!merged.some((m) => m.name === f.name && m.size === f.size)) {
+                              merged.push(f);
+                            }
+                          });
+                          return merged;
+                        });
                         setImportError(null);
+                        // allow re-selecting the same file(s) again
+                        e.target.value = "";
                       }
                     }}
                     className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
@@ -869,14 +909,59 @@ const Attendance = () => {
                     </div>
                     <div>
                       <p className="font-semibold text-sm">
-                        {selectedFile ? selectedFile.name : "Choose Excel file"}
+                        {selectedFiles.length
+                          ? `${selectedFiles.length} file${selectedFiles.length > 1 ? "s" : ""} selected`
+                          : "Choose Excel files"}
                       </p>
                       <p className="text-xs text-muted-foreground mt-1">
-                        {selectedFile ? `${(selectedFile.size / 1024).toFixed(1)} KB` : "Drag and drop sheet or click to browse"}
+                        {selectedFiles.length
+                          ? "Click to add more files"
+                          : "Drag and drop sheets or click to browse (multiple allowed)"}
                       </p>
                     </div>
                   </div>
                 </div>
+
+                {selectedFiles.length > 0 && (
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {selectedFiles.map((file, idx) => (
+                      <div
+                        key={`${file.name}-${file.size}`}
+                        className="flex items-center gap-3 bg-muted/30 border border-border/50 rounded-xl px-3 py-2"
+                      >
+                        <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
+                          <FileText className="h-4 w-4" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium truncate">{file.name}</p>
+                          <p className="text-xs text-muted-foreground">{(file.size / 1024).toFixed(1)} KB</p>
+                        </div>
+                        {importing && importProgress?.name === file.name ? (
+                          <Loader2 className="h-4 w-4 animate-spin text-primary shrink-0" />
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setSelectedFiles((prev) => prev.filter((_, i) => i !== idx))}
+                            disabled={importing}
+                            className="grid h-7 w-7 shrink-0 place-items-center rounded-lg text-muted-foreground hover:bg-red-500/10 hover:text-red-500 transition-colors disabled:opacity-50"
+                            title="Remove file"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {importing && importProgress && (
+                  <div className="flex items-center gap-2 bg-primary/10 border border-primary/20 text-primary p-3 rounded-xl text-xs font-medium">
+                    <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+                    <span>
+                      Importing {importProgress.current} of {importProgress.total}: {importProgress.name}
+                    </span>
+                  </div>
+                )}
 
                 {importError && (
                   <div className="flex items-center gap-2 bg-red-500/10 border border-red-500/20 text-red-500 p-3 rounded-xl text-xs font-medium">
@@ -891,7 +976,7 @@ const Attendance = () => {
                     type="button"
                     onClick={() => {
                       setShowImportModal(false);
-                      setSelectedFile(null);
+                      setSelectedFiles([]);
                       setImportError(null);
                     }}
                     disabled={importing}
@@ -901,10 +986,12 @@ const Attendance = () => {
                   <Button
                     variant="brand"
                     type="submit"
-                    disabled={!selectedFile || importing}
+                    disabled={!selectedFiles.length || importing}
                     className="shadow-glow-brand"
                   >
-                    {importing ? "Processing..." : "Start Import"}
+                    {importing
+                      ? "Processing..."
+                      : `Import ${selectedFiles.length > 1 ? `${selectedFiles.length} Files` : "File"}`}
                   </Button>
                 </DialogFooter>
               </form>
