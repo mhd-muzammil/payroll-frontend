@@ -205,6 +205,7 @@ const Attendance = () => {
   }, [checkOutGeo]);
   const [editingRecord, setEditingRecord] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [prefilledEmployee, setPrefilledEmployee] = useState(null);
 
   // Helper to calculate default cycle dates (from 25th of prev month to 24th of current month)
   const getDefaultCycleDates = useCallback(() => {
@@ -393,6 +394,7 @@ const Attendance = () => {
   const handleCreate = async (formData) => {
     await createRecord(formData);
     setShowForm(false);
+    setPrefilledEmployee(null);
   };
 
   const handleUpdate = async (formData) => {
@@ -741,6 +743,10 @@ const Attendance = () => {
         onEdit={setEditingRecord}
         onDelete={setDeleteConfirm}
         onToggleStatus={handleQuickStatusUpdate}
+        onAddForEmployee={(emp) => {
+          setPrefilledEmployee(emp);
+          setShowForm(true);
+        }}
       />
 
       {filteredRecords.length === 0 && (
@@ -764,12 +770,24 @@ const Attendance = () => {
                   intime: true,
                   outtime: true,
                 }
+              : prefilledEmployee
+              ? {
+                  employee_name: true,
+                  role: true,
+                  department: true,
+                  salary: true,
+                }
               : {}
           }
-          forceValues={employeeFixedValues}
+          forceValues={
+            isEmployee
+              ? employeeFixedValues
+              : prefilledEmployee || {}
+          }
           onCancel={() => {
             setShowForm(false);
             setEditingRecord(null);
+            setPrefilledEmployee(null);
           }}
           loading={loading}
         />

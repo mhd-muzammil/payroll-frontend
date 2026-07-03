@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { ChevronDown, Pencil, Trash2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { ChevronDown, Pencil, Trash2, Plus } from "lucide-react";
 import {
   formatTime,
   formatDayLabel,
@@ -54,6 +55,7 @@ const AttendanceGroupedTable = ({
   onEdit,
   onDelete,
   onToggleStatus,
+  onAddForEmployee,
 }) => {
   const groups = useMemo(() => {
     const map = new Map();
@@ -178,6 +180,27 @@ const AttendanceGroupedTable = ({
                   </span>
                 )}
               </div>
+
+              {!isEmployee && onAddForEmployee && (
+                <Button
+                  variant="brand"
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onAddForEmployee({
+                      employee_name: g.employee_name,
+                      role: g.role,
+                      department: g.department,
+                      salary: g.records[0]?.salary || "0.00",
+                    });
+                  }}
+                  className="ml-auto rounded-xl text-xs font-semibold shadow-glow-brand"
+                  title={`Mark Attendance for ${g.employee_name}`}
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  <span>Mark Attendance</span>
+                </Button>
+              )}
             </button>
 
             {/* Daily breakdown */}
