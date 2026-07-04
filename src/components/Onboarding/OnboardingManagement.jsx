@@ -195,33 +195,11 @@ const OnboardingManagement = () => {
       
       const savedRecord = await onboardingService.create(data);
       
-      // Automatically create corresponding real Employee profile
-      try {
-        const branches = ['Chennai', 'Vellore', 'Salem', 'Kanchipuram', 'Hosur'];
-        const enteredLoc = formData.workLocation || "";
-        const matchedBranch = branches.find(b => b.toLowerCase() === enteredLoc.trim().toLowerCase()) || 'Chennai';
-
-        const empPayload = {
-          employee_name: formData.employeeName,
-          branch: matchedBranch,
-          email: formData.emailId || null,
-          phone: formData.mobileNumber || null,
-          role: formData.designation,
-          department: formData.department,
-          salary: "0.00", // Default salary required by model
-          status: "active",
-          emp_code: formData.employeeId || null,
-        };
-        await employeeService.create(empPayload);
-      } catch (empErr) {
-        console.warn("Failed auto-creating employee from onboarding, possibly duplicate email/phone", empErr);
-      }
-
-      // Trigger full fetch to update all stats dynamically
+      // Trigger full fetch to update all stats & records dynamically
       await fetchOnboardings();
       
       setShowForm(false);
-      alert("Successfully onboarded " + formData.employeeName);
+      alert("Successfully onboarded " + formData.employeeName + "! Profile connected to Employee and Payslips.");
     } catch (error) {
       console.error("Failed submitting onboarding:", error);
       alert("Submission failed. Check if all required fields are filled.");

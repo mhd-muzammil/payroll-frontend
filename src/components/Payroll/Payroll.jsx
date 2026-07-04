@@ -6,7 +6,7 @@ import PageHeader from "../ui/PageHeader";
 import StatsCard from "../ui/StatsCard";
 import Toolbar from "../ui/Toolbar";
 import DataTable from "../ui/DataTable";
-import { Wallet, TrendingUp, Clock, CheckCircle2, Play, MoreHorizontal, Loader2, MapPin, Users, Save, Calendar, FileText, Eye } from "lucide-react";
+import { Wallet, TrendingUp, Clock, CheckCircle2, Play, MoreHorizontal, Loader2, MapPin, Users, Save, Calendar, FileText, Eye, X } from "lucide-react";
 import { api } from "@/api/Api";
 import { extractArray } from "../../Utility/apiUtils";
 
@@ -64,6 +64,9 @@ const PayrollPage = () => {
   const [error, setError] = useState(null);
   const [selectedRegion, setSelectedRegion] = useState("");
   const [allEmployees, setAllEmployees] = useState([]);
+  const [monthlyPayslips, setMonthlyPayslips] = useState([]);
+  const [generating, setGenerating] = useState(false);
+  const [selectedSlipForModal, setSelectedSlipForModal] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [cycleSubTab, setCycleSubTab] = useState("employees"); // employees | history
   const [employeeStats, setEmployeeStats] = useState({
@@ -163,8 +166,11 @@ const PayrollPage = () => {
       const statsUrl = region 
         ? `/api/payslips/company_stats/?branch=${region}&month=${m}&year=${y}` 
         : `/api/payslips/company_stats/?month=${m}&year=${y}`;
+      const payslipsUrl = region
+        ? `/api/payslips/?month=${m}&year=${y}&branch=${region}`
+        : `/api/payslips/?month=${m}&year=${y}`;
 
-      const [cyclesRes, statsRes] = await Promise.all([
+      const [cyclesRes, statsRes, payslipsRes] = await Promise.all([
         api.get(summaryUrl).catch(e => {
           console.error("Cycle API Error Details:", e);
           throw new Error(`Summary Endpt Failure: ${e.response?.status || e.message}`);
@@ -172,13 +178,41 @@ const PayrollPage = () => {
         api.get(statsUrl).catch(e => {
           console.error("Stats API Error Details:", e);
           throw new Error(`KPI Endpt Failure: ${e.response?.status || e.message}`);
+        }),
+        api.get(payslipsUrl).catch(e => {
+          console.error("Payslips List API Error Details:", e);
+          return { data: [] };
         })
       ]);
 
-      setRuns(cyclesRes.data || []);
+      const cycleData = cyclesRes.data || [];
+      setRuns(cycleData);
+
+      // Auto switch to latest month if current month has no slips generated
+      if (cycleData.length > 0 && statsRes.data?.slipsCount === 0 && m === new Date().getMonth() + 1) {
+        const firstCycle = cycleData[0];
+        if (firstCycle && firstCycle.period) {
+          const parts = firstCycle.period.split(" ");
+          if (parts.length === 2) {
+            const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+            const mIdx = monthNames.findIndex(mn => mn.toLowerCase() === parts[0].toLowerCase());
+            if (mIdx !== -1) {
+              const latestM = mIdx + 1;
+              const latestY = parseInt(parts[1]);
+              if (latestM !== m || latestY !== y) {
+                setSelectedMonth(latestM);
+                setSelectedYear(latestY);
+                return;
+              }
+            }
+          }
+        }
+      }
+
       if (statsRes.data) {
         setStats(statsRes.data);
       }
+      setMonthlyPayslips(extractArray(payslipsRes.data || []));
     } catch (err) {
       console.error("Aggregated Fetch Exception:", err);
       setError(err.message || "Network communication error or API disconnect");
@@ -220,8 +254,29 @@ const PayrollPage = () => {
     }
   };
 
-  const filteredEmployees = useMemo(() => {
-    return allEmployees.filter((emp) => {
+  const employeeRoster = useMemo(() => {
+    const payslipMap = new Map();
+    (monthlyPayslips || []).forEach(p => {
+      const empId = p.employee?.id || p.employee;
+      if (empId) payslipMap.set(Number(empId), p);
+    });
+
+    return allEmployees.map(emp => {
+      const slip = payslipMap.get(Number(emp.id));
+      return {
+        ...emp,
+        payslip: slip || null,
+        payslipStatus: slip ? slip.status : "Not Generated",
+        netSalary: slip ? parseFloat(slip.net_salary || 0) : null,
+        grossEarnings: slip ? parseFloat(slip.gross_earnings || 0) : null,
+        lopDays: slip ? parseFloat(slip.lop_days || 0) : null,
+        paidDays: slip ? parseFloat(slip.paid_days || 0) : null,
+      };
+    });
+  }, [allEmployees, monthlyPayslips]);
+
+  const filteredRoster = useMemo(() => {
+    return employeeRoster.filter((emp) => {
       if (selectedRegion) {
         const matchBranch = emp.branch && emp.branch.trim().toLowerCase() === selectedRegion.trim().toLowerCase();
         if (!matchBranch) return false;
@@ -232,11 +287,59 @@ const PayrollPage = () => {
         const roleMatch = emp.role && emp.role.toLowerCase().includes(q);
         const deptMatch = emp.department && emp.department.toLowerCase().includes(q);
         const codeMatch = emp.emp_code && emp.emp_code.toLowerCase().includes(q);
-        if (!nameMatch && !roleMatch && !deptMatch && !codeMatch) return false;
+        const statusMatch = emp.payslipStatus && emp.payslipStatus.toLowerCase().includes(q);
+        if (!nameMatch && !roleMatch && !deptMatch && !codeMatch && !statusMatch) return false;
       }
       return true;
     });
-  }, [allEmployees, selectedRegion, searchQuery]);
+  }, [employeeRoster, selectedRegion, searchQuery]);
+
+  const handleGenerateAll = async () => {
+    setGenerating(true);
+    try {
+      const monthName = monthsList.find(m => m.value === selectedMonth)?.label;
+      const res = await api.post("/api/payslips/generate_all/", {
+        month: selectedMonth,
+        year: selectedYear
+      });
+      alert(res.data.message || `Successfully processed payslips for ${monthName} ${selectedYear}`);
+      fetchData(selectedRegion, selectedMonth, selectedYear);
+    } catch (e) {
+      console.error("Failed to bulk generate payslips", e);
+      alert(e.response?.data?.error || "Failed to generate payslips.");
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const handleGenerateSingle = async (empId, empName) => {
+    setGenerating(true);
+    try {
+      const res = await api.post("/api/payslips/generate_all/", {
+        employee_id: empId,
+        month: selectedMonth,
+        year: selectedYear
+      });
+      alert(res.data.message || `Generated payslip for ${empName}`);
+      fetchData(selectedRegion, selectedMonth, selectedYear);
+    } catch (e) {
+      console.error("Failed to generate single payslip", e);
+      alert(e.response?.data?.error || "Failed to generate payslip.");
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const handleMarkPaid = async (payslipId) => {
+    try {
+      await api.patch(`/api/payslips/${payslipId}/`, { status: "Paid" });
+      alert("Payslip marked as Paid successfully!");
+      fetchData(selectedRegion, selectedMonth, selectedYear);
+    } catch (e) {
+      console.error("Failed to mark payslip as paid", e);
+      alert("Failed to update status to Paid.");
+    }
+  };
 
   useEffect(() => {
     fetchEmployees();
@@ -410,6 +513,17 @@ const PayrollPage = () => {
                   <span className="text-muted-foreground">Unpaid Pending:</span>
                   <span className="font-bold text-amber-600 dark:text-amber-400">{stats.unpaidCount || 0} ({stats.unpaidAmountFmt || "₹0"})</span>
                 </div>
+
+                {stats.notGeneratedCount > 0 && (
+                  <button
+                    onClick={handleGenerateAll}
+                    disabled={generating}
+                    className="flex items-center gap-1.5 bg-primary text-primary-foreground px-3 py-1.5 rounded-xl font-bold hover:opacity-90 transition-all shadow-xs disabled:opacity-50"
+                  >
+                    {generating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
+                    Generate All Slips ({stats.notGeneratedCount})
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -473,10 +587,10 @@ const PayrollPage = () => {
             <div className="flex items-center gap-2">
               <Users className="h-4 w-4 text-primary" />
               <span className="text-sm font-bold text-foreground">
-                {selectedRegion ? `${selectedRegion} Region` : "All Regions"}:
+                {selectedRegion ? `${selectedRegion} Region` : "All Regions"} ({monthsList.find(m => m.value === selectedMonth)?.label} {selectedYear}):
               </span>
               <span className="text-xs font-semibold text-muted-foreground bg-muted px-2.5 py-0.5 rounded-full border border-border/50">
-                {filteredEmployees.length} staff
+                {filteredRoster.length} staff
               </span>
             </div>
 
@@ -490,7 +604,7 @@ const PayrollPage = () => {
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                Employee Roster ({filteredEmployees.length})
+                Employee Payroll Status ({filteredRoster.length})
               </button>
               <button
                 type="button"
@@ -513,7 +627,7 @@ const PayrollPage = () => {
             </div>
           ) : cycleSubTab === "employees" ? (
             <DataTable
-              data={filteredEmployees}
+              data={filteredRoster}
               emptyMessage={
                 selectedRegion
                   ? `No employees found in ${selectedRegion} region.`
@@ -561,7 +675,7 @@ const PayrollPage = () => {
                 },
                 {
                   key: "salary",
-                  label: "Base Salary",
+                  label: "Base Salary (Gross)",
                   render: (e) => (
                     <span className="font-bold text-sm font-mono text-foreground">
                       ₹{parseFloat(e.salary || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
@@ -569,29 +683,99 @@ const PayrollPage = () => {
                   ),
                 },
                 {
-                  key: "status",
-                  label: "Status",
+                  key: "payslipStatus",
+                  label: `${monthsList.find(m => m.value === selectedMonth)?.label} Status`,
+                  render: (e) => {
+                    const st = e.payslipStatus;
+                    if (st === "Paid") {
+                      return (
+                        <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-700 bg-emerald-100 dark:bg-emerald-950/80 dark:text-emerald-300 px-2.5 py-1 rounded-lg border border-emerald-200 dark:border-emerald-900">
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                          Paid
+                        </span>
+                      );
+                    }
+                    if (st === "Generated") {
+                      return (
+                        <span className="inline-flex items-center gap-1 text-xs font-bold text-blue-700 bg-blue-100 dark:bg-blue-950/80 dark:text-blue-300 px-2.5 py-1 rounded-lg border border-blue-200 dark:border-blue-900">
+                          <FileText className="h-3.5 w-3.5" />
+                          Generated
+                        </span>
+                      );
+                    }
+                    return (
+                      <span className="inline-flex items-center gap-1 text-xs font-semibold text-amber-700 bg-amber-50 dark:bg-amber-950/50 dark:text-amber-300 px-2.5 py-1 rounded-lg border border-amber-200 dark:border-amber-900/60">
+                        <Clock className="h-3.5 w-3.5" />
+                        Not Generated
+                      </span>
+                    );
+                  },
+                },
+                {
+                  key: "netSalary",
+                  label: "Earned Net Salary",
                   render: (e) => (
-                    <Badge
-                      variant={e.status === "active" ? "success" : e.status === "onleave" ? "warning" : "secondary"}
-                      className="capitalize"
-                    >
-                      {e.status || "active"}
-                    </Badge>
+                    <div className="font-mono text-sm">
+                      {e.netSalary !== null ? (
+                        <span className="font-black text-foreground">
+                          ₹{e.netSalary.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-muted-foreground italic">Not Generated</span>
+                      )}
+                    </div>
+                  ),
+                },
+                {
+                  key: "days",
+                  label: "Worked / LOP",
+                  render: (e) => (
+                    <div className="text-xs font-medium">
+                      {e.paidDays !== null ? (
+                        <span>
+                          <strong className="text-emerald-600 dark:text-emerald-400">{e.paidDays}d Paid</strong>
+                          {e.lopDays > 0 && <span className="text-rose-500 font-bold ml-1">({e.lopDays}d LOP)</span>}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">-</span>
+                      )}
+                    </div>
                   ),
                 },
                 {
                   key: "act",
                   label: "Action",
                   render: (e) => (
-                    <div className="flex items-center justify-end gap-1">
-                      <button
-                        onClick={() => navigate("/payslip")}
-                        className="flex items-center gap-1 rounded-lg border border-border px-3 h-8 text-xs hover:bg-muted font-semibold text-primary transition-colors"
-                      >
-                        <FileText className="h-3.5 w-3.5" />
-                        View Payslip
-                      </button>
+                    <div className="flex items-center justify-end gap-1.5">
+                      {e.payslip ? (
+                        <>
+                          <button
+                            onClick={() => setSelectedSlipForModal(e.payslip)}
+                            className="flex items-center gap-1 rounded-lg border border-border px-2.5 h-8 text-xs hover:bg-muted font-semibold text-primary transition-colors"
+                          >
+                            <Eye className="h-3.5 w-3.5" />
+                            View Slip
+                          </button>
+                          {e.payslipStatus !== "Paid" && (
+                            <button
+                              onClick={() => handleMarkPaid(e.payslip.id)}
+                              className="flex items-center gap-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 h-8 text-xs font-bold transition-colors shadow-2xs"
+                            >
+                              <CheckCircle2 className="h-3.5 w-3.5" />
+                              Mark Paid
+                            </button>
+                          )}
+                        </>
+                      ) : (
+                        <button
+                          onClick={() => handleGenerateSingle(e.id, e.employee_name)}
+                          disabled={generating}
+                          className="flex items-center gap-1 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground px-2.5 h-8 text-xs font-bold transition-colors shadow-2xs disabled:opacity-50"
+                        >
+                          {generating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
+                          Generate Slip
+                        </button>
+                      )}
                     </div>
                   ),
                 },
@@ -758,6 +942,90 @@ const PayrollPage = () => {
             </div>
           )}
         </>
+      )}
+
+      {/* Payslip Quick Preview Modal */}
+      {selectedSlipForModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 overflow-y-auto">
+          <div className="bg-card border border-border rounded-3xl max-w-lg w-full p-6 shadow-2xl relative animate-in fade-in zoom-in-95 duration-200">
+            <button
+              onClick={() => setSelectedSlipForModal(null)}
+              className="absolute top-4 right-4 p-2 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            >
+              <X className="h-5 w-5" />
+            </button>
+
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2.5 rounded-2xl bg-primary/10 text-primary">
+                <FileText className="h-6 w-6" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-foreground">
+                  {selectedSlipForModal.employee_name}
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  Payslip for {monthsList.find(m => m.value === selectedSlipForModal.month)?.label} {selectedSlipForModal.year}
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-3 bg-muted/30 border border-border/60 rounded-2xl p-4 text-xs font-medium mb-4">
+              <div className="flex justify-between py-1 border-b border-border/40">
+                <span className="text-muted-foreground">Employee Code</span>
+                <span className="font-bold font-mono">{selectedSlipForModal.emp_code || "-"}</span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-border/40">
+                <span className="text-muted-foreground">Designation & Branch</span>
+                <span className="font-semibold">{selectedSlipForModal.role || "Staff"} ({selectedSlipForModal.branch || "Chennai"})</span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-border/40">
+                <span className="text-muted-foreground">Worked / LOP Days</span>
+                <span>{selectedSlipForModal.paid_days || 30} Days Worked ({selectedSlipForModal.lop_days || 0} LOP)</span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-border/40">
+                <span className="text-muted-foreground">Gross Monthly Earnings</span>
+                <span className="font-bold text-foreground">₹{parseFloat(selectedSlipForModal.gross_earnings || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-border/40">
+                <span className="text-muted-foreground">Gross Deductions</span>
+                <span className="font-bold text-rose-600 dark:text-rose-400">₹{parseFloat(selectedSlipForModal.gross_deductions || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+              </div>
+              <div className="flex justify-between py-1.5 text-sm font-black pt-2 border-t border-border">
+                <span className="text-foreground">Net Take-Home Payout</span>
+                <span className="text-emerald-600 dark:text-emerald-400 font-mono">
+                  ₹{parseFloat(selectedSlipForModal.net_salary || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between gap-3 pt-2">
+              <Badge variant={selectedSlipForModal.status === "Paid" ? "success" : "warning"} className="text-xs px-3 py-1 capitalize">
+                Status: {selectedSlipForModal.status}
+              </Badge>
+
+              <div className="flex items-center gap-2">
+                {selectedSlipForModal.status !== "Paid" && (
+                  <Button
+                    onClick={() => {
+                      handleMarkPaid(selectedSlipForModal.id);
+                      setSelectedSlipForModal(null);
+                    }}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs"
+                  >
+                    Mark Paid
+                  </Button>
+                )}
+                <Button
+                  variant="outline"
+                  onClick={() => navigate("/payslip")}
+                  className="text-xs font-semibold"
+                >
+                  Full Payslip View
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
