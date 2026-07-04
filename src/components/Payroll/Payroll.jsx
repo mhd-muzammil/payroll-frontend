@@ -1,11 +1,12 @@
 import { useEffect, useState, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import PageHeader from "../ui/PageHeader";
 import StatsCard from "../ui/StatsCard";
 import Toolbar from "../ui/Toolbar";
 import DataTable from "../ui/DataTable";
-import { Wallet, TrendingUp, Clock, CheckCircle2, Play, MoreHorizontal, Loader2, MapPin, Users, Save, Calendar } from "lucide-react";
+import { Wallet, TrendingUp, Clock, CheckCircle2, Play, MoreHorizontal, Loader2, MapPin, Users, Save, Calendar, FileText, Eye } from "lucide-react";
 import { api } from "@/api/Api";
 import { extractArray } from "../../Utility/apiUtils";
 
@@ -56,11 +57,15 @@ const defaultStyle = {
 };
 
 const PayrollPage = () => {
+  const navigate = useNavigate();
   const [runs, setRuns] = useState([]);
   const [stats, setStats] = useState({ thisMonth: "₹0", ytdTotal: "₹0", pending: "₹0", processed: "0%" });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedRegion, setSelectedRegion] = useState("");
+  const [allEmployees, setAllEmployees] = useState([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [cycleSubTab, setCycleSubTab] = useState("employees"); // employees | history
   const [employeeStats, setEmployeeStats] = useState({
     Chennai: 0,
     Vellore: 0,
@@ -150,12 +155,14 @@ const PayrollPage = () => {
     }
   };
 
-  const fetchData = async (region = selectedRegion) => {
+  const fetchData = async (region = selectedRegion, m = selectedMonth, y = selectedYear) => {
     setLoading(true);
     setError(null);
     try {
       const summaryUrl = region ? `/api/payslips/cycles_summary/?branch=${region}` : "/api/payslips/cycles_summary/";
-      const statsUrl = region ? `/api/payslips/company_stats/?branch=${region}` : "/api/payslips/company_stats/";
+      const statsUrl = region 
+        ? `/api/payslips/company_stats/?branch=${region}&month=${m}&year=${y}` 
+        : `/api/payslips/company_stats/?month=${m}&year=${y}`;
 
       const [cyclesRes, statsRes] = await Promise.all([
         api.get(summaryUrl).catch(e => {
@@ -184,6 +191,7 @@ const PayrollPage = () => {
     try {
       const res = await api.get("/api/employees/");
       const list = extractArray(res.data);
+      setAllEmployees(list);
       const regions = ["Chennai", "Vellore", "Salem", "Kanchipuram", "Hosur"];
       const statsObj = {
         Chennai: 0,
@@ -212,13 +220,31 @@ const PayrollPage = () => {
     }
   };
 
+  const filteredEmployees = useMemo(() => {
+    return allEmployees.filter((emp) => {
+      if (selectedRegion) {
+        const matchBranch = emp.branch && emp.branch.trim().toLowerCase() === selectedRegion.trim().toLowerCase();
+        if (!matchBranch) return false;
+      }
+      if (searchQuery.trim()) {
+        const q = searchQuery.trim().toLowerCase();
+        const nameMatch = emp.employee_name && emp.employee_name.toLowerCase().includes(q);
+        const roleMatch = emp.role && emp.role.toLowerCase().includes(q);
+        const deptMatch = emp.department && emp.department.toLowerCase().includes(q);
+        const codeMatch = emp.emp_code && emp.emp_code.toLowerCase().includes(q);
+        if (!nameMatch && !roleMatch && !deptMatch && !codeMatch) return false;
+      }
+      return true;
+    });
+  }, [allEmployees, selectedRegion, searchQuery]);
+
   useEffect(() => {
     fetchEmployees();
   }, []);
 
   useEffect(() => {
-    fetchData(selectedRegion);
-  }, [selectedRegion]);
+    fetchData(selectedRegion, selectedMonth, selectedYear);
+  }, [selectedRegion, selectedMonth, selectedYear]);
 
   useEffect(() => {
     if (activeTab === "profitability") {
@@ -236,7 +262,7 @@ const PayrollPage = () => {
             {activeTab === "profitability" ? (
               <Button icon={Play} onClick={() => fetchPLData(selectedMonth, selectedYear)}>Refresh P&L</Button>
             ) : (
-              <Button icon={Play} onClick={() => { fetchData(selectedRegion); fetchEmployees(); }}>Refresh Data</Button>
+              <Button icon={Play} onClick={() => { fetchData(selectedRegion, selectedMonth, selectedYear); fetchEmployees(); }}>Refresh Data</Button>
             )}
           </div>
         }
@@ -283,11 +309,109 @@ const PayrollPage = () => {
 
       {activeTab === "cycles" ? (
         <>
+          {/* Monthly Period Filter Selector */}
+          <div className="flex flex-wrap items-center justify-between gap-4 bg-card border border-border/60 rounded-3xl p-5 shadow-xs">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 rounded-xl bg-primary/10 text-primary">
+                <Calendar className="h-5 w-5" />
+              </div>
+              <div>
+                <span className="text-base font-bold text-foreground block">Payroll Period Selector</span>
+                <span className="text-xs text-muted-foreground">Select Month & Year to view monthly salary metrics, status & payouts</span>
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-3">
+              <select
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
+                className="h-10 rounded-xl border border-border bg-background px-3 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                {monthsList.map(m => (
+                  <option key={m.value} value={m.value}>{m.label}</option>
+                ))}
+              </select>
+
+              <select
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                className="h-10 rounded-xl border border-border bg-background px-3 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                {yearsList.map(y => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Monthly KPI Stats Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 md:gap-6">
-            <StatsCard label="This Month Net" value={stats.thisMonth} delta="Live Data" icon={Wallet} accent="primary" />
-            <StatsCard label="YTD Total Net" value={stats.ytdTotal} delta="Live Cumulative" icon={TrendingUp} accent="success" />
-            <StatsCard label="Pending Adjusts" value={stats.pending} icon={Clock} accent="warning" />
-            <StatsCard label="Month Completion" value={stats.processed} icon={CheckCircle2} accent="info" />
+            <StatsCard
+              label="Total Base Salary (Gross Total)"
+              value={stats.totalBaseSalaryFmt || "₹0"}
+              delta={`${stats.totalActiveEmployees || 0} Active Employees`}
+              icon={Wallet}
+              accent="primary"
+            />
+            <StatsCard
+              label="Generated Net Payout"
+              value={stats.generatedNetFmt || "₹0"}
+              delta={`Gross: ${stats.generatedGrossFmt || "₹0"} (${stats.slipsCount || 0} Slips)`}
+              icon={TrendingUp}
+              accent="success"
+            />
+            <StatsCard
+              label="Paid / Pending Employees"
+              value={`${stats.paidCount || 0} Paid • ${stats.unpaidCount || 0} Pending`}
+              delta={`Paid: ${stats.paidAmountFmt || "₹0"} | Pending: ${stats.unpaidAmountFmt || "₹0"}`}
+              icon={CheckCircle2}
+              accent="warning"
+            />
+            <StatsCard
+              label="Total Deductions Amount"
+              value={stats.totalDeductionsFmt || "₹0"}
+              delta="EPF, ESI & Statutory Deductions"
+              icon={Clock}
+              accent="info"
+            />
+          </div>
+
+          {/* Monthly Detailed Metrics Summary Banner */}
+          <div className="bg-gradient-to-r from-indigo-500/10 via-purple-500/5 to-pink-500/10 border border-indigo-200/50 dark:border-indigo-900/40 rounded-3xl p-5 shadow-xs">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <h4 className="text-sm font-black text-indigo-700 dark:text-indigo-300 uppercase tracking-wider flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-indigo-500 animate-pulse"></span>
+                  {monthsList.find(m => m.value === selectedMonth)?.label} {selectedYear} Monthly Payroll Breakdown
+                </h4>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Complete breakdown of employee base salaries, generated payouts, paid status, and deductions.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2.5 text-xs font-semibold">
+                <div className="bg-card px-3 py-1.5 rounded-xl border border-border shadow-2xs flex items-center gap-1.5">
+                  <span className="text-muted-foreground">Base Salary (Gross):</span>
+                  <span className="font-bold text-foreground">{stats.totalBaseSalaryFmt || "₹0"}</span>
+                </div>
+                <div className="bg-card px-3 py-1.5 rounded-xl border border-border shadow-2xs flex items-center gap-1.5">
+                  <span className="text-muted-foreground">Generated Net:</span>
+                  <span className="font-bold text-emerald-600 dark:text-emerald-400">{stats.generatedNetFmt || "₹0"}</span>
+                </div>
+                <div className="bg-card px-3 py-1.5 rounded-xl border border-border shadow-2xs flex items-center gap-1.5">
+                  <span className="text-muted-foreground">Total Deductions:</span>
+                  <span className="font-bold text-rose-600 dark:text-rose-400">{stats.totalDeductionsFmt || "₹0"}</span>
+                </div>
+                <div className="bg-card px-3 py-1.5 rounded-xl border border-border shadow-2xs flex items-center gap-1.5">
+                  <span className="text-muted-foreground">Paid Staff:</span>
+                  <span className="font-bold text-blue-600 dark:text-blue-400">{stats.paidCount || 0} ({stats.paidAmountFmt || "₹0"})</span>
+                </div>
+                <div className="bg-card px-3 py-1.5 rounded-xl border border-border shadow-2xs flex items-center gap-1.5">
+                  <span className="text-muted-foreground">Unpaid Pending:</span>
+                  <span className="font-bold text-amber-600 dark:text-amber-400">{stats.unpaidCount || 0} ({stats.unpaidAmountFmt || "₹0"})</span>
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* Region-Wise Payroll Distribution */}
@@ -342,13 +466,137 @@ const PayrollPage = () => {
             </div>
           </div>
 
-          <Toolbar />
+          <Toolbar searchValue={searchQuery} onSearchChange={setSearchQuery} />
+
+          {/* Sub-tab view header */}
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-card border border-border/60 rounded-2xl p-3.5 shadow-xs mb-4">
+            <div className="flex items-center gap-2">
+              <Users className="h-4 w-4 text-primary" />
+              <span className="text-sm font-bold text-foreground">
+                {selectedRegion ? `${selectedRegion} Region` : "All Regions"}:
+              </span>
+              <span className="text-xs font-semibold text-muted-foreground bg-muted px-2.5 py-0.5 rounded-full border border-border/50">
+                {filteredEmployees.length} staff
+              </span>
+            </div>
+
+            <div className="flex rounded-xl overflow-hidden bg-muted/50 p-1 border border-border/70 text-xs">
+              <button
+                type="button"
+                onClick={() => setCycleSubTab("employees")}
+                className={`px-3 py-1.5 font-bold rounded-lg transition-all ${
+                  cycleSubTab === "employees"
+                    ? "bg-card text-foreground shadow-xs border border-border/50"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Employee Roster ({filteredEmployees.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setCycleSubTab("history")}
+                className={`px-3 py-1.5 font-bold rounded-lg transition-all ${
+                  cycleSubTab === "history"
+                    ? "bg-card text-foreground shadow-xs border border-border/50"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Payroll Cycles History ({runs.length})
+              </button>
+            </div>
+          </div>
 
           {loading ? (
             <div className="flex flex-col items-center justify-center py-12 text-muted-foreground space-y-2 bg-card border border-border rounded-2xl">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              <p className="text-sm">Aggregating real-time payroll cycles...</p>
+              <p className="text-sm">Aggregating real-time payroll data...</p>
             </div>
+          ) : cycleSubTab === "employees" ? (
+            <DataTable
+              data={filteredEmployees}
+              emptyMessage={
+                selectedRegion
+                  ? `No employees found in ${selectedRegion} region.`
+                  : "No employees found."
+              }
+              columns={[
+                {
+                  key: "employee_name",
+                  label: "Employee",
+                  render: (e) => (
+                    <div>
+                      <div className="font-bold text-sm text-foreground">{e.employee_name}</div>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        {e.emp_code && (
+                          <span className="text-[10px] font-mono font-semibold bg-muted px-1.5 py-0.5 rounded text-muted-foreground">
+                            ID: {e.emp_code}
+                          </span>
+                        )}
+                        {e.email && <span className="text-xs text-muted-foreground">{e.email}</span>}
+                      </div>
+                    </div>
+                  ),
+                },
+                {
+                  key: "role",
+                  label: "Role & Department",
+                  render: (e) => (
+                    <div>
+                      <div className="text-sm font-semibold text-foreground">{e.role || "Staff"}</div>
+                      <Badge variant="outline" className="text-[10px] mt-0.5 capitalize">
+                        {e.department || "General"}
+                      </Badge>
+                    </div>
+                  ),
+                },
+                {
+                  key: "branch",
+                  label: "Branch",
+                  render: (e) => (
+                    <span className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 px-2.5 py-1 rounded-lg border border-indigo-100 dark:border-indigo-900/40">
+                      <MapPin className="h-3 w-3" />
+                      {e.branch || "Chennai"}
+                    </span>
+                  ),
+                },
+                {
+                  key: "salary",
+                  label: "Base Salary",
+                  render: (e) => (
+                    <span className="font-bold text-sm font-mono text-foreground">
+                      ₹{parseFloat(e.salary || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                    </span>
+                  ),
+                },
+                {
+                  key: "status",
+                  label: "Status",
+                  render: (e) => (
+                    <Badge
+                      variant={e.status === "active" ? "success" : e.status === "onleave" ? "warning" : "secondary"}
+                      className="capitalize"
+                    >
+                      {e.status || "active"}
+                    </Badge>
+                  ),
+                },
+                {
+                  key: "act",
+                  label: "Action",
+                  render: (e) => (
+                    <div className="flex items-center justify-end gap-1">
+                      <button
+                        onClick={() => navigate("/payslip")}
+                        className="flex items-center gap-1 rounded-lg border border-border px-3 h-8 text-xs hover:bg-muted font-semibold text-primary transition-colors"
+                      >
+                        <FileText className="h-3.5 w-3.5" />
+                        View Payslip
+                      </button>
+                    </div>
+                  ),
+                },
+              ]}
+            />
           ) : (
             <DataTable
               data={runs}
@@ -368,9 +616,11 @@ const PayrollPage = () => {
                   key: "act", label: "",
                   render: () => (
                     <div className="flex items-center justify-end gap-1">
-                      <button className="rounded-lg border border-border px-3 h-8 text-xs hover:bg-muted font-medium transition-colors">Details</button>
-                      <button className="grid h-8 w-8 place-items-center rounded-lg hover:bg-muted transition-colors">
-                        <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
+                      <button
+                        onClick={() => navigate("/payslip")}
+                        className="rounded-lg border border-border px-3 h-8 text-xs hover:bg-muted font-medium transition-colors"
+                      >
+                        Details
                       </button>
                     </div>
                   ),

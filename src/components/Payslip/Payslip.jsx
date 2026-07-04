@@ -1034,13 +1034,13 @@ const PayslipsPage = () => {
                                       </tr>
                                       <tr>
                                         <td style={{ ...tdStyle, fontWeight: "bold", backgroundColor: "#fafafa" }}>Incentive</td>
-                                        <td style={{ ...tdStyle, textAlign: "right", fontFamily: "monospace" }}>-</td>
-                                        <td style={{ ...tdStyle, textAlign: "right", fontFamily: "monospace" }}>-</td>
+                                        <td style={{ ...tdStyle, textAlign: "right", fontFamily: "monospace" }}>{formatINR(selectedSlip.gross_incentive)}</td>
+                                        <td style={{ ...tdStyle, textAlign: "right", fontFamily: "monospace", fontWeight: "bold" }}>{formatINR(selectedSlip.earned_incentive)}</td>
                                       </tr>
                                       <tr>
                                         <td style={{ ...tdStyle, fontWeight: "bold", backgroundColor: "#fafafa" }}>Other Earnings</td>
-                                        <td style={{ ...tdStyle, textAlign: "right", fontFamily: "monospace" }}>-</td>
-                                        <td style={{ ...tdStyle, textAlign: "right", fontFamily: "monospace" }}>-</td>
+                                        <td style={{ ...tdStyle, textAlign: "right", fontFamily: "monospace" }}>{formatINR(selectedSlip.gross_other_earnings)}</td>
+                                        <td style={{ ...tdStyle, textAlign: "right", fontFamily: "monospace", fontWeight: "bold" }}>{formatINR(selectedSlip.earned_other_earnings)}</td>
                                       </tr>
                                       <tr style={{ backgroundColor: "#f3f4f6", fontWeight: "900", fontSize: "12px" }}>
                                         <td style={tdStyle}>Gross Salary / Earnings</td>
