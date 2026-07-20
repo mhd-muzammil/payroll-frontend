@@ -220,6 +220,103 @@ const PayslipsPage = () => {
 
   const [emailingSlipId, setEmailingSlipId] = useState(null);
 
+  // Manual editing of days / other-deduction on the payslip preview dialog.
+  const [editTotalDays, setEditTotalDays] = useState("");
+  const [editLop, setEditLop] = useState("");
+  const [editPaidDays, setEditPaidDays] = useState("");
+  const [editOtherDed, setEditOtherDed] = useState("");
+  const [recalculating, setRecalculating] = useState(false);
+  const [reverting, setReverting] = useState(false);
+
+  // Keep the editable inputs in sync whenever a different slip is opened.
+  useEffect(() => {
+    if (selectedSlip) {
+      setEditTotalDays(String(parseFloat(selectedSlip.total_days ?? 0)));
+      setEditLop(String(parseFloat(selectedSlip.lop_days ?? 0)));
+      setEditPaidDays(String(parseFloat(selectedSlip.paid_days ?? 0)));
+      setEditOtherDed(String(parseFloat(selectedSlip.deduction_other ?? 0)));
+    }
+  }, [selectedSlip]);
+
+  const applyUpdatedSlip = (updated) => {
+    setSelectedSlip(updated);
+    setSlips((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+    setMonthSlips((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+  };
+
+  // `field` tells the handler which value the operator just edited, so we send
+  // the matching key. Days are resolved server-side (paid_days wins over lop).
+  const handleRecalculate = async (field) => {
+    if (!selectedSlip || recalculating || reverting) return;
+
+    const totalDays = parseFloat(editTotalDays);
+    if (isNaN(totalDays) || totalDays <= 0) {
+      alert("Total Days must be a number greater than 0.");
+      return;
+    }
+
+    const payload = { total_days: totalDays };
+
+    if (field === "paid_days") {
+      const v = parseFloat(editPaidDays);
+      if (isNaN(v) || v < 0 || v > totalDays) {
+        alert(`No of Days must be between 0 and ${totalDays}.`);
+        return;
+      }
+      payload.paid_days = v;
+    } else if (field === "lop_days") {
+      const v = parseFloat(editLop);
+      if (isNaN(v) || v < 0 || v > totalDays) {
+        alert(`No of Lop Days must be between 0 and ${totalDays}.`);
+        return;
+      }
+      // Fractional LOP (e.g. 0.5 for a half day) is deducted proportionally.
+      payload.lop_days = v;
+    } else if (field === "other_deduction") {
+      const v = parseFloat(editOtherDed);
+      if (isNaN(v) || v < 0) {
+        alert("Other Deduction must be 0 or more.");
+        return;
+      }
+      payload.other_deduction = v;
+      // Preserve the current LOP split when only the deduction changes.
+      payload.lop_days = parseFloat(editLop) || 0;
+    } else if (field === "total_days") {
+      // Only the cycle length changed; keep the existing LOP split.
+      payload.lop_days = parseFloat(editLop) || 0;
+    }
+
+    setRecalculating(true);
+    try {
+      const res = await api.post(`/api/payslips/${selectedSlip.id}/recalculate/`, payload);
+      applyUpdatedSlip(res.data);
+      alert("Payslip recalculated and saved successfully.");
+    } catch (err) {
+      console.error("Failed to recalculate payslip:", err);
+      alert(err.response?.data?.error || "Failed to recalculate payslip. Please try again.");
+    } finally {
+      setRecalculating(false);
+    }
+  };
+
+  const handleRevert = async () => {
+    if (!selectedSlip || recalculating || reverting) return;
+    if (!window.confirm("Undo all manual edits and recalculate this payslip from attendance records?")) {
+      return;
+    }
+    setReverting(true);
+    try {
+      const res = await api.post(`/api/payslips/${selectedSlip.id}/revert/`);
+      applyUpdatedSlip(res.data);
+      alert("Payslip reverted to attendance-based values.");
+    } catch (err) {
+      console.error("Failed to revert payslip:", err);
+      alert(err.response?.data?.error || "Failed to revert payslip. Please try again.");
+    } finally {
+      setReverting(false);
+    }
+  };
+
   const handleEmailPayslip = async (slip) => {
     if (!slip?.employee_details?.email) {
       alert("This employee does not have a registered email address. Please edit their profile first.");
@@ -308,6 +405,13 @@ const PayslipsPage = () => {
             .bg-gray {
               background-color: #f3f4f6 !important;
             }
+            /* On print, hide on-screen editors and reveal the plain values. */
+            [data-print-hide="true"] {
+              display: none !important;
+            }
+            .editable-print-value {
+              display: inline !important;
+            }
           </style>
         </head>
         <body>
@@ -357,6 +461,63 @@ const PayslipsPage = () => {
   const valStyle = {
     ...tdStyle,
     width: "32%"
+  };
+
+  // Renders one editable "days" row (Total Days / LOP / No of Days). The plain
+  // value is shown on print; the input + Save button are hidden from print.
+  const renderEditableDaysRow = (label, value, inputValue, setInputValue, field, opts = {}) => {
+    const isPaid = selectedSlip?.status === "Paid";
+    const disabled = recalculating || reverting || isPaid;
+    const color = opts.color || "#111827";
+    const labelBg = opts.labelBg || "#f3f4f6";
+    return (
+      <tr>
+        <td style={{ ...tdStyle, fontWeight: "bold", color, backgroundColor: labelBg }}>{label}</td>
+        <td style={{ ...tdStyle, textAlign: "center", color, fontFamily: "monospace", fontWeight: "bold" }}>
+          <span className="editable-print-value" style={{ display: "none" }}>{value}</span>
+          <span data-print-hide="true" style={{ display: "inline-flex", alignItems: "center", gap: "4px", justifyContent: "center" }}>
+            <input
+              type="number"
+              min="0"
+              step={opts.step || "0.5"}
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              disabled={disabled}
+              style={{
+                width: "50px",
+                textAlign: "center",
+                color,
+                fontFamily: "monospace",
+                fontWeight: "bold",
+                border: `1px solid ${color}`,
+                borderRadius: "4px",
+                padding: "1px 2px",
+                backgroundColor: "#fff",
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => handleRecalculate(field)}
+              disabled={disabled}
+              title={isPaid ? "Paid payslip cannot be edited" : "Save & recalculate"}
+              style={{
+                cursor: disabled ? "not-allowed" : "pointer",
+                fontSize: "9px",
+                fontWeight: "bold",
+                color: "#fff",
+                backgroundColor: disabled ? "#9ca3af" : color,
+                border: "none",
+                borderRadius: "4px",
+                padding: "2px 5px",
+                fontFamily: "sans-serif",
+              }}
+            >
+              {recalculating ? "..." : "Save"}
+            </button>
+          </span>
+        </td>
+      </tr>
+    );
   };
 
   const regionStats = useMemo(() => {
@@ -617,7 +778,7 @@ const PayslipsPage = () => {
                         <div className="flex items-center gap-2">
                           <Badge variant="success">Generated</Badge>
                           <span className="text-xs font-bold font-mono text-emerald-600 dark:text-emerald-400">
-                            ₹{parseFloat(matchingSlip.net_salary).toLocaleString("en-IN")}
+                            ₹{formatINR(matchingSlip.net_salary)}
                           </span>
                         </div>
                       );
@@ -728,7 +889,7 @@ const PayslipsPage = () => {
                   label: "Net Salary", 
                   render: (s) => (
                     <span className="text-sm font-bold tracking-tight text-foreground font-mono">
-                      ₹{parseFloat(s.net_salary).toLocaleString("en-IN")}
+                      ₹{formatINR(s.net_salary)}
                     </span>
                   ) 
                 },
@@ -794,10 +955,20 @@ const PayslipsPage = () => {
                   <p className="text-xs text-muted-foreground">{selectedSlip.employee_details?.employee_name} - {getMonthLabel(selectedSlip.month)} {selectedSlip.year}</p>
                 </div>
                 <div className="flex items-center gap-3 pr-8">
-                  <Button 
-                    variant="brand" 
-                    size="sm" 
-                    icon={emailingSlipId === selectedSlip.id ? Loader2 : Mail} 
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    icon={reverting ? Loader2 : RefreshCw}
+                    disabled={reverting || recalculating || selectedSlip.status === "Paid"}
+                    title={selectedSlip.status === "Paid" ? "Paid payslip cannot be reverted" : "Undo manual edits (recalculate from attendance)"}
+                    onClick={handleRevert}
+                  >
+                    {reverting ? "Reverting..." : "Undo Edits"}
+                  </Button>
+                  <Button
+                    variant="brand"
+                    size="sm"
+                    icon={emailingSlipId === selectedSlip.id ? Loader2 : Mail}
                     disabled={emailingSlipId === selectedSlip.id}
                     onClick={() => handleEmailPayslip(selectedSlip)}
                   >
@@ -969,18 +1140,30 @@ const PayslipsPage = () => {
                                 <td style={{ padding: "0", width: "30%" }}>
                                   <table style={{ width: "100%", borderCollapse: "collapse" }}>
                                     <tbody>
-                                      <tr>
-                                        <td style={{ ...tdStyle, fontWeight: "bold", backgroundColor: "#f3f4f6", width: "60%" }}>Total Days</td>
-                                        <td style={{ ...tdStyle, textAlign: "center", fontFamily: "monospace", fontWeight: "bold" }}>{selectedSlip.total_days}</td>
-                                      </tr>
-                                      <tr>
-                                        <td style={{ ...tdStyle, fontWeight: "bold", color: "#dc2626", backgroundColor: "#fef2f2" }}>No of Lop Days</td>
-                                        <td style={{ ...tdStyle, textAlign: "center", color: "#dc2626", fontFamily: "monospace", fontWeight: "bold" }}>{parseFloat(selectedSlip.lop_days).toFixed(1)}</td>
-                                      </tr>
-                                      <tr>
-                                        <td style={{ ...tdStyle, fontWeight: "bold", backgroundColor: "#f3f4f6" }}>No of Days</td>
-                                        <td style={{ ...tdStyle, textAlign: "center", fontFamily: "monospace", fontWeight: "bold" }}>{parseFloat(selectedSlip.paid_days).toFixed(1)}</td>
-                                      </tr>
+                                      {renderEditableDaysRow(
+                                        "Total Days",
+                                        selectedSlip.total_days,
+                                        editTotalDays,
+                                        setEditTotalDays,
+                                        "total_days",
+                                        { step: "1" }
+                                      )}
+                                      {renderEditableDaysRow(
+                                        "No of Lop Days",
+                                        parseFloat(selectedSlip.lop_days).toFixed(2),
+                                        editLop,
+                                        setEditLop,
+                                        "lop_days",
+                                        { color: "#dc2626", labelBg: "#fef2f2", step: "0.01" }
+                                      )}
+                                      {renderEditableDaysRow(
+                                        "No of Days",
+                                        parseFloat(selectedSlip.paid_days).toFixed(2),
+                                        editPaidDays,
+                                        setEditPaidDays,
+                                        "paid_days",
+                                        { step: "0.01" }
+                                      )}
                                     </tbody>
                                   </table>
                                 </td>
@@ -1091,7 +1274,51 @@ const PayslipsPage = () => {
                                       </tr>
                                       <tr>
                                         <td style={{ ...tdStyle, fontWeight: "bold" }}>Other Deduction</td>
-                                        <td style={{ ...tdStyle, textAlign: "right", fontFamily: "monospace", color: "#b91c1c" }}>{parseFloat(selectedSlip.deduction_other) > 0 ? formatINR(selectedSlip.deduction_other) : "-"}</td>
+                                        <td style={{ ...tdStyle, textAlign: "right", fontFamily: "monospace", color: "#b91c1c" }}>
+                                          <span className="editable-print-value" style={{ display: "none" }}>
+                                            {parseFloat(selectedSlip.deduction_other) > 0 ? formatINR(selectedSlip.deduction_other) : "-"}
+                                          </span>
+                                          <span data-print-hide="true" style={{ display: "inline-flex", alignItems: "center", gap: "4px", justifyContent: "flex-end" }}>
+                                            <input
+                                              type="number"
+                                              min="0"
+                                              step="0.01"
+                                              value={editOtherDed}
+                                              onChange={(e) => setEditOtherDed(e.target.value)}
+                                              disabled={recalculating || reverting || selectedSlip.status === "Paid"}
+                                              style={{
+                                                width: "70px",
+                                                textAlign: "right",
+                                                color: "#b91c1c",
+                                                fontFamily: "monospace",
+                                                fontWeight: "bold",
+                                                border: "1px solid #b91c1c",
+                                                borderRadius: "4px",
+                                                padding: "1px 3px",
+                                                backgroundColor: "#fff",
+                                              }}
+                                            />
+                                            <button
+                                              type="button"
+                                              onClick={() => handleRecalculate("other_deduction")}
+                                              disabled={recalculating || reverting || selectedSlip.status === "Paid"}
+                                              title={selectedSlip.status === "Paid" ? "Paid payslip cannot be edited" : "Save & recalculate"}
+                                              style={{
+                                                cursor: (recalculating || reverting || selectedSlip.status === "Paid") ? "not-allowed" : "pointer",
+                                                fontSize: "9px",
+                                                fontWeight: "bold",
+                                                color: "#fff",
+                                                backgroundColor: (recalculating || reverting || selectedSlip.status === "Paid") ? "#9ca3af" : "#b91c1c",
+                                                border: "none",
+                                                borderRadius: "4px",
+                                                padding: "2px 5px",
+                                                fontFamily: "sans-serif",
+                                              }}
+                                            >
+                                              {recalculating ? "..." : "Save"}
+                                            </button>
+                                          </span>
+                                        </td>
                                       </tr>
                                       <tr style={{ backgroundColor: "#f3f4f6", fontWeight: "900", fontSize: "12px" }}>
                                         <td style={tdStyle}>Total Deductions</td>
@@ -1165,7 +1392,7 @@ const PayslipsPage = () => {
                           NET TAKE HOME SALARY
                         </td>
                         <td style={{ ...tdStyle, border: "none", textAlign: "right", padding: "10px 15px", fontSize: "20px", fontFamily: "sans-serif", color: "#4ade80" }}>
-                          ₹{parseFloat(selectedSlip.net_salary).toLocaleString("en-IN")}
+                          ₹{formatINR(selectedSlip.net_salary)}
                         </td>
                       </tr>
 

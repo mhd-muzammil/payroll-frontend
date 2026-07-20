@@ -22,7 +22,8 @@ export const onboardingService = {
     },
 
     update: async (id, formData) => {
-        const { data } = await api.put(ENDPOINTS.BY_ID(id), formData);
+        // PATCH (partial) so fields/files not re-sent are preserved.
+        const { data } = await api.patch(ENDPOINTS.BY_ID(id), formData);
         return data;
     },
 

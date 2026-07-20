@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar } from "@/components/ui/avatar";
-import { UserPlus, FileCheck, Clock, CheckCircle2, Eye, X, Calendar, Briefcase, MapPin, Mail, Phone, CreditCard, Building2, ExternalLink, FileText, Trash2, UserCheck, UserMinus } from "lucide-react";
+import { UserPlus, FileCheck, Clock, CheckCircle2, Eye, X, Calendar, Briefcase, MapPin, Mail, Phone, CreditCard, Building2, ExternalLink, FileText, Trash2, UserCheck, UserMinus, Pencil } from "lucide-react";
 import PageHeader from "../ui/PageHeader";
 import DataTable from "../ui/DataTable";
 import StatsCard from "../ui/StatsCard";
@@ -62,6 +62,7 @@ const OnboardingManagement = () => {
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [editingRecord, setEditingRecord] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [viewingRecord, setViewingRecord] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
@@ -139,67 +140,79 @@ const OnboardingManagement = () => {
     fetchOnboardings();
   }, []);
 
+  const buildFormData = (formData) => {
+    const data = new FormData();
+
+    // Basic details
+    data.append("employee_name", formData.employeeName);
+    data.append("employee_id", formData.employeeId || "");
+    data.append("department", formData.department);
+    data.append("designation", formData.designation);
+    data.append("work_location", formData.workLocation);
+    data.append("date_of_joining", formData.dateOfJoining);
+    data.append("mobile_number", formData.mobileNumber);
+    data.append("email_id", formData.emailId);
+
+    // Personal and emergency details
+    if (formData.dob) data.append("dob", formData.dob);
+    data.append("gender", formData.gender || "");
+    data.append("blood_group", formData.bloodGroup || "");
+    data.append("address", formData.address || "");
+    data.append("tshirt_size", formData.tShirtSize || "");
+    data.append("emergency_contact_name", formData.emergencyName || "");
+    data.append("emergency_relationship", formData.relationship || "");
+    data.append("emergency_number", formData.emergencyNumber || "");
+
+    // Bank details
+    data.append("bank_name", formData.bankName || "");
+    data.append("account_holder_name", formData.accountHolderName || "");
+    data.append("account_number", formData.accountNumber || "");
+    data.append("ifsc_code", formData.ifscCode || "");
+    data.append("bank_branch", formData.bankBranch || "");
+    if (formData.cancelledCheque) {
+      data.append("cancelled_cheque", formData.cancelledCheque);
+    }
+
+    // ID card details
+    data.append("photo_submitted", formData.photoSubmitted || "");
+    data.append("id_card_blood_group", formData.idCardBloodGroup || "");
+
+    // Documents files (only appended when a new file is selected)
+    if (formData.docs.aadhaar) data.append("doc_aadhaar", formData.docs.aadhaar);
+    if (formData.docs.pan) data.append("doc_pan", formData.docs.pan);
+    if (formData.docs.bankProof) data.append("doc_bank_proof", formData.docs.bankProof);
+    if (formData.docs.passportPhoto) data.append("doc_passport_photo", formData.docs.passportPhoto);
+    if (formData.docs.educationCert) data.append("doc_education_cert", formData.docs.educationCert);
+    if (formData.docs.resume) data.append("doc_resume", formData.docs.resume);
+    if (formData.docs.drivingLicense) data.append("doc_driving_license", formData.docs.drivingLicense);
+
+    // Extra info
+    data.append("total_experience", formData.totalExperience || "");
+    data.append("hp_experience", formData.hpExperience || "");
+    data.append("skills", formData.skills || "");
+
+    return data;
+  };
+
   const handleSubmit = async (formData) => {
     setSubmitting(true);
     try {
-      const data = new FormData();
-      
-      // Basic details
-      data.append("employee_name", formData.employeeName);
-      data.append("employee_id", formData.employeeId || "");
-      data.append("department", formData.department);
-      data.append("designation", formData.designation);
-      data.append("work_location", formData.workLocation);
-      data.append("date_of_joining", formData.dateOfJoining);
-      data.append("mobile_number", formData.mobileNumber);
-      data.append("email_id", formData.emailId);
-      
-      // Personal and emergency details
-      if (formData.dob) data.append("dob", formData.dob);
-      data.append("gender", formData.gender || "");
-      data.append("blood_group", formData.bloodGroup || "");
-      data.append("address", formData.address || "");
-      data.append("tshirt_size", formData.tShirtSize || "");
-      data.append("emergency_contact_name", formData.emergencyName || "");
-      data.append("emergency_relationship", formData.relationship || "");
-      data.append("emergency_number", formData.emergencyNumber || "");
-      
-      // Bank details
-      data.append("bank_name", formData.bankName || "");
-      data.append("account_holder_name", formData.accountHolderName || "");
-      data.append("account_number", formData.accountNumber || "");
-      data.append("ifsc_code", formData.ifscCode || "");
-      data.append("bank_branch", formData.bankBranch || "");
-      if (formData.cancelledCheque) {
-        data.append("cancelled_cheque", formData.cancelledCheque);
-      }
+      const data = buildFormData(formData);
 
-      // ID card details
-      data.append("photo_submitted", formData.photoSubmitted || "");
-      data.append("id_card_blood_group", formData.idCardBloodGroup || "");
-      
-      // Documents files
-      if (formData.docs.aadhaar) data.append("doc_aadhaar", formData.docs.aadhaar);
-      if (formData.docs.pan) data.append("doc_pan", formData.docs.pan);
-      if (formData.docs.bankProof) data.append("doc_bank_proof", formData.docs.bankProof);
-      if (formData.docs.passportPhoto) data.append("doc_passport_photo", formData.docs.passportPhoto);
-      if (formData.docs.educationCert) data.append("doc_education_cert", formData.docs.educationCert);
-      if (formData.docs.resume) data.append("doc_resume", formData.docs.resume);
-      if (formData.docs.drivingLicense) data.append("doc_driving_license", formData.docs.drivingLicense);
-      
-      // Extra info
-      data.append("total_experience", formData.totalExperience || "");
-      data.append("hp_experience", formData.hpExperience || "");
-      data.append("skills", formData.skills || "");
-      data.append("status", "Completed");
-      
-      const savedRecord = await onboardingService.create(data);
-      
-      // Trigger full fetch to update all stats & records dynamically
-      await fetchOnboardings();
-      
-      setShowForm(false);
-      alert("Successfully onboarded " + formData.employeeName + "! Profile connected to Employee and Payslips.");
+      if (editingRecord) {
+        // Editing keeps the existing status untouched (partial update).
+        await onboardingService.update(editingRecord.id, data);
+        await fetchOnboardings();
+        setEditingRecord(null);
+        setShowForm(false);
+        alert("Onboarding details updated for " + formData.employeeName + ".");
+      } else {
+        data.append("status", "Completed");
+        await onboardingService.create(data);
+        await fetchOnboardings();
+        setShowForm(false);
+        alert("Successfully onboarded " + formData.employeeName + "! Profile connected to Employee and Payslips.");
+      }
     } catch (error) {
       console.error("Failed submitting onboarding:", error);
       alert("Submission failed. Check if all required fields are filled.");
@@ -251,12 +264,13 @@ const OnboardingManagement = () => {
     });
   }, [safeRecords, selectedRegion]);
 
-  if (showForm) {
+  if (showForm || editingRecord) {
     return (
-      <OnboardingForm 
-        onCancel={() => setShowForm(false)} 
-        onSubmit={handleSubmit} 
-        isSubmitting={submitting} 
+      <OnboardingForm
+        onCancel={() => { setShowForm(false); setEditingRecord(null); }}
+        onSubmit={handleSubmit}
+        isSubmitting={submitting}
+        initialData={editingRecord}
       />
     );
   }
@@ -377,6 +391,14 @@ const OnboardingManagement = () => {
                   type="button"
                 >
                   <Eye className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={() => setEditingRecord(r)}
+                  className="grid h-8 w-8 place-items-center rounded-lg border border-border hover:bg-amber-50 hover:text-amber-600 transition-colors"
+                  title="Edit Onboarding Record"
+                  type="button"
+                >
+                  <Pencil className="h-4 w-4" />
                 </button>
                 <button
                   onClick={() => setDeleteConfirm(r)}

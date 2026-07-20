@@ -3,38 +3,42 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { User, Contact, Building2, CreditCard, FileCheck, BadgePlus } from "lucide-react";
 
-const OnboardingForm = ({ onSubmit, onCancel, isSubmitting = false }) => {
-  const [formData, setFormData] = useState({
+const OnboardingForm = ({ onSubmit, onCancel, isSubmitting = false, initialData = null }) => {
+  const isEditing = Boolean(initialData);
+
+  // Map a backend record (snake_case) onto the form's camelCase fields. Files
+  // are left null: existing uploads are kept unless the operator picks new ones.
+  const buildInitialState = (rec) => ({
     // 1. Basic Details
-    employeeName: "",
-    employeeId: "",
-    department: "",
-    designation: "",
-    workLocation: "",
-    dateOfJoining: "",
-    mobileNumber: "",
-    emailId: "",
+    employeeName: rec?.employee_name || "",
+    employeeId: rec?.employee_id || "",
+    department: rec?.department || "",
+    designation: rec?.designation || "",
+    workLocation: rec?.work_location || "",
+    dateOfJoining: rec?.date_of_joining || "",
+    mobileNumber: rec?.mobile_number || "",
+    emailId: rec?.email_id || "",
     // 2. Personal Details
-    dob: "",
-    gender: "",
-    bloodGroup: "",
-    address: "",
-    tShirtSize: "",
+    dob: rec?.dob || "",
+    gender: rec?.gender || "",
+    bloodGroup: rec?.blood_group || "",
+    address: rec?.address || "",
+    tShirtSize: rec?.tshirt_size || "",
     // 3. Emergency Contact
-    emergencyName: "",
-    relationship: "",
-    emergencyNumber: "",
+    emergencyName: rec?.emergency_contact_name || "",
+    relationship: rec?.emergency_relationship || "",
+    emergencyNumber: rec?.emergency_number || "",
     // 4. Bank Details
-    bankName: "",
-    accountHolderName: "",
-    accountNumber: "",
-    ifscCode: "",
-    bankBranch: "",
+    bankName: rec?.bank_name || "",
+    accountHolderName: rec?.account_holder_name || "",
+    accountNumber: rec?.account_number || "",
+    ifscCode: rec?.ifsc_code || "",
+    bankBranch: rec?.bank_branch || "",
     cancelledCheque: null,
     // 5. ID Card Details
-    photoSubmitted: "",
-    idCardBloodGroup: "",
-    // 6. Documents Submitted
+    photoSubmitted: rec?.photo_submitted || "",
+    idCardBloodGroup: rec?.id_card_blood_group || "",
+    // 6. Documents Submitted (files re-uploaded only if changed)
     docs: {
       aadhaar: null,
       pan: null,
@@ -45,10 +49,12 @@ const OnboardingForm = ({ onSubmit, onCancel, isSubmitting = false }) => {
       drivingLicense: null,
     },
     // 7. Additional Info
-    totalExperience: "",
-    hpExperience: "",
-    skills: "", // pc, printer, both
+    totalExperience: rec?.total_experience || "",
+    hpExperience: rec?.hp_experience || "",
+    skills: rec?.skills || "", // pc, printer, both
   });
+
+  const [formData, setFormData] = useState(() => buildInitialState(initialData));
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -76,8 +82,12 @@ const OnboardingForm = ({ onSubmit, onCancel, isSubmitting = false }) => {
     <div className="space-y-8 pb-12">
       <div className="flex items-center justify-between">
         <div className="flex flex-col gap-1.5">
-          <h1 className="text-2xl font-bold tracking-tight">Employee Onboarding Form</h1>
-          <p className="text-sm text-muted-foreground">Complete the information form to onboard a new employee.</p>
+          <h1 className="text-2xl font-bold tracking-tight">{isEditing ? "Edit Onboarding Details" : "Employee Onboarding Form"}</h1>
+          <p className="text-sm text-muted-foreground">
+            {isEditing
+              ? "Update the information below. Existing documents stay unless you upload new ones."
+              : "Complete the information form to onboard a new employee."}
+          </p>
         </div>
         {onCancel && (
           <Button type="button" variant="outline" onClick={onCancel}>
@@ -380,7 +390,9 @@ const OnboardingForm = ({ onSubmit, onCancel, isSubmitting = false }) => {
             Cancel
           </Button>
           <Button type="submit" variant="brand" size="lg" disabled={isSubmitting} className="rounded-2xl h-12 px-10 shadow-lg shadow-primary/20 font-semibold">
-            {isSubmitting ? "Submitting..." : "Submit Onboarding Form"}
+            {isSubmitting
+              ? (isEditing ? "Updating..." : "Submitting...")
+              : (isEditing ? "Update Onboarding" : "Submit Onboarding Form")}
           </Button>
         </div>
       </form>
