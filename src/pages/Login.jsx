@@ -56,7 +56,7 @@ const LoginPage = () => {
           <div className="grid h-11 w-11 place-items-center rounded-xl bg-white/15 backdrop-blur">
             <Wallet className="h-5 w-5" />
           </div>
-          <span className="text-lg font-semibold tracking-tight">PayrollX</span>
+          <span className="text-lg font-semibold tracking-tight">Renderways Technology</span>
         </div>
 
         <motion.div
@@ -78,7 +78,7 @@ const LoginPage = () => {
           </div>
         </motion.div>
 
-        <div className="relative text-xs text-white/60">© 2026 PayrollX. All rights reserved.</div>
+        <div className="relative text-xs text-white/60">© 2026 Renderways Technology. All rights reserved.</div>
       </div>
 
       {/* Right form panel */}
@@ -93,7 +93,7 @@ const LoginPage = () => {
             <div className="grid h-10 w-10 place-items-center rounded-xl gradient-brand text-white">
               <Wallet className="h-5 w-5" />
             </div>
-            <span className="text-lg font-semibold tracking-tight">PayrollX</span>
+            <span className="text-lg font-semibold tracking-tight">Renderways Technology</span>
           </div>
 
           <h2 className="text-2xl md:text-3xl font-semibold tracking-tight">Welcome back</h2>

@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">Payroll</string>
-    <string name="title_activity_main">Payroll</string>
+    <string name="app_name">Renderways Technology</string>
+    <string name="title_activity_main">Renderways Technology</string>
     <string name="package_name">in.systimus.payroll</string>
     <string name="custom_url_scheme">in.systimus.payroll</string>
 </resources>

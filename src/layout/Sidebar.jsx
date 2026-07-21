@@ -77,8 +77,8 @@ export function Sidebar({ collapsed, setCollapsed, mobileOpen, setMobileOpen }) 
           </div>
           {(!collapsed || mobile) && (
             <div className="overflow-hidden">
-              <div className="text-[15px] font-semibold leading-tight">Payroll</div>
-              <div className="text-[11px] text-muted-foreground leading-tight">Renderways</div>
+              <div className="text-[15px] font-semibold leading-tight">Renderways</div>
+              <div className="text-[11px] text-muted-foreground leading-tight">Technology</div>
             </div>
           )}
         </Link>
