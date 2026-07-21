@@ -1,11 +1,14 @@
-const CACHE_NAME = 'payroll-cache-v1';
+// Bump this whenever a pre-cached asset changes. The activate handler deletes
+// every cache whose name doesn't match, so a new version purges stale copies —
+// without it, browsers keep serving the old icons forever.
+const CACHE_NAME = 'payroll-cache-v2';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
   '/icon-192.png',
   '/icon-512.png',
-  '/favicon.svg',
-  '/vite.svg'
+  '/apple-touch-icon.png',
+  '/favicon.svg'
 ];
 
 self.addEventListener('install', (event) => {
