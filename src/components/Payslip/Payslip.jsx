@@ -434,6 +434,9 @@ const PayslipsPage = () => {
   // Table Constants to maintain absolute alignment regardless of layout or environment.
   const tableMainStyle = {
     width: "100%",
+    // Keep the payslip legible on phones: scroll horizontally inside the
+    // preview instead of squeezing every column into ~380px.
+    minWidth: "680px",
     maxWidth: "780px",
     border: "4px solid #000",
     borderCollapse: "collapse",
@@ -949,12 +952,12 @@ const PayslipsPage = () => {
           {selectedSlip && (
             <>
               {/* Top Control Action Bar */}
-              <div className="flex items-center justify-between border-b border-border px-6 py-4 sticky top-0 bg-background/95 backdrop-blur-md z-20 rounded-t-xl flex-shrink-0">
-                <div className="flex flex-col">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-border px-4 sm:px-6 py-4 sticky top-0 bg-background/95 backdrop-blur-md z-20 rounded-t-xl flex-shrink-0">
+                <div className="flex flex-col pr-8">
                   <h3 className="text-base font-semibold tracking-tight text-foreground">Employee Payslip</h3>
                   <p className="text-xs text-muted-foreground">{selectedSlip.employee_details?.employee_name} - {getMonthLabel(selectedSlip.month)} {selectedSlip.year}</p>
                 </div>
-                <div className="flex items-center gap-3 pr-8">
+                <div className="flex flex-wrap items-center gap-2 sm:gap-3 sm:pr-8">
                   <Button
                     variant="outline"
                     size="sm"
