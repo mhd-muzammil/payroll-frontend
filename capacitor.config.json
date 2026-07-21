@@ -1,0 +1,14 @@
+{
+  "appId": "in.systimus.payroll",
+  "appName": "Payroll",
+  "webDir": "dist",
+  "server": {
+    "url": "https://payroll.systimus.in",
+    "cleartext": false
+  },
+  "plugins": {
+    "CapacitorHttp": {
+      "enabled": true
+    }
+  }
+}
