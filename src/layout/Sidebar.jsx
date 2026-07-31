@@ -17,7 +17,8 @@ import {
   ClipboardList,
   TrendingUp,
   UserCheck,
-  Laptop
+  Laptop,
+  PhoneCall
 } from "lucide-react";
 import { useState } from "react";
 import { ROLES, clearAuth, getUserRole, normalizeRole, canAccessSection } from "@/auth/rbac";
@@ -29,6 +30,7 @@ const nav = [
   { to: "/onboarding", label: "Onboarding", icon: UserPlus },
   { to: "/employees", label: "Employees", icon: Users },
   { to: "/tasks", label: "Tasks", icon: ClipboardList },
+  { to: "/cases", label: "Cases", icon: PhoneCall, roles: [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.HR, ROLES.EMPLOYEE] },
   { to: "/attendance", label: "Attendance", icon: CalendarCheck },
   { to: "/payroll", label: "Payroll", icon: Wallet },
   { to: "/payslips", label: "Payslips", icon: FileText },
@@ -64,7 +66,10 @@ export function Sidebar({ collapsed, setCollapsed, mobileOpen, setMobileOpen }) 
     if (!hasRole) return false;
     
     const section = item.to.replace(/^\//, "");
-    if (!section || section === "dashboard") return true;
+    // OpenCall sections are gated by role above, not by the per-branch
+    // allowed_sections map, so let them through here.
+    const OPEN_SECTIONS = new Set(["cases"]);
+    if (!section || section === "dashboard" || OPEN_SECTIONS.has(section)) return true;
     return canAccessSection(section);
   });
 

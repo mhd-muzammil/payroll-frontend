@@ -15,6 +15,7 @@ import HiringPage from './pages/HiringPage';
 import TasksPage from './pages/TasksPage';
 import PerformancePage from './pages/PerformancePage';
 import AssetsPage from './pages/AssetsPage';
+import CasesPage from './pages/CasesPage';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import { ROLES, getDefaultRouteByRole, getUserRole, isAuthenticated } from './auth/rbac';
 import { ErrorBoundary } from './components/ui/ErrorBoundary';
@@ -55,6 +56,7 @@ function App() {
           <Route path="/leaves" element={<LeavePage />} />
           <Route path="/tasks" element={<TasksPage />} />
           <Route path="/performance" element={<PerformancePage />} />
+          <Route path="/cases" element={<CasesPage />} />
         </Route>
 
 
