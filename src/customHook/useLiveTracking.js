@@ -56,6 +56,17 @@ export function useLiveTracking() {
       setContext(caseId, status);
       setError(null);
 
+      // Guard against a double-start (e.g. Start Duty then Start Travel) leaving
+      // an orphaned watch/interval that would double-send pings and leak.
+      if (watchIdRef.current != null) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+        watchIdRef.current = null;
+      }
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+
       watchIdRef.current = navigator.geolocation.watchPosition(
         (pos) => {
           const fix = {
