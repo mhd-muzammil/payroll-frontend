@@ -245,14 +245,46 @@ const EmployeesPage = () => {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+          {/* All Regions (overall) — click to clear the filter and show everyone */}
+          <div
+            onClick={() => setSelectedRegion("")}
+            className={`cursor-pointer bg-gradient-to-br from-primary/10 to-primary/5 rounded-2xl p-4 flex flex-col justify-between hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 group ${selectedRegion === "" ? "ring-2 ring-primary/60 border border-primary" : "border border-border/60"}`}
+          >
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <span className="font-bold text-sm tracking-tight text-primary">All Regions</span>
+                <div className="p-1.5 rounded-lg bg-primary/15 opacity-80 group-hover:opacity-100 transition-opacity duration-300">
+                  <Users className="h-3.5 w-3.5 text-primary" />
+                </div>
+              </div>
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-2xl font-black tracking-tight text-foreground">{employeeRows.length}</span>
+                <span className="text-xs font-semibold text-muted-foreground">
+                  {employeeRows.length === 1 ? "Employee" : "Employees"}
+                </span>
+              </div>
+            </div>
+            <div className="mt-4">
+              <div className="flex items-center justify-between text-[10px] font-bold text-muted-foreground mb-1 px-0.5">
+                <span className="tracking-wider">TOTAL</span>
+                <span className="text-primary">100%</span>
+              </div>
+              <div className="w-full bg-muted/60 dark:bg-muted/30 rounded-full h-1.5 overflow-hidden">
+                <div className="bg-primary h-1.5 rounded-full" style={{ width: "100%" }} />
+              </div>
+            </div>
+          </div>
+
           {Object.entries(regionStats).map(([region, count]) => {
             const style = regionStyles[region] || defaultStyle;
             const pct = employeeRows.length > 0 ? Math.round((count / employeeRows.length) * 100) : 0;
+            const isSelected = selectedRegion.toLowerCase() === region.toLowerCase();
             return (
-              <div 
-                key={region} 
-                className={`bg-gradient-to-br ${style.bg} border ${style.border} rounded-2xl p-4 flex flex-col justify-between hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 group`}
+              <div
+                key={region}
+                onClick={() => setSelectedRegion(isSelected ? "" : region)}
+                className={`cursor-pointer bg-gradient-to-br ${style.bg} border ${style.border} rounded-2xl p-4 flex flex-col justify-between hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 group ${isSelected ? "ring-2 ring-primary/60 border-primary" : ""}`}
               >
                 <div>
                   <div className="flex items-center justify-between mb-3">
