@@ -122,15 +122,21 @@ export function getAllowedSections() {
   return Object.keys(allowed);
 }
 
+// Sections that every authenticated user may reach regardless of their
+// per-branch allowed_sections map (they are gated by route-level roles instead).
+const OPEN_SECTIONS = ["cases"];
+
 export function canAccessSection(section) {
   const claims = getTokenClaims();
   if (!claims) return false;
-  
+
+  if (OPEN_SECTIONS.includes(section)) return true;
+
   const role = getRoleFromClaims(claims) || normalizeRole(localStorage.getItem(ROLE_KEY));
   if (role === ROLES.SUPER_ADMIN || role === ROLES.ADMIN) {
     return true;
   }
-  
+
   const allowed = claims.allowed_sections;
   if (!allowed) return false;
   
