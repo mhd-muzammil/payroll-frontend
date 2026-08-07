@@ -68,6 +68,7 @@ const OnboardingManagement = () => {
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [employeeStats, setEmployeeStats] = useState({ current: 0, separated: 0 });
   const [selectedRegion, setSelectedRegion] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
 
   const handleViewDocument = async (documentUrl) => {
     const popup = window.open("", "_blank");
@@ -257,12 +258,23 @@ const OnboardingManagement = () => {
   }, [safeRecords]);
 
   const filteredRecords = useMemo(() => {
-    if (!selectedRegion) return safeRecords;
-    return safeRecords.filter((r) => {
-      const loc = r.work_location || "Not Assigned";
-      return loc.toLowerCase() === selectedRegion.toLowerCase();
-    });
-  }, [safeRecords, selectedRegion]);
+    let list = safeRecords;
+    if (selectedRegion) {
+      list = list.filter((r) => (r.work_location || "Not Assigned").toLowerCase() === selectedRegion.toLowerCase());
+    }
+    const q = searchQuery.trim().toLowerCase();
+    if (q) {
+      list = list.filter((r) =>
+        (r.employee_name || "").toLowerCase().includes(q) ||
+        (r.email_id || "").toLowerCase().includes(q) ||
+        (r.employee_id || "").toLowerCase().includes(q) ||
+        (r.mobile_number || "").toLowerCase().includes(q) ||
+        (r.designation || "").toLowerCase().includes(q) ||
+        (r.department || "").toLowerCase().includes(q)
+      );
+    }
+    return list;
+  }, [safeRecords, selectedRegion, searchQuery]);
 
   if (showForm || editingRecord) {
     return (
@@ -346,6 +358,25 @@ const OnboardingManagement = () => {
             );
           })}
         </div>
+      </div>
+
+      {/* Search onboarding records */}
+      <div className="mb-4 flex items-center gap-3">
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Search name / email / ID / phone / designation…"
+          className="h-10 w-full max-w-md rounded-xl border border-border bg-card px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+        />
+        {(searchQuery || selectedRegion) && (
+          <button
+            onClick={() => { setSearchQuery(""); setSelectedRegion(""); }}
+            className="text-sm text-primary hover:underline whitespace-nowrap"
+          >
+            Clear
+          </button>
+        )}
       </div>
 
       <DataTable
