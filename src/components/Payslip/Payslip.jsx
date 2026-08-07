@@ -752,6 +752,7 @@ const PayslipsPage = () => {
                       <Avatar name={emp.employee_name || "Emp"} />
                       <div>
                         <div className="text-sm font-medium">{emp.employee_name || "Unknown"}</div>
+                        <div className="text-[11px] text-muted-foreground truncate max-w-[200px]">{emp.email || "no email"}</div>
                         <div className="text-xs text-muted-foreground font-mono">{emp.emp_code || `ID: ${emp.id}`} - {emp.role || "N/A"}</div>
                       </div>
                     </div>
@@ -872,6 +873,7 @@ const PayslipsPage = () => {
                       <Avatar name={s.employee_details?.employee_name || "Emp"} />
                       <div>
                         <div className="text-sm font-medium">{s.employee_details?.employee_name || "Unknown"}</div>
+                        <div className="text-[11px] text-muted-foreground truncate max-w-[200px]">{s.employee_details?.email || "no email"}</div>
                         <div className="text-xs text-muted-foreground">{s.employee_details?.role || "N/A"}</div>
                       </div>
                     </div>

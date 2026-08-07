@@ -65,6 +65,7 @@ const AttendanceGroupedTable = ({
         map.set(key, {
           key,
           employee_name: r.employee_name,
+          email: r.email || null,
           department: r.department,
           role: r.role,
           branch: r.branch || "Chennai",
@@ -144,6 +145,9 @@ const AttendanceGroupedTable = ({
                 <Avatar name={g.employee_name} />
                 <div>
                   <div className="text-sm font-semibold">{g.employee_name}</div>
+                  <div className="text-[11px] text-muted-foreground truncate max-w-[200px]">
+                    {g.email || "no email"}
+                  </div>
                   <div className="text-xs text-muted-foreground">
                     {g.role || "—"}
                     {g.department ? ` · ${g.department}` : ""}
