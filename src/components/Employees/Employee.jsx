@@ -179,12 +179,18 @@ const EmployeesPage = () => {
   // Data-health detection: duplicate names/emails + missing key details, so
   // every row can flag its own issues and nothing is missed by eye.
   const norm = (s) => (s || "").toString().trim().replace(/\s+/g, " ").toLowerCase();
+  // A real duplicate is the SAME name within the SAME branch — the same name in
+  // two different branches is two different people (that is how the whole system
+  // keys identity), so it must NOT be flagged as a duplicate.
   const dupInfo = useMemo(() => {
     const nameCount = {};
     const emailCount = {};
     employeeRows.forEach((e) => {
       const n = norm(e.employee_name);
-      if (n) nameCount[n] = (nameCount[n] || 0) + 1;
+      if (n) {
+        const key = `${norm(e.branch)}|${n}`;
+        nameCount[key] = (nameCount[key] || 0) + 1;
+      }
       const em = norm(e.email);
       if (em) emailCount[em] = (emailCount[em] || 0) + 1;
     });
@@ -195,7 +201,8 @@ const EmployeesPage = () => {
     const issues = [];
     const n = norm(e.employee_name);
     const em = norm(e.email);
-    if (n && dupInfo.nameCount[n] > 1) issues.push({ label: "Duplicate name", tone: "red" });
+    const nameKey = `${norm(e.branch)}|${n}`;
+    if (n && dupInfo.nameCount[nameKey] > 1) issues.push({ label: "Duplicate name", tone: "red" });
     if (em && dupInfo.emailCount[em] > 1) issues.push({ label: "Duplicate email", tone: "red" });
     if (!em) issues.push({ label: "No email", tone: "amber" });
     if (!norm(e.phone)) issues.push({ label: "No phone", tone: "amber" });
