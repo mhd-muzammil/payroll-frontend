@@ -176,6 +176,48 @@ const EmployeesPage = () => {
     return stats;
   }, [employeeRows]);
 
+  // Data-health detection: duplicate names/emails + missing key details, so
+  // every row can flag its own issues and nothing is missed by eye.
+  const norm = (s) => (s || "").toString().trim().replace(/\s+/g, " ").toLowerCase();
+  const dupInfo = useMemo(() => {
+    const nameCount = {};
+    const emailCount = {};
+    employeeRows.forEach((e) => {
+      const n = norm(e.employee_name);
+      if (n) nameCount[n] = (nameCount[n] || 0) + 1;
+      const em = norm(e.email);
+      if (em) emailCount[em] = (emailCount[em] || 0) + 1;
+    });
+    return { nameCount, emailCount };
+  }, [employeeRows]);
+
+  const getIssues = (e) => {
+    const issues = [];
+    const n = norm(e.employee_name);
+    const em = norm(e.email);
+    if (n && dupInfo.nameCount[n] > 1) issues.push({ label: "Duplicate name", tone: "red" });
+    if (em && dupInfo.emailCount[em] > 1) issues.push({ label: "Duplicate email", tone: "red" });
+    if (!em) issues.push({ label: "No email", tone: "amber" });
+    if (!norm(e.phone)) issues.push({ label: "No phone", tone: "amber" });
+    if (!e.date_of_joining) issues.push({ label: "No DOJ", tone: "amber" });
+    if (!e.user) issues.push({ label: "No login", tone: "amber" });
+    return issues;
+  };
+
+  const issueStats = useMemo(() => {
+    const s = { dupNameGroups: 0, noEmail: 0, noPhone: 0, noDOJ: 0, noUser: 0, flagged: 0 };
+    s.dupNameGroups = Object.values(dupInfo.nameCount).filter((c) => c > 1).length;
+    employeeRows.forEach((e) => {
+      if (getIssues(e).length) s.flagged += 1;
+      if (!norm(e.email)) s.noEmail += 1;
+      if (!norm(e.phone)) s.noPhone += 1;
+      if (!e.date_of_joining) s.noDOJ += 1;
+      if (!e.user) s.noUser += 1;
+    });
+    return s;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [employeeRows, dupInfo]);
+
   if (loading && safeRecords.length === 0) {
     return <div className="p-6 text-sm text-muted-foreground">Loading employees...</div>;
   }
@@ -319,6 +361,29 @@ const EmployeesPage = () => {
         </div>
       </div>
 
+      {/* Data-health summary — surfaces duplicates + missing details at a glance */}
+      {issueStats.flagged > 0 && (
+        <div className="mb-6 rounded-2xl border border-amber-500/30 bg-amber-500/5 px-4 py-3">
+          <div className="flex items-center gap-2 text-sm font-semibold text-amber-700 dark:text-amber-500">
+            <span>⚠️ Data check — {issueStats.flagged} employee(s) need attention</span>
+          </div>
+          <div className="mt-2 flex flex-wrap gap-2 text-xs">
+            {issueStats.dupNameGroups > 0 && (
+              <span className="px-2 py-1 rounded-md bg-red-50 text-red-600 border border-red-200 font-medium">
+                {issueStats.dupNameGroups} duplicate name group(s)
+              </span>
+            )}
+            <span className="px-2 py-1 rounded-md bg-amber-50 text-amber-700 border border-amber-200">No email: {issueStats.noEmail}</span>
+            <span className="px-2 py-1 rounded-md bg-amber-50 text-amber-700 border border-amber-200">No phone: {issueStats.noPhone}</span>
+            <span className="px-2 py-1 rounded-md bg-amber-50 text-amber-700 border border-amber-200">No joining date: {issueStats.noDOJ}</span>
+            <span className="px-2 py-1 rounded-md bg-amber-50 text-amber-700 border border-amber-200">No login: {issueStats.noUser}</span>
+          </div>
+          <p className="mt-2 text-[11px] text-muted-foreground">
+            The "Issues" column flags each row. Fix by editing the employee (add email/phone/joining date) or merging duplicates.
+          </p>
+        </div>
+      )}
+
       <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
         <div className="flex rounded-2xl overflow-hidden bg-muted/40 p-1.5 max-w-md border border-border flex-1 min-w-[280px]">
           <button
@@ -424,6 +489,31 @@ const EmployeesPage = () => {
                     : "Active"}
               </Badge>
             ),
+          },
+          {
+            key: "issues", label: "Issues",
+            render: (e) => {
+              const issues = getIssues(e);
+              if (!issues.length) {
+                return <span className="text-xs text-emerald-600 font-medium">✓ OK</span>;
+              }
+              return (
+                <div className="flex flex-wrap gap-1 max-w-[220px]">
+                  {issues.map((it) => (
+                    <span
+                      key={it.label}
+                      className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md border ${
+                        it.tone === "red"
+                          ? "bg-red-50 text-red-600 border-red-200 dark:bg-red-950/30 dark:border-red-900/40"
+                          : "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:border-amber-900/40"
+                      }`}
+                    >
+                      {it.label}
+                    </span>
+                  ))}
+                </div>
+              );
+            },
           },
           {
             key: "act", label: "", className: "w-12",
