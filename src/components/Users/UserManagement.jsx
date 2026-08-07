@@ -333,8 +333,9 @@ const UserManagement = () => {
       <DataTable
         data={rows}
         columns={[
-          { key: "user", label: "User", render: (u) => <div className="flex items-center gap-2"><Avatar name={u.username} /><div><div className="text-sm font-medium">{u.username}</div><div className="text-xs text-muted-foreground">{u.email || "-"}</div></div></div> },
+          { key: "user", label: "User", render: (u) => <div className="flex items-center gap-2"><Avatar name={u.username} /><div className="text-sm font-medium">{u.username}</div></div> },
           { key: "name", label: "Name", render: (u) => <span className="text-sm">{`${u.first_name || ""} ${u.last_name || ""}`.trim() || "-"}</span> },
+          { key: "email", label: "Email", render: (u) => <span className="text-sm text-muted-foreground break-all">{u.email || "-"}</span> },
           { key: "role", label: "Role", render: (u) => <Badge variant="primary">{u.role}</Badge> },
           { key: "region", label: "Region", render: (u) => <span className="text-sm font-medium text-foreground">{u.branch || "Not Assigned"}</span> },
           { key: "phone", label: "Phone", render: (u) => <span className="text-sm">{u.phone_number || "-"}</span> },
