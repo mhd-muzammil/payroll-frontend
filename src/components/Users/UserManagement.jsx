@@ -381,8 +381,14 @@ const UserManagement = () => {
       />
 
       {showForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <form onSubmit={onSubmit} className="w-full max-w-xl rounded-2xl bg-card p-6 space-y-3">
+        // The permissions block makes this panel ~690px tall from the moment it
+        // opens, so on a short laptop or a landscape phone the Create/Update
+        // button sat below the fold with nothing able to scroll to it.
+        <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center overflow-y-auto bg-black/50 p-4">
+          <form
+            onSubmit={onSubmit}
+            className="w-full max-w-xl rounded-2xl bg-card p-4 sm:p-6 space-y-3 max-h-[90dvh] overflow-y-auto"
+          >
             <h3 className="text-lg font-semibold">{editing ? "Edit User" : "Create User"}</h3>
             <div className="grid grid-cols-2 gap-3">
               <input required className="h-10 rounded-xl border border-border bg-background px-3 text-sm" placeholder="Username" value={form.username} onChange={(e) => setForm((p) => ({ ...p, username: e.target.value }))} />

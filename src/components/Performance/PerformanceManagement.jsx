@@ -172,8 +172,11 @@ export default function PerformanceManagement() {
     {
       key: "ratings",
       label: "Metrics Breakdown",
+      // The 220px floor only applies where the real table renders. On the
+      // mobile card path the cell is ~142px, so it forced two of the four
+      // scores past the card's clipped edge and they could not be read.
       render: (row) => (
-        <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-muted-foreground min-w-[220px]">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1 text-xs text-muted-foreground md:min-w-[220px]">
           <div className="flex justify-between items-center">
             <span>Work Quality:</span>
             <span className="font-bold text-foreground ml-1.5">{row.work_quality}/5</span>

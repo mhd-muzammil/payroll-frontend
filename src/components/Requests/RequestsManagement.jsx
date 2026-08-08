@@ -314,7 +314,11 @@ export default function RequestsManagement() {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 shrink-0">
+                  {/* Below sm the cluster takes its own full-width line and
+                      wraps: shrink-0 plus the button's inherited nowrap meant
+                      three buttons (~293px) spilled a 264px card at 360px, and
+                      Reject was only reachable by panning the page sideways. */}
+                  <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto sm:shrink-0">
                     <Button variant="outline" size="sm" onClick={() => openConversation(r)}>
                       Conversation
                     </Button>

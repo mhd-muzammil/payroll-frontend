@@ -52,8 +52,10 @@ const AttendanceForm = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="bg-card rounded-3xl p-6 w-full max-w-lg mx-4 shadow-2xl">
+    // Same cap as the other overlays: without it a short viewport puts the
+    // save button out of reach, since a fixed layer never scrolls the document.
+    <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center overflow-y-auto bg-black/50 backdrop-blur-sm py-4">
+      <div className="bg-card rounded-3xl p-6 w-full max-w-lg mx-4 shadow-2xl max-h-[90dvh] overflow-y-auto">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-lg font-semibold">
             {initialData ? "Edit Attendance" : "Add Attendance"}

@@ -116,7 +116,7 @@ export default function EngineerCases() {
             <button
               onClick={endDuty}
               disabled={dutyBusy}
-              className="px-3 py-1 rounded-md bg-red-600 text-white disabled:opacity-60"
+              className="min-h-11 px-4 py-2.5 text-sm rounded-lg bg-red-600 text-white disabled:opacity-60"
             >
               {dutyBusy ? "…" : "Stop Duty"}
             </button>
@@ -124,7 +124,7 @@ export default function EngineerCases() {
             <button
               onClick={startDuty}
               disabled={dutyBusy}
-              className="px-3 py-1 rounded-md bg-green-600 text-white disabled:opacity-60"
+              className="min-h-11 px-4 py-2.5 text-sm rounded-lg bg-green-600 text-white disabled:opacity-60"
             >
               {dutyBusy ? "…" : "Start Duty"}
             </button>
@@ -167,18 +167,23 @@ export default function EngineerCases() {
               <div className="flex items-center justify-between">
                 <span className="text-xs font-medium text-blue-700">{STATUS_LABEL[c.status] || c.status}</span>
                 {c.latitude != null && (
-                  <button onClick={() => openInMaps(c)} className="text-xs text-blue-600 underline">
+                  <button
+                    onClick={() => openInMaps(c)}
+                    className="inline-flex items-center min-h-10 px-3 rounded-lg border border-blue-200 text-sm text-blue-600"
+                  >
                     Open in map
                   </button>
                 )}
               </div>
 
-              <div className="flex flex-wrap gap-2 pt-1">
+              {/* Gloved thumbs outdoors: every control on this screen is a
+                  44px target with real space between, not a 24px chip. */}
+              <div className="flex flex-wrap gap-2.5 pt-1">
                 {c.status === "assigned" && (
                   <button
                     disabled={busyId === c.id}
                     onClick={() => runAction(() => caseService.accept(c.id), c)}
-                    className="px-2.5 py-1 text-xs rounded-md bg-indigo-600 text-white disabled:opacity-50"
+                    className="min-h-11 px-4 py-2.5 text-sm rounded-lg bg-indigo-600 text-white disabled:opacity-50"
                   >
                     Accept
                   </button>
@@ -187,7 +192,7 @@ export default function EngineerCases() {
                   <button
                     disabled={busyId === c.id}
                     onClick={() => onStartTravel(c)}
-                    className="px-2.5 py-1 text-xs rounded-md bg-blue-600 text-white disabled:opacity-50"
+                    className="min-h-11 px-4 py-2.5 text-sm rounded-lg bg-blue-600 text-white disabled:opacity-50"
                   >
                     Start Travel
                   </button>
@@ -196,7 +201,7 @@ export default function EngineerCases() {
                   <button
                     disabled={busyId === c.id}
                     onClick={() => runAction(() => caseService.reached(c.id), c, "working")}
-                    className="px-2.5 py-1 text-xs rounded-md bg-teal-600 text-white disabled:opacity-50"
+                    className="min-h-11 px-4 py-2.5 text-sm rounded-lg bg-teal-600 text-white disabled:opacity-50"
                   >
                     Reached
                   </button>
@@ -205,7 +210,7 @@ export default function EngineerCases() {
                   <button
                     disabled={busyId === c.id}
                     onClick={() => runAction(() => caseService.startWork(c.id), c, "working")}
-                    className="px-2.5 py-1 text-xs rounded-md bg-amber-600 text-white disabled:opacity-50"
+                    className="min-h-11 px-4 py-2.5 text-sm rounded-lg bg-amber-600 text-white disabled:opacity-50"
                   >
                     Start Work
                   </button>
@@ -214,7 +219,7 @@ export default function EngineerCases() {
                   <button
                     disabled={busyId === c.id}
                     onClick={() => runAction(() => caseService.complete(c.id), c, "")}
-                    className="px-2.5 py-1 text-xs rounded-md bg-green-600 text-white disabled:opacity-50"
+                    className="min-h-11 px-4 py-2.5 text-sm rounded-lg bg-green-600 text-white disabled:opacity-50"
                   >
                     Complete
                   </button>

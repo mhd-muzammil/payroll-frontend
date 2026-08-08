@@ -9,8 +9,7 @@ import {
   FileText,
   CalendarDays,
   BarChart3,
-  ShieldCheck,
-  Settings,
+  LogOut,
   ChevronLeft,
   Sparkles,
   X,
@@ -21,7 +20,6 @@ import {
   PhoneCall,
   HandCoins
 } from "lucide-react";
-import { useState } from "react";
 import { ROLES, clearAuth, getUserRole, normalizeRole, canAccessSection } from "@/auth/rbac";
 
 const nav = [
@@ -80,7 +78,7 @@ export function Sidebar({ collapsed, setCollapsed, mobileOpen, setMobileOpen }) 
 
   const content = (mobile = false) => (
     <div className="flex h-full flex-col gap-2 p-4">
-      <div className="flex items-center justify-between px-2 py-3">
+      <div className="flex shrink-0 items-center justify-between px-2 py-3">
         <Link to="/" className="flex items-center gap-2.5 overflow-hidden">
           <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl gradient-brand shadow-glow">
             <Sparkles className="h-5 w-5 text-white" />
@@ -106,7 +104,11 @@ export function Sidebar({ collapsed, setCollapsed, mobileOpen, setMobileOpen }) 
         )}
       </div>
 
-      <nav className="flex-1 space-y-1 px-1">
+      {/* min-h-0 is what makes this scroll: without it a flex child refuses to
+          shrink below its content, so a long nav pushed Logout off the bottom
+          of the sidebar entirely — worse on short screens and with every item
+          added. Now the links scroll and the footer stays put. */}
+      <nav className="flex-1 min-h-0 overflow-y-auto space-y-1 px-1">
         {visibleNav.map((item) => {
           const active = item.to === "/" ? path === "/" : path.startsWith(item.to);
           const Icon = item.icon;
@@ -136,14 +138,16 @@ export function Sidebar({ collapsed, setCollapsed, mobileOpen, setMobileOpen }) 
       </nav>
 
 
+      {/* Pinned: always reachable no matter how long the nav gets. */}
       <Link
         to="/login"
         onClick={() => clearAuth()}
-        className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-muted-foreground hover:bg-muted/60 hover:text-foreground transition ${
+        title="Logout"
+        className={`mt-1 flex shrink-0 items-center gap-3 rounded-xl border-t border-border/60 px-3 py-2.5 pt-3 text-sm text-muted-foreground hover:bg-muted/60 hover:text-foreground transition ${
           collapsed && !mobile ? "justify-center" : ""
         }`}
       >
-        <Settings className="h-[18px] w-[18px]" />
+        <LogOut className="h-[18px] w-[18px] shrink-0" />
         {(!collapsed || mobile) && <span>Logout</span>}
       </Link>
     </div>

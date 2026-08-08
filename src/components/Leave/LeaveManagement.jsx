@@ -354,8 +354,18 @@ const LeaveManagement = () => {
       </div>
 
       {showForm && (
-         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-           <div className="bg-card rounded-3xl shadow-2xl w-full max-w-md border p-6 animate-in zoom-in-95 duration-200">
+         // A fixed overlay contributes no scroll to the document, so a panel
+         // taller than the viewport put Submit and Cancel permanently off
+         // screen — which is what happens on a phone the moment the keyboard
+         // opens over the reason box. The overlay scrolls and the panel caps.
+         <div
+           className="fixed inset-0 z-50 flex items-start sm:items-center justify-center overflow-y-auto overscroll-contain bg-black/50 backdrop-blur-sm p-4"
+           onClick={() => setShowForm(false)}
+         >
+           <div
+             className="bg-card rounded-3xl shadow-2xl w-full max-w-md border p-6 max-h-[calc(100dvh-2rem)] overflow-y-auto animate-in zoom-in-95 duration-200"
+             onClick={(e) => e.stopPropagation()}
+           >
               <div className="flex justify-between items-center mb-4">
                  <h3 className="text-lg font-semibold">Apply For Leave / Permission</h3>
                  <button onClick={() => setShowForm(false)} className="p-1 rounded-full hover:bg-muted"><X className="h-5 w-5" /></button>

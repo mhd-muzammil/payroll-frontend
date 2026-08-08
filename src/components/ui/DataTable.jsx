@@ -1,6 +1,13 @@
 // Columns whose content is a row of buttons rather than a value. On mobile
 // these are pulled out of the label/value grid and shown as a footer strip.
-const isActionColumn = (c) => c.key === "act" || !c.label;
+// NOTE: "actions" as well as "act" — callers use both spellings, and the ones
+// spelling it "actions" were falling through into the label/value grid, where
+// their icon buttons stayed at 28-32px inside a ~142px cell. Deliberately NOT
+// "action": HiringManagement uses key:"action" for a real Status/Action column
+// (a select plus a badge) that belongs in the detail grid.
+// Only the mobile path splits columns; the desktop table iterates `columns`
+// directly, so this cannot move anything out of the desktop header/body.
+const isActionColumn = (c) => c.key === "act" || c.key === "actions" || !c.label;
 
 const DataTable = ({ columns, data, emptyMessage = "No records found." }) => {
   const [primary, ...rest] = columns;

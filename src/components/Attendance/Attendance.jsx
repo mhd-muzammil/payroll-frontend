@@ -605,7 +605,8 @@ const Attendance = () => {
                 : "Live headcount · one count per employee"}
             </span>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+          {/* xl, not lg — five tracks do not fit beside the sidebar at 1024px. */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
             {Object.entries(stats.regionBreakdown).map(([region, data]) => (
               <div key={region} className="bg-muted/30 border border-border/50 rounded-2xl p-4 flex flex-col justify-between">
                 <div>

@@ -294,7 +294,10 @@ const EmployeesPage = () => {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        {/* xl, not lg: at 1024px the 260px sidebar leaves ~652px, so six tracks
+            are ~95px and the region names print over the neighbouring card.
+            Matches OnboardingManagement and Payroll, which already use xl. */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
           {/* All Regions (overall) — click to clear the filter and show everyone */}
           <div
             onClick={() => setSelectedRegion("")}
