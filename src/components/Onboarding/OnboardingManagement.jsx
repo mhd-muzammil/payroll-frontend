@@ -2,13 +2,12 @@ import { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar } from "@/components/ui/avatar";
-import { UserPlus, FileCheck, Clock, CheckCircle2, Eye, X, Calendar, Briefcase, MapPin, Mail, Phone, CreditCard, Building2, ExternalLink, FileText, Trash2, UserCheck, UserMinus, Pencil } from "lucide-react";
+import { UserPlus, FileCheck, Clock, Eye, X, Calendar, Briefcase, MapPin, Mail, Phone, CreditCard, Building2, ExternalLink, FileText, Trash2, UserCheck, UserMinus, Pencil } from "lucide-react";
 import PageHeader from "../ui/PageHeader";
 import DataTable from "../ui/DataTable";
 import StatsCard from "../ui/StatsCard";
 import OnboardingForm from "./OnboardingForm";
 import { onboardingService } from "../../services/onboardingService";
-import { employeeService } from "../../services/employeeService";
 import { api } from "../../api/Api";
 import { extractArray } from "../../Utility/apiUtils";
 
@@ -50,6 +49,19 @@ const regionStyles = {
   }
 };
 
+// Where a person stands with the company today. Mutually exclusive and
+// exhaustive, so the summary cards partition the list instead of overlapping.
+const EMPLOYMENT_STATUSES = ["Active", "Inactive", "Relieved"];
+
+const STATUS_BADGE = {
+  Active: "success",
+  Inactive: "warning",
+  Relieved: "muted",
+};
+
+/** Records created before this field existed have no value; treat them as Active. */
+const employmentStatusOf = (record) => record?.employment_status || "Active";
+
 const defaultStyle = {
   bg: "from-gray-50/50 to-slate-50/30 dark:from-gray-950/20 dark:to-slate-950/10",
   border: "border-gray-100 dark:border-gray-950/50",
@@ -66,9 +78,10 @@ const OnboardingManagement = () => {
   const [submitting, setSubmitting] = useState(false);
   const [viewingRecord, setViewingRecord] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
-  const [employeeStats, setEmployeeStats] = useState({ current: 0, separated: 0 });
   const [selectedRegion, setSelectedRegion] = useState("");
+  const [selectedStatus, setSelectedStatus] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [savingStatusId, setSavingStatusId] = useState(null);
 
   const handleViewDocument = async (documentUrl) => {
     const popup = window.open("", "_blank");
@@ -94,34 +107,42 @@ const OnboardingManagement = () => {
   const fetchOnboardings = async () => {
     setLoading(true);
     try {
-      const [onboardingData, employeeData] = await Promise.all([
-        onboardingService.getAll(),
-        employeeService.getAll()
-      ]);
-      
-      const safeOnboardingData = extractArray(onboardingData);
-      const safeEmployeeData = extractArray(employeeData);
-      
-      setRecords(safeOnboardingData);
-
-      // Calculate counts of current employees (active, onleave) and separated employees (inactive) ONLY IF they were onboarded
-      const onboardedEmails = new Set(safeOnboardingData.map(o => o.email_id?.toLowerCase()));
-      const onboardedNames = new Set(safeOnboardingData.map(o => o.employee_name?.toLowerCase()));
-
-      const onboardedEmployees = safeEmployeeData.filter(e => 
-        (e.email && onboardedEmails.has(e.email.toLowerCase())) || 
-        (e.employee_name && onboardedNames.has(e.employee_name.toLowerCase()))
-      );
-
-      const current = onboardedEmployees.filter(e => e.status === "active" || e.status === "onleave").length;
-      const separated = onboardedEmployees.filter(e => e.status === "inactive").length;
-      setEmployeeStats({ current, separated });
+      // Employment status now lives on the onboarding record itself, so the
+      // counts no longer depend on re-matching people against the Employee
+      // table by name/email — a match that quietly failed for anyone whose
+      // name was spelled differently in the two places.
+      setRecords(extractArray(await onboardingService.getAll()));
     } catch (error) {
-      console.error("Failed fetching onboarding or employee data", error);
+      console.error("Failed fetching onboarding data", error);
     }
     setLoading(false);
   };
 
+
+  const handleStatusChange = async (record, nextStatus) => {
+    const previous = employmentStatusOf(record);
+    if (nextStatus === previous) return;
+
+    // Optimistic: the cards recount immediately. Rolled back if the save fails,
+    // so the numbers can never show a change the server did not accept.
+    setSavingStatusId(record.id);
+    setRecords((prev) =>
+      prev.map((r) => (r.id === record.id ? { ...r, employment_status: nextStatus } : r))
+    );
+    try {
+      const body = new FormData();
+      body.append("employment_status", nextStatus);
+      await onboardingService.update(record.id, body);
+    } catch (error) {
+      console.error("Failed to update employment status", error);
+      setRecords((prev) =>
+        prev.map((r) => (r.id === record.id ? { ...r, employment_status: previous } : r))
+      );
+      alert(`Could not set ${record.employee_name} to ${nextStatus}. Please try again.`);
+    } finally {
+      setSavingStatusId(null);
+    }
+  };
 
   const handleDelete = async () => {
     if (!deleteConfirm?.id) return;
@@ -224,11 +245,20 @@ const OnboardingManagement = () => {
 
   const safeRecords = Array.isArray(records) ? records : [];
 
+  // Active / Inactive / Relieved are mutually exclusive and cover everyone, so
+  // these three add up to Total and each person is counted exactly once. The
+  // old cards mixed two different questions — how far the paperwork got
+  // (Completed / In Progress) and where the person stands now (Current / Ex) —
+  // so the same head appeared under three separate totals.
   const stats = useMemo(() => {
-    const total = safeRecords.length;
-    const completed = safeRecords.filter(r => r.status === "Completed").length;
-    const progress = safeRecords.filter(r => r.status === "In Progress").length;
-    return { total, completed, progress };
+    const count = (value) =>
+      safeRecords.filter((r) => employmentStatusOf(r) === value).length;
+    return {
+      total: safeRecords.length,
+      active: count("Active"),
+      inactive: count("Inactive"),
+      relieved: count("Relieved"),
+    };
   }, [safeRecords]);
 
   const regionStats = useMemo(() => {
@@ -259,6 +289,9 @@ const OnboardingManagement = () => {
 
   const filteredRecords = useMemo(() => {
     let list = safeRecords;
+    if (selectedStatus) {
+      list = list.filter((r) => employmentStatusOf(r) === selectedStatus);
+    }
     if (selectedRegion) {
       list = list.filter((r) => (r.work_location || "Not Assigned").toLowerCase() === selectedRegion.toLowerCase());
     }
@@ -274,7 +307,7 @@ const OnboardingManagement = () => {
       );
     }
     return list;
-  }, [safeRecords, selectedRegion, searchQuery]);
+  }, [safeRecords, selectedRegion, selectedStatus, searchQuery]);
 
   if (showForm || editingRecord) {
     return (
@@ -308,21 +341,38 @@ const OnboardingManagement = () => {
         }
       />
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 md:gap-6 mb-6">
+      {/* Active + Inactive + Relieved = Total. Each card filters the table, so
+          the numbers are checkable: click one and count the rows. */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-6">
         <button
-          onClick={() => setSelectedRegion("")}
+          onClick={() => { setSelectedRegion(""); setSelectedStatus(""); }}
           className={`text-left w-full transition-all duration-300 ${
-            selectedRegion !== "" 
-              ? "opacity-60 hover:opacity-100 scale-[0.98]" 
+            selectedRegion !== "" || selectedStatus !== ""
+              ? "opacity-60 hover:opacity-100 scale-[0.98]"
               : "ring-2 ring-primary ring-offset-2 dark:ring-offset-background rounded-3xl shadow-lg scale-[1.02]"
           }`}
         >
           <StatsCard label="Total Onboarded" value={stats.total.toString()} icon={FileCheck} accent="primary" />
         </button>
-        <StatsCard label="Completed" value={stats.completed.toString()} icon={CheckCircle2} accent="success" />
-        <StatsCard label="In Progress" value={stats.progress.toString()} icon={Clock} accent="warning" />
-        <StatsCard label="Current Employee" value={employeeStats.current.toString()} icon={UserCheck} accent="info" />
-        <StatsCard label="Ex-employee" value={employeeStats.separated.toString()} icon={UserMinus} accent="muted" />
+        {[
+          { status: "Active", label: "Active", icon: UserCheck, accent: "success", value: stats.active },
+          { status: "Inactive", label: "Inactive", icon: Clock, accent: "warning", value: stats.inactive },
+          { status: "Relieved", label: "Relieved", icon: UserMinus, accent: "muted", value: stats.relieved },
+        ].map((card) => (
+          <button
+            key={card.status}
+            onClick={() => setSelectedStatus(selectedStatus === card.status ? "" : card.status)}
+            className={`text-left w-full transition-all duration-300 ${
+              selectedStatus === card.status
+                ? "ring-2 ring-primary ring-offset-2 dark:ring-offset-background rounded-3xl shadow-lg scale-[1.02]"
+                : selectedStatus !== ""
+                  ? "opacity-60 hover:opacity-100 scale-[0.98]"
+                  : "hover:opacity-90"
+            }`}
+          >
+            <StatsCard label={card.label} value={card.value.toString()} icon={card.icon} accent={card.accent} />
+          </button>
+        ))}
       </div>
 
       {/* Region-Wise Onboarding Distribution */}
@@ -404,9 +454,17 @@ const OnboardingManagement = () => {
             key: "status",
             label: "Status",
             render: (r) => (
-              <Badge variant={r.status === "Completed" ? "success" : "warning"}>
-                {r.status}
-              </Badge>
+              <select
+                value={employmentStatusOf(r)}
+                disabled={savingStatusId === r.id}
+                onChange={(e) => handleStatusChange(r, e.target.value)}
+                className="rounded-full border border-border/60 bg-background px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
+                title="Where this person stands with the company today"
+              >
+                {EMPLOYMENT_STATUSES.map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
             ),
           },
           {
@@ -458,8 +516,8 @@ const OnboardingManagement = () => {
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <Badge variant={viewingRecord.status === "Completed" ? "success" : "warning"}>
-                  {viewingRecord.status}
+                <Badge variant={STATUS_BADGE[employmentStatusOf(viewingRecord)] || "muted"}>
+                  {employmentStatusOf(viewingRecord)}
                 </Badge>
                 <button onClick={() => setViewingRecord(null)} className="rounded-full p-1.5 hover:bg-muted transition-colors ml-2">
                   <X className="h-5 w-5 text-muted-foreground" />
