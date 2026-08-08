@@ -79,7 +79,9 @@ const OnboardingManagement = () => {
   const [viewingRecord, setViewingRecord] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [selectedRegion, setSelectedRegion] = useState("");
-  const [selectedStatus, setSelectedStatus] = useState("");
+  // Opens on the people who actually work here. Leavers stay one click away on
+  // the Relieved card rather than padding the list you look at every day.
+  const [selectedStatus, setSelectedStatus] = useState("Active");
   const [searchQuery, setSearchQuery] = useState("");
   const [savingStatusId, setSavingStatusId] = useState(null);
 
@@ -419,12 +421,19 @@ const OnboardingManagement = () => {
           placeholder="Search name / email / ID / phone / designation…"
           className="h-10 w-full max-w-md rounded-xl border border-border bg-card px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
         />
-        {(searchQuery || selectedRegion) && (
+        {/* Say plainly that a filter is on, so a missing name reads as
+            "filtered out", never as "the record is gone". */}
+        <span className="text-sm text-muted-foreground whitespace-nowrap">
+          Showing <strong className="text-foreground">{filteredRecords.length}</strong> of {stats.total}
+          {selectedStatus && <> · <strong className="text-foreground">{selectedStatus}</strong></>}
+          {selectedRegion && <> · {selectedRegion}</>}
+        </span>
+        {(searchQuery || selectedRegion || selectedStatus) && (
           <button
-            onClick={() => { setSearchQuery(""); setSelectedRegion(""); }}
+            onClick={() => { setSearchQuery(""); setSelectedRegion(""); setSelectedStatus(""); }}
             className="text-sm text-primary hover:underline whitespace-nowrap"
           >
-            Clear
+            Show all
           </button>
         )}
       </div>
