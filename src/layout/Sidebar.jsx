@@ -18,7 +18,8 @@ import {
   TrendingUp,
   UserCheck,
   Laptop,
-  PhoneCall
+  PhoneCall,
+  HandCoins
 } from "lucide-react";
 import { useState } from "react";
 import { ROLES, clearAuth, getUserRole, normalizeRole, canAccessSection } from "@/auth/rbac";
@@ -35,6 +36,7 @@ const nav = [
   { to: "/payroll", label: "Payroll", icon: Wallet },
   { to: "/payslips", label: "Payslips", icon: FileText },
   { to: "/leaves", label: "Leave & Permissions", icon: CalendarDays },
+  { to: "/requests", label: "Requests", icon: HandCoins, roles: [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.HR, ROLES.EMPLOYEE] },
   { to: "/performance", label: "Performance", icon: TrendingUp },
   { to: "/assets", label: "Assets", icon: Laptop },
   // { to: "/calendar", label: "Calendar", icon: CalendarDays },
@@ -50,7 +52,8 @@ const navWithRoles = nav.map((item) => {
     item.to === "/payslips" ||
     item.to === "/leaves" ||
     item.to === "/tasks" ||
-    item.to === "/performance"
+    item.to === "/performance" ||
+    item.to === "/requests"
   ) {
     return { ...item, roles: [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.HR, ROLES.EMPLOYEE] };
   }
@@ -66,9 +69,11 @@ export function Sidebar({ collapsed, setCollapsed, mobileOpen, setMobileOpen }) 
     if (!hasRole) return false;
     
     const section = item.to.replace(/^\//, "");
-    // OpenCall sections are gated by role above, not by the per-branch
-    // allowed_sections map, so let them through here.
-    const OPEN_SECTIONS = new Set(["cases"]);
+    // Sections gated by role above and by the API itself, not by the per-branch
+    // allowed_sections map — which has no entry for them, so checking it would
+    // hide them from everyone. /requests is every employee's own inbox; the
+    // backend scopes what each role can see.
+    const OPEN_SECTIONS = new Set(["cases", "requests"]);
     if (!section || section === "dashboard" || OPEN_SECTIONS.has(section)) return true;
     return canAccessSection(section);
   });

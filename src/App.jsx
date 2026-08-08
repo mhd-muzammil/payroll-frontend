@@ -16,6 +16,7 @@ import TasksPage from './pages/TasksPage';
 import PerformancePage from './pages/PerformancePage';
 import AssetsPage from './pages/AssetsPage';
 import CasesPage from './pages/CasesPage';
+import RequestsPage from './pages/RequestsPage';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import { ROLES, getDefaultRouteByRole, getUserRole, isAuthenticated } from './auth/rbac';
 import { ErrorBoundary } from './components/ui/ErrorBoundary';
@@ -60,6 +61,8 @@ function App() {
           <Route path="/tasks" element={<TasksPage />} />
           <Route path="/performance" element={<PerformancePage />} />
           <Route path="/cases" element={<CasesPage />} />
+          {/* Employees raise advance / report requests; admin & HR review them. */}
+          <Route path="/requests" element={<RequestsPage />} />
         </Route>
 
 
