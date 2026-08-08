@@ -19,6 +19,7 @@ import CasesPage from './pages/CasesPage';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import { ROLES, getDefaultRouteByRole, getUserRole, isAuthenticated } from './auth/rbac';
 import { ErrorBoundary } from './components/ui/ErrorBoundary';
+import { DutyProvider } from './context/DutyContext';
 // import CompliancePage from './pages/CompliancePage';
 
 function RoleHomeRedirect() {
@@ -32,6 +33,8 @@ function App() {
     <>
     <ErrorBoundary>
     <BrowserRouter>
+    {/* Above the routes on purpose: duty must survive page navigation. */}
+    <DutyProvider>
       <Routes>
         <Route path="/" element={<RoleHomeRedirect />} />
         <Route path="/login" element={<LoginPage />} />
@@ -64,6 +67,7 @@ function App() {
         {/* <Route path='/compliance' element={<CompliancePage />} /> */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+    </DutyProvider>
     </BrowserRouter>
     </ErrorBoundary>
     </>

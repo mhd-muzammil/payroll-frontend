@@ -75,14 +75,19 @@ export function useLiveTracking() {
             accuracy: pos.coords.accuracy,
             speed: pos.coords.speed,
           };
+          const isFirstFix = latestRef.current == null;
           latestRef.current = fix;
           setLastFix(fix);
+          // Report the very first fix immediately. Waiting a full interval left
+          // an engineer who just went on duty invisible on the live board for
+          // 30s, which reads as "duty didn't work".
+          if (isFirstFix) void sendPing();
         },
         (err) => setError(err.message || "Unable to get location"),
         { enableHighAccuracy: true, maximumAge: 10000, timeout: 20000 }
       );
 
-      // First ping fires as soon as a fix arrives; then on a fixed cadence.
+      // The first fix pings immediately (above); after that, a fixed cadence.
       intervalRef.current = setInterval(sendPing, PING_INTERVAL_MS);
       setTracking(true);
     },

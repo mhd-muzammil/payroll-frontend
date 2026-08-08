@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { caseService } from "../../services/caseService";
-import { useLiveTracking } from "../../customHook/useLiveTracking";
+import { useDuty } from "../../context/DutyContext";
 
 const STATUS_LABEL = {
   assigned: "Assigned",
@@ -30,7 +30,19 @@ export default function EngineerCases() {
   const [err, setErr] = useState(null);
   const [busyId, setBusyId] = useState(null);
 
-  const { tracking, lastFix, error: trackErr, start, stop, setContext } = useLiveTracking();
+  // Duty lives at app level, so it keeps running when the engineer opens
+  // another page — this screen only reads and drives it.
+  const {
+    onDuty,
+    startedAt,
+    busy: dutyBusy,
+    streaming,
+    lastFix,
+    error: trackErr,
+    startDuty,
+    endDuty,
+    setContext,
+  } = useDuty();
 
   const load = async () => {
     setLoading(true);
@@ -64,8 +76,9 @@ export default function EngineerCases() {
   };
 
   const onStartTravel = (c) => {
-    if (!tracking) start(c.id, "on_the_way");
-    else setContext(c.id, "on_the_way");
+    // Heading to a job implies being on duty; start it if they haven't.
+    if (!onDuty) startDuty();
+    setContext(c.id, "on_the_way");
     runAction(() => caseService.startTravel(c.id), c, "on_the_way");
   };
 
@@ -80,21 +93,40 @@ export default function EngineerCases() {
       <div className="flex items-center justify-between flex-wrap gap-2">
         <h1 className="text-xl font-semibold">My Cases</h1>
         <div className="flex items-center gap-3 text-sm">
+          {/* Three states, not two: off duty; on duty and sending; on duty but
+              the phone has no fix yet (office wants to know the difference). */}
           <span
             className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full ${
-              tracking ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"
+              !onDuty
+                ? "bg-gray-100 text-gray-600"
+                : streaming && lastFix
+                ? "bg-green-100 text-green-700"
+                : "bg-amber-100 text-amber-700"
             }`}
+            title={startedAt ? `On duty since ${new Date(startedAt).toLocaleTimeString()}` : undefined}
           >
-            <span className={`w-2 h-2 rounded-full ${tracking ? "bg-green-500 animate-pulse" : "bg-gray-400"}`} />
-            {tracking ? "Tracking ON" : "Tracking OFF"}
+            <span
+              className={`w-2 h-2 rounded-full ${
+                !onDuty ? "bg-gray-400" : streaming && lastFix ? "bg-green-500 animate-pulse" : "bg-amber-500"
+              }`}
+            />
+            {!onDuty ? "Off duty" : streaming && lastFix ? "On duty" : "On duty · waiting for GPS"}
           </span>
-          {tracking ? (
-            <button onClick={stop} className="px-3 py-1 rounded-md bg-red-600 text-white">
-              Stop Duty
+          {onDuty ? (
+            <button
+              onClick={endDuty}
+              disabled={dutyBusy}
+              className="px-3 py-1 rounded-md bg-red-600 text-white disabled:opacity-60"
+            >
+              {dutyBusy ? "…" : "Stop Duty"}
             </button>
           ) : (
-            <button onClick={() => start(null, "on_duty")} className="px-3 py-1 rounded-md bg-green-600 text-white">
-              Start Duty
+            <button
+              onClick={startDuty}
+              disabled={dutyBusy}
+              className="px-3 py-1 rounded-md bg-green-600 text-white disabled:opacity-60"
+            >
+              {dutyBusy ? "…" : "Start Duty"}
             </button>
           )}
         </div>
