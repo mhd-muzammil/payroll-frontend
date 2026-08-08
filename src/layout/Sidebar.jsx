@@ -67,12 +67,10 @@ export function Sidebar({ collapsed, setCollapsed, mobileOpen, setMobileOpen }) 
     if (!hasRole) return false;
     
     const section = item.to.replace(/^\//, "");
-    // Sections gated by role above and by the API itself, not by the per-branch
-    // allowed_sections map — which has no entry for them, so checking it would
-    // hide them from everyone. /requests is every employee's own inbox; the
-    // backend scopes what each role can see.
-    const OPEN_SECTIONS = new Set(["cases", "requests"]);
-    if (!section || section === "dashboard" || OPEN_SECTIONS.has(section)) return true;
+    if (!section || section === "dashboard") return true;
+    // canAccessSection already honours OPEN_SECTIONS from rbac. This used to keep
+    // its own copy of that list, which is how the nav and ProtectedRoute drifted
+    // apart — the link showed but the route bounced straight back.
     return canAccessSection(section);
   });
 

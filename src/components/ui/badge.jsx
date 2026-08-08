@@ -14,6 +14,16 @@ const badgeVariants = cva(
           "bg-secondary text-secondary-foreground [a]:hover:bg-secondary/80",
         destructive:
           "bg-destructive/10 text-destructive focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:focus-visible:ring-destructive/40 [a]:hover:bg-destructive/20",
+        // Status colours. Several screens already asked for success / warning /
+        // muted (case status, onboarding employment status, request status) but
+        // they were never defined here, so cva applied no variant class at all
+        // and every one of those badges rendered colourless — "Pending" looked
+        // identical to "Approved". Shaped like `destructive` above.
+        success:
+          "bg-emerald-500/10 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300",
+        warning:
+          "bg-amber-500/10 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300",
+        muted: "bg-muted text-muted-foreground",
         outline:
           "border-border text-foreground [a]:hover:bg-muted [a]:hover:text-muted-foreground",
         ghost:

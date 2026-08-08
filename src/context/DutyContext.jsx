@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { trackingService } from "../services/trackingService";
 import { useLiveTracking } from "../customHook/useLiveTracking";
-import { isAuthenticated } from "../auth/rbac";
+import { getUserRole, isAuthenticated, ROLES } from "../auth/rbac";
 
 /**
  * Owns "am I on duty?" for the whole app.
@@ -37,9 +37,11 @@ export function DutyProvider({ children }) {
     return Boolean(state?.on_duty);
   }, []);
 
-  // Resume an open duty session after a reload / reopened tab.
+  // Resume an open duty session after a reload / reopened tab. Only engineers
+  // go on duty — asking for staff would make every admin page load fire a
+  // request that 409s (they have no employee record) and litter the console.
   useEffect(() => {
-    if (!isAuthenticated()) return;
+    if (!isAuthenticated() || getUserRole() !== ROLES.EMPLOYEE) return;
     let cancelled = false;
     trackingService
       .duty()
@@ -47,8 +49,8 @@ export function DutyProvider({ children }) {
         if (cancelled) return;
         if (applyState(state)) trackingRef.current.start();
       })
-      // Staff have no employee profile and simply are not on duty; a failure
-      // here must never block the app.
+      // An employee with no linked record simply is not on duty; a failure here
+      // must never block the app.
       .catch(() => {});
     return () => {
       cancelled = true;

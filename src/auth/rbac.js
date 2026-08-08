@@ -124,7 +124,11 @@ export function getAllowedSections() {
 
 // Sections that every authenticated user may reach regardless of their
 // per-branch allowed_sections map (they are gated by route-level roles instead).
-const OPEN_SECTIONS = ["cases"];
+// A section missing from BOTH this list and the map is unreachable: ProtectedRoute
+// bounces it to the role's default route, which is how /requests silently
+// redirected to /attendance. Add new sections of this kind HERE — Sidebar and
+// ProtectedRoute both read it, so they can never disagree.
+export const OPEN_SECTIONS = ["cases", "requests"];
 
 export function canAccessSection(section) {
   const claims = getTokenClaims();
