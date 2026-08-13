@@ -19,6 +19,56 @@ import { getUserRole, isAuthenticated, ROLES } from "../auth/rbac";
 
 const DutyContext = createContext(null);
 
+/** Marks the refusal so the caller can show the engineer's message, not an API one. */
+function locationError(message) {
+  const error = new Error(message);
+  error.locationDenied = true;
+  return error;
+}
+
+/**
+ * Ask for a position before duty starts, and refuse duty if it does not come.
+ *
+ * Resolves only on a real fix — asking for permission is not enough, because a
+ * granted permission with the phone's location switched off still never
+ * produces one.
+ */
+function requireLocationPermission() {
+  return new Promise((resolve, reject) => {
+    if (!("geolocation" in navigator)) {
+      reject(locationError("This device cannot share its location, so duty cannot be tracked."));
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      resolve,
+      (err) => {
+        if (err.code === err.PERMISSION_DENIED) {
+          reject(
+            locationError(
+              "Location is blocked for this site. Allow location in your browser settings, then tap Start Duty again.",
+            ),
+          );
+        } else if (err.code === err.POSITION_UNAVAILABLE) {
+          reject(
+            locationError(
+              "Your phone's location is switched off. Turn it on, then tap Start Duty again.",
+            ),
+          );
+        } else {
+          reject(
+            locationError(
+              "Could not get your location. Step outside or check your signal, then tap Start Duty again.",
+            ),
+          );
+        }
+      },
+      // Generous: a cold GPS outdoors can take a while, and refusing duty over
+      // an impatient timeout would be worse than waiting.
+      { enableHighAccuracy: true, timeout: 30000, maximumAge: 0 },
+    );
+  });
+}
+
 export function DutyProvider({ children }) {
   const tracking = useLiveTracking();
   const [onDuty, setOnDuty] = useState(false);
@@ -61,10 +111,19 @@ export function DutyProvider({ children }) {
     setBusy(true);
     setDutyError(null);
     try {
+      // Location FIRST, and duty only if it is granted. Starting duty without it
+      // put an engineer on the board as "on duty, waiting for GPS" for the rest
+      // of the shift — the office could see they were out but never where, and
+      // their distance stayed at zero. Duty without a position is not tracking.
+      await requireLocationPermission();
       applyState(await trackingService.startDuty());
       tracking.start();
     } catch (e) {
-      setDutyError(e?.response?.data?.detail || "Could not start duty");
+      setDutyError(
+        e?.locationDenied
+          ? e.message
+          : e?.response?.data?.detail || "Could not start duty",
+      );
     } finally {
       setBusy(false);
     }

@@ -180,7 +180,9 @@ export default function EngineerCases() {
               disabled={dutyBusy}
               className="min-h-11 px-4 py-2.5 text-sm rounded-lg bg-green-600 text-white disabled:opacity-60"
             >
-              {dutyBusy ? "…" : "Start Duty"}
+              {/* Named, because getting a first fix outdoors can take a while and
+                  a bare spinner reads as the app having hung. */}
+              {dutyBusy ? "Getting location…" : "Start Duty"}
             </button>
           )}
         </div>
