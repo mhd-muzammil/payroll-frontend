@@ -93,6 +93,7 @@ export default function EngineerCases() {
     streaming,
     lastFix,
     error: trackErr,
+    locationBlocked,
     startDuty,
     endDuty,
     setContext,
@@ -177,7 +178,8 @@ export default function EngineerCases() {
           ) : (
             <button
               onClick={startDuty}
-              disabled={dutyBusy}
+              disabled={dutyBusy || locationBlocked}
+              title={locationBlocked ? "Allow location for this site first" : undefined}
               className="min-h-11 px-4 py-2.5 text-sm rounded-lg bg-green-600 text-white disabled:opacity-60"
             >
               {/* Named, because getting a first fix outdoors can take a while and
@@ -194,7 +196,20 @@ export default function EngineerCases() {
           {lastFix.accuracy != null && ` (±${Math.round(lastFix.accuracy)}m)`}
         </p>
       )}
-      {(err || trackErr) && <p className="text-sm text-red-600">{err || trackErr}</p>}
+      {/* A blocked location is a standing condition, not a failed action, so it
+          gets a banner the engineer can act on rather than a line of red text
+          they scroll past. It clears itself the moment they allow it. */}
+      {locationBlocked ? (
+        <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+          <p className="font-medium">Location is off for this site, so duty cannot start.</p>
+          <p className="mt-1">
+            Tap the padlock next to the web address, set <strong>Location</strong> to{" "}
+            <strong>Allow</strong>. It is a one-time setting — after that Start Duty just works.
+          </p>
+        </div>
+      ) : (
+        (err || trackErr) && <p className="text-sm text-red-600">{err || trackErr}</p>
+      )}
 
       {loading ? (
         <p className="text-gray-500">Loading…</p>

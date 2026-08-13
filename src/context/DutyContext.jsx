@@ -26,6 +26,35 @@ function locationError(message) {
   return error;
 }
 
+const LOCATION_BLOCKED_MESSAGE =
+  "Location is blocked for this site, so duty cannot be tracked. Tap the padlock next to the web address, set Location to Allow, and it will work from then on — you will not be asked again.";
+
+/**
+ * Watch whether this device will give us a location, so the engineer is told
+ * BEFORE their shift rather than at the moment they tap Start Duty.
+ *
+ * Permissions API only, deliberately: querying it prompts nobody. The prompt
+ * itself belongs to the Start Duty tap, where the engineer has just asked for
+ * something and an ask back makes sense.
+ *
+ * Not every browser has it; where it is missing we simply learn nothing up front
+ * and the Start Duty check still catches it.
+ */
+function watchLocationPermission(onChange) {
+  if (!navigator.permissions?.query) return () => {};
+  let status = null;
+  const handle = () => onChange(status.state);
+  navigator.permissions
+    .query({ name: "geolocation" })
+    .then((result) => {
+      status = result;
+      handle();
+      result.addEventListener("change", handle);
+    })
+    .catch(() => {});
+  return () => status?.removeEventListener("change", handle);
+}
+
 /**
  * Ask for a position before duty starts, and refuse duty if it does not come.
  *
@@ -43,11 +72,7 @@ function requireLocationPermission() {
       resolve,
       (err) => {
         if (err.code === err.PERMISSION_DENIED) {
-          reject(
-            locationError(
-              "Location is blocked for this site. Allow location in your browser settings, then tap Start Duty again.",
-            ),
-          );
+          reject(locationError(LOCATION_BLOCKED_MESSAGE));
         } else if (err.code === err.POSITION_UNAVAILABLE) {
           reject(
             locationError(
@@ -75,6 +100,8 @@ export function DutyProvider({ children }) {
   const [startedAt, setStartedAt] = useState(null);
   const [busy, setBusy] = useState(false);
   const [dutyError, setDutyError] = useState(null);
+  // "granted" | "prompt" | "denied" | null (browser cannot tell us)
+  const [locationPermission, setLocationPermission] = useState(null);
 
   // start/stop identities change with the hook's internals; keep the latest in
   // a ref so the resume effect below runs exactly once, on load.
@@ -106,6 +133,19 @@ export function DutyProvider({ children }) {
       cancelled = true;
     };
   }, [applyState]);
+
+  // Told up front, and cleared the moment they fix it — no reload needed.
+  useEffect(() => {
+    if (!isAuthenticated() || getUserRole() !== ROLES.EMPLOYEE) return;
+    return watchLocationPermission((state) => {
+      setLocationPermission(state);
+      setDutyError((current) => {
+        if (state === "denied") return LOCATION_BLOCKED_MESSAGE;
+        // They just allowed it: drop the warning without making them reload.
+        return current === LOCATION_BLOCKED_MESSAGE ? null : current;
+      });
+    });
+  }, []);
 
   const startDuty = useCallback(async () => {
     setBusy(true);
@@ -153,6 +193,9 @@ export function DutyProvider({ children }) {
     streaming: tracking.tracking,
     lastFix: tracking.lastFix,
     error: dutyError || tracking.error,
+    // Lets the screen disable Start Duty while it is pointless, rather than
+    // letting the engineer tap it and be refused.
+    locationBlocked: locationPermission === "denied",
     startDuty,
     endDuty,
     setContext: tracking.setContext,
