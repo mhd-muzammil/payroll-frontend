@@ -12,6 +12,19 @@ const STATUS_LABEL = {
   cancelled: "Cancelled",
 };
 
+/**
+ * Where an engineer is sent to navigate. A plain Google Maps link — no API key,
+ * no billing, nothing to configure — which opens the Google Maps app on the
+ * phone and gives turn-by-turn directions. Accepts "lat,lng" or a street
+ * address; Maps resolves either.
+ *
+ * The live-tracking map that staff LOOK at still uses OpenStreetMap tiles,
+ * because that is the only tile source that needs no key. This is the map an
+ * engineer actually travels with, so it gets the better Indian coverage.
+ */
+const mapsUrl = (query) =>
+  `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+
 // The ticket's own fields, in the order an engineer reads them: which call,
 // which machine, whose account. Anything the sync did not send is skipped, so a
 // card never shows a label with a blank beside it.
@@ -125,7 +138,7 @@ export default function EngineerCases() {
 
   const openInMaps = (c) => {
     if (c.latitude != null && c.longitude != null) {
-      window.open(`https://www.openstreetmap.org/?mlat=${c.latitude}&mlon=${c.longitude}#map=17/${c.latitude}/${c.longitude}`, "_blank");
+      window.open(mapsUrl(`${c.latitude},${c.longitude}`), "_blank", "noopener");
     }
   };
 
@@ -213,7 +226,7 @@ export default function EngineerCases() {
                 )}
                 {c.address && (
                   <a
-                    href={`https://www.openstreetmap.org/search?query=${encodeURIComponent(c.address)}`}
+                    href={mapsUrl(c.address)}
                     target="_blank"
                     rel="noreferrer"
                     className="block text-blue-600"
