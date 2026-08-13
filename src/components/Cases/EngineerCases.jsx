@@ -12,6 +12,47 @@ const STATUS_LABEL = {
   cancelled: "Cancelled",
 };
 
+// The ticket's own fields, in the order an engineer reads them: which call,
+// which machine, whose account. Anything the sync did not send is skipped, so a
+// card never shows a label with a blank beside it.
+const DETAIL_ROWS = [
+  ["ticket_id", "Ticket ID"],
+  ["case_id", "Case ID"],
+  ["wip_aging", "WIP aging"],
+  ["location", "Location"],
+  ["work_location", "Work location"],
+  ["product_name", "Product"],
+  ["product_serial_no", "Product S.No"],
+  ["product_line_name", "Product line"],
+  ["account_name", "Account"],
+  ["customer_mail", "Customer mail"],
+  ["customer_pincode", "Pincode"],
+  ["engineer", "Engineer"],
+];
+
+function CaseDetails({ details }) {
+  const rows = DETAIL_ROWS.filter(([key]) => details?.[key]);
+  if (rows.length === 0) return null;
+
+  return (
+    // Collapsed by default: the card stays scannable on a phone, and the full
+    // ticket is one tap away when the engineer is standing in front of the machine.
+    <details className="rounded-lg bg-gray-50 border border-gray-100">
+      <summary className="cursor-pointer select-none px-3 py-2 text-sm font-medium text-gray-700">
+        Ticket details
+      </summary>
+      <dl className="px-3 pb-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
+        {rows.map(([key, label]) => (
+          <div key={key} className="contents">
+            <dt className="text-gray-500 whitespace-nowrap">{label}</dt>
+            <dd className="text-gray-800 break-words">{details[key]}</dd>
+          </div>
+        ))}
+      </dl>
+    </details>
+  );
+}
+
 const PRIORITY_COLOR = {
   urgent: "bg-red-100 text-red-700",
   high: "bg-orange-100 text-orange-700",
@@ -158,11 +199,32 @@ export default function EngineerCases() {
                 </span>
               </div>
 
-              <div className="text-sm text-gray-600 space-y-0.5">
-                <p>👤 {c.customer_name} {c.customer_phone && `· ${c.customer_phone}`}</p>
-                {c.address && <p>📍 {c.address}</p>}
+              <div className="text-sm text-gray-600 space-y-1">
+                <p className="font-medium text-gray-800">👤 {c.customer_name}</p>
+                {/* Tappable, because the first thing an engineer does is ring
+                    the customer and then navigate to them. */}
+                {c.customer_phone && (
+                  <a
+                    href={`tel:${c.customer_phone}`}
+                    className="inline-flex items-center min-h-9 text-blue-600"
+                  >
+                    📞 {c.customer_phone}
+                  </a>
+                )}
+                {c.address && (
+                  <a
+                    href={`https://www.openstreetmap.org/search?query=${encodeURIComponent(c.address)}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="block text-blue-600"
+                  >
+                    📍 {c.address}
+                  </a>
+                )}
                 {c.description && <p className="text-gray-500">{c.description}</p>}
               </div>
+
+              <CaseDetails details={c.details} />
 
               <div className="flex items-center justify-between">
                 <span className="text-xs font-medium text-blue-700">{STATUS_LABEL[c.status] || c.status}</span>
