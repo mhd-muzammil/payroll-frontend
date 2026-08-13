@@ -176,10 +176,13 @@ export default function EngineerCases() {
               {dutyBusy ? "…" : "Stop Duty"}
             </button>
           ) : (
+            // Never disabled by the cached permission state. The browser does not
+            // reliably announce a permission changed in its own settings, so a
+            // stale "denied" would lock the engineer out of duty entirely — and
+            // the tap itself asks the device, which is the only real answer.
             <button
               onClick={startDuty}
-              disabled={dutyBusy || locationBlocked}
-              title={locationBlocked ? "Allow location for this site first" : undefined}
+              disabled={dutyBusy}
               className="min-h-11 px-4 py-2.5 text-sm rounded-lg bg-green-600 text-white disabled:opacity-60"
             >
               {/* Named, because getting a first fix outdoors can take a while and
@@ -201,10 +204,12 @@ export default function EngineerCases() {
           they scroll past. It clears itself the moment they allow it. */}
       {locationBlocked ? (
         <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
-          <p className="font-medium">Location is off for this site, so duty cannot start.</p>
+          <p className="font-medium">Location looks blocked for this site.</p>
           <p className="mt-1">
-            Tap the padlock next to the web address, set <strong>Location</strong> to{" "}
-            <strong>Allow</strong>. It is a one-time setting — after that Start Duty just works.
+            Tap the padlock next to the web address and set <strong>Location</strong> to{" "}
+            <strong>Allow</strong> — a one-time setting.{" "}
+            <strong>Already allowed it? Just tap Start Duty</strong> — this notice can lag behind
+            the browser until the page is reloaded.
           </p>
         </div>
       ) : (
