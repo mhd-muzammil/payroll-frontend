@@ -47,24 +47,52 @@ const LOCATION_ON_HTTP_MESSAGE =
 const BROWSER_APP_BLOCKED_MESSAGE =
   "This site is allowed, but the browser app itself has no location permission from your phone — so the padlock settings will not help. Open your phone's Settings → Apps → Chrome → Permissions → Location → Allow (\"while using the app\" is enough), then come back and tap Start Duty again.";
 
-// Never asked and already refused: either the box was dismissed, or the browser
-// never got as far as showing one. Both are worth naming, in that order.
-const PROMPT_DISMISSED_MESSAGE =
-  "The browser did not get permission. Tap Start Duty again and choose Allow when the box appears. If no box appears at all, your phone has not given the browser location permission: Settings → Apps → Chrome → Permissions → Location → Allow.";
+// This site was never allowed OR blocked, and the answer is still no — so the
+// browser refused without ever asking. Nothing about this site is the problem
+// and there is no padlock setting to change; something above it is switched off.
+const NO_PROMPT_MESSAGE =
+  "The browser refused without even asking, so this site is not what is blocking it — something above it is switched off. Check these three, then tap Start Duty again:";
 
 const EITHER_BLOCKED_MESSAGE =
-  "The browser refused to share your location. Two things to check: the padlock next to the web address → Location → Allow, and your phone's Settings → Apps → Chrome → Permissions → Location → Allow. Then tap Start Duty again.";
+  "The browser refused to share your location. Check the padlock next to the web address, and your phone's location permission for the browser. Then tap Start Duty again.";
 
-/** Which of them it is, from what the browser has actually told us. */
-function permissionDeniedMessage(sitePermission) {
+/**
+ * The exact taps, because "allow location" is not one setting on Android — it is
+ * three in three different places, and only one of them is the padlock every
+ * guide mentions. An engineer told to fix the padlock when the padlock is not
+ * the problem just taps Start Duty forever.
+ */
+const CHROME_SITE_SETTING_STEP =
+  "In Chrome: ⋮ (top right) → Settings → Site settings → Location — turn it ON. If this is off, no permission box will ever appear.";
+const ANDROID_APP_STEP =
+  "Phone Settings → Apps → Chrome → Permissions → Location → Allow (\"while using the app\" is enough).";
+const OPEN_IN_CHROME_STEP =
+  "If you opened this from inside WhatsApp or another app, open it in Chrome instead — in-app browsers refuse location outright.";
+const PADLOCK_STEP =
+  "Tap the padlock next to the web address → Permissions → Location → Allow.";
+
+/** Which of them it is, and what to tap, from what the browser actually said. */
+function permissionDeniedFix(sitePermission) {
   if (typeof window !== "undefined" && window.isSecureContext === false) {
-    return LOCATION_ON_HTTP_MESSAGE;
+    return { message: LOCATION_ON_HTTP_MESSAGE, steps: [] };
   }
-  if (sitePermission === "denied") return LOCATION_BLOCKED_MESSAGE;
-  if (sitePermission === "granted") return BROWSER_APP_BLOCKED_MESSAGE;
-  if (sitePermission === "prompt") return PROMPT_DISMISSED_MESSAGE;
-  // No Permissions API to compare against, so name both switches.
-  return EITHER_BLOCKED_MESSAGE;
+  if (sitePermission === "denied") {
+    return { message: LOCATION_BLOCKED_MESSAGE, steps: [] };
+  }
+  if (sitePermission === "granted") {
+    return { message: BROWSER_APP_BLOCKED_MESSAGE, steps: [ANDROID_APP_STEP, OPEN_IN_CHROME_STEP] };
+  }
+  if (sitePermission === "prompt") {
+    return {
+      message: NO_PROMPT_MESSAGE,
+      steps: [CHROME_SITE_SETTING_STEP, ANDROID_APP_STEP, OPEN_IN_CHROME_STEP],
+    };
+  }
+  // No Permissions API to compare against, so name every switch there is.
+  return {
+    message: EITHER_BLOCKED_MESSAGE,
+    steps: [PADLOCK_STEP, CHROME_SITE_SETTING_STEP, ANDROID_APP_STEP],
+  };
 }
 
 /**
@@ -127,8 +155,10 @@ function requireLocationPermission(sitePermission) {
       resolve,
       (err) => {
         if (err.code === err.PERMISSION_DENIED) {
-          const error = locationError(permissionDeniedMessage(sitePermission));
+          const fix = permissionDeniedFix(sitePermission);
+          const error = locationError(fix.message);
           error.errorCode = err.code;
+          error.steps = fix.steps;
           reject(error);
         } else if (err.code === err.POSITION_UNAVAILABLE) {
           const error = locationError(
@@ -162,6 +192,8 @@ export function DutyProvider({ children }) {
   // What the device said on the last refused attempt, for the engineer to read
   // out when the instructions have not helped.
   const [diagnostic, setDiagnostic] = useState(null);
+  // The exact taps for THIS refusal, in the order most likely to be the cause.
+  const [locationSteps, setLocationSteps] = useState([]);
 
   // start/stop identities change with the hook's internals; keep the latest in
   // a ref so the resume effect below runs exactly once, on load.
@@ -211,6 +243,7 @@ export function DutyProvider({ children }) {
     setBusy(true);
     setDutyError(null);
     setDiagnostic(null);
+    setLocationSteps([]);
     // A blocked permission is refused in the same frame as the tap, so the
     // button flickered and settled back on the message already on screen — the
     // engineer read that as a dead button and kept tapping. Hold the "Getting
@@ -231,6 +264,7 @@ export function DutyProvider({ children }) {
           : e?.response?.data?.detail || "Could not start duty",
       );
       if (e?.locationDenied) {
+        setLocationSteps(e.steps ?? []);
         setDiagnostic(
           locationDiagnostic({
             sitePermission: locationPermission,
@@ -275,6 +309,7 @@ export function DutyProvider({ children }) {
     locationBlocked: locationPermission === "denied",
     // Only set after a refusal, so the screen can show what the device said.
     locationDiagnostic: diagnostic,
+    locationSteps,
     startDuty,
     endDuty,
     setContext: tracking.setContext,

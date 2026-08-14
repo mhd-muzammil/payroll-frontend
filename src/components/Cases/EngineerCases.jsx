@@ -95,6 +95,7 @@ export default function EngineerCases() {
     error: trackErr,
     locationBlocked,
     locationDiagnostic,
+    locationSteps,
     startDuty,
     endDuty,
     setContext,
@@ -220,11 +221,21 @@ export default function EngineerCases() {
         (err || trackErr) && (
           <div>
             <p className="text-sm text-red-600">{err || trackErr}</p>
+            {/* Numbered, because "allow location" is three settings in three
+                places on Android and only one of them is the padlock. A wall of
+                red prose gets scrolled past; a short list gets followed. */}
+            {locationSteps?.length > 0 && (
+              <ol className="mt-2 space-y-1.5 pl-5 text-sm text-gray-700 list-decimal">
+                {locationSteps.map((step) => (
+                  <li key={step}>{step}</li>
+                ))}
+              </ol>
+            )}
             {/* What the device actually answered. An instant refusal is otherwise
                 invisible — the tap looks like nothing happened — and this line is
                 what tells apart a blocked site from a blocked browser app. */}
             {locationDiagnostic && (
-              <p className="mt-1 text-xs text-gray-500">Device said: {locationDiagnostic}</p>
+              <p className="mt-2 text-xs text-gray-500">Device said: {locationDiagnostic}</p>
             )}
           </div>
         )
