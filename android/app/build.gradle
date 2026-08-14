@@ -14,12 +14,14 @@ android {
         applicationId "in.systimus.payroll"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        // 2 / "1.1" is the build that can actually track duty: 1.0 shipped without
-        // ACCESS_FINE_LOCATION, so Start Duty was denied by Android before any
-        // dialog could appear. Bumped so a phone can be told apart from the old
-        // one at a glance — Settings → Apps → Renderways Technology shows this.
-        versionCode 2
-        versionName "1.1"
+        // 1.0 shipped without ACCESS_FINE_LOCATION, so Start Duty was denied by
+        // Android before any dialog could appear. 1.2 carries every permission the
+        // app is plausibly going to want, and the camera / notification /
+        // geolocation plugins, so a future feature ships from the web alone rather
+        // than as another APK on 24 phones. Bumped so a phone can be told apart at
+        // a glance — Settings → Apps → Renderways Technology shows this.
+        versionCode 3
+        versionName "1.2"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

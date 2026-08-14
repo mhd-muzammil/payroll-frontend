@@ -44,6 +44,52 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
 
-    <!-- Not required, so the app still installs on a device without GPS hardware. -->
+    <!--
+      Declared AHEAD of the web app needing them, on purpose.
+
+      Everything the engineers see comes from the live site, so a web change
+      reaches them with no new APK. Permissions are the one thing that cannot
+      arrive that way — they live in this file, inside the APK. So every
+      permission the app is plausibly going to want is declared now, once, and a
+      future feature needs no reinstall on 24 phones.
+
+      Declaring a permission grants nothing. Android still asks the engineer the
+      first time a feature actually uses it, and the app asks for nothing it is
+      not using. An undeclared one, by contrast, is denied instantly and without
+      a dialog — which is exactly how Start Duty broke.
+    -->
+
+    <!-- Photographing a completed job / attaching a proof-of-work picture. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <!-- Picking an existing picture: split by API level, as Android 13 replaced
+         the single storage permission with per-type media ones. -->
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+
+    <!-- Telling an engineer about a new case, or that duty is still running.
+         Required from Android 13; a no-op below it. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- Local reminders survive a reboot. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+
+    <!--
+      For duty tracking that keeps working with the screen off. The service and
+      its notification are still to be built — this only means that when they
+      are, the APK does not have to go out again.
+    -->
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+    <!-- Hardware the app uses when it is there, but must never be a reason an
+         install is refused. -->
     <uses-feature android:name="android.hardware.location.gps" android:required="false" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
 </manifest>
