@@ -32,4 +32,18 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+
+    <!--
+      Duty tracking. Without these declared, Capacitor's WebView geolocation
+      handler still asks Android for the permission, but Android denies an
+      undeclared permission INSTANTLY and without a dialog — so Start Duty failed
+      with PERMISSION_DENIED, no box ever appeared, and the page could only report
+      "site: prompt · error 1". Nothing in the web app or in Chrome's settings
+      could have fixed that; the permission has to exist here.
+    -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+
+    <!-- Not required, so the app still installs on a device without GPS hardware. -->
+    <uses-feature android:name="android.hardware.location.gps" android:required="false" />
 </manifest>

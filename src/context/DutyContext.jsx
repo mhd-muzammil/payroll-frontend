@@ -74,6 +74,12 @@ const EITHER_BLOCKED_MESSAGE =
  */
 function browserSurface() {
   if (typeof navigator === "undefined") return "unknown";
+  // OUR OWN app first. It is a WebView too, so the in-app test below would
+  // otherwise tell an engineer using the APK to "open this in Chrome" — advice
+  // that makes no sense inside an installed app and cannot be followed.
+  if (typeof window !== "undefined" && window.Capacitor?.isNativePlatform?.()) {
+    return "app";
+  }
   const ua = navigator.userAgent || "";
   // "; wv)" is Android's own marker for a WebView. The rest are in-app browsers
   // that identify themselves.
@@ -85,6 +91,16 @@ function browserSurface() {
   }
   return "browser";
 }
+
+// Inside our own app there is no site permission and no padlock — only the one
+// Android permission the app itself holds.
+const APP_LOCATION_DENIED_MESSAGE =
+  "The app does not have location permission from your phone yet, so duty cannot be tracked. This is one setting, and once it is allowed you will never be asked again.";
+
+const APP_SETTINGS_STEP =
+  "Phone Settings → Apps → Renderways Technology → Permissions → Location → Allow (\"while using the app\" is enough). Then come back and tap Start Duty.";
+const REINSTALL_STEP =
+  "If Location is not listed there at all, you are on the old app — install the updated one and it will ask you the first time you tap Start Duty.";
 
 const IN_APP_BROWSER_MESSAGE =
   "You are not in Chrome — this page is open inside another app's browser (WhatsApp, Instagram and the like), and those cannot show a location box at all. No setting will fix it here. Open the same link in Chrome and Start Duty will ask you normally.";
@@ -108,9 +124,13 @@ function permissionDeniedFix(sitePermission) {
   if (typeof window !== "undefined" && window.isSecureContext === false) {
     return { message: LOCATION_ON_HTTP_MESSAGE, steps: [] };
   }
-  // Checked before the site permission: an in-app browser cannot be fixed by any
-  // permission at all, so telling them to change one wastes their time.
-  if (browserSurface() === "in-app") {
+  // Checked before the site permission, because neither of these can be fixed by
+  // a site permission and pointing at one wastes the engineer's time.
+  const surface = browserSurface();
+  if (surface === "app") {
+    return { message: APP_LOCATION_DENIED_MESSAGE, steps: [APP_SETTINGS_STEP, REINSTALL_STEP] };
+  }
+  if (surface === "in-app") {
     return {
       message: IN_APP_BROWSER_MESSAGE,
       steps: [OPEN_IN_CHROME_FROM_IN_APP_STEP, COPY_LINK_STEP],
