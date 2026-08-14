@@ -94,6 +94,7 @@ export default function EngineerCases() {
     lastFix,
     error: trackErr,
     locationBlocked,
+    locationDiagnostic,
     startDuty,
     endDuty,
     setContext,
@@ -211,9 +212,22 @@ export default function EngineerCases() {
             <strong>Already allowed it? Just tap Start Duty</strong> — this notice can lag behind
             the browser until the page is reloaded.
           </p>
+          {locationDiagnostic && (
+            <p className="mt-2 text-xs text-amber-800">Device said: {locationDiagnostic}</p>
+          )}
         </div>
       ) : (
-        (err || trackErr) && <p className="text-sm text-red-600">{err || trackErr}</p>
+        (err || trackErr) && (
+          <div>
+            <p className="text-sm text-red-600">{err || trackErr}</p>
+            {/* What the device actually answered. An instant refusal is otherwise
+                invisible — the tap looks like nothing happened — and this line is
+                what tells apart a blocked site from a blocked browser app. */}
+            {locationDiagnostic && (
+              <p className="mt-1 text-xs text-gray-500">Device said: {locationDiagnostic}</p>
+            )}
+          </div>
+        )
       )}
 
       {loading ? (

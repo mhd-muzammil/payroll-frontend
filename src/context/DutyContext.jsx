@@ -30,6 +30,61 @@ const LOCATION_BLOCKED_MESSAGE =
   "Location is blocked for this site, so duty cannot be tracked. Tap the padlock next to the web address, set Location to Allow, and it will work from then on — you will not be asked again.";
 
 /**
+ * The browser refusing to give a position is not one problem, it is three, and
+ * they need three different switches. Telling an engineer to tap the padlock
+ * when the padlock is not the problem leaves them tapping Start Duty forever
+ * with the phone's own location plainly switched on.
+ *
+ * The tell is the disagreement: when the Permissions API says this site is
+ * allowed (or has not been asked) and getCurrentPosition still answers
+ * PERMISSION_DENIED, the site is not what is refusing.
+ */
+const LOCATION_ON_HTTP_MESSAGE =
+  "This page is open on an http:// address. Browsers never share location on one, whatever the phone's settings say — so duty cannot be tracked here. Open the site on its https:// address and tap Start Duty again.";
+
+// The site says yes and the answer is still no, so nothing on this page or in
+// its site settings can fix it — the browser app is what has no location.
+const BROWSER_APP_BLOCKED_MESSAGE =
+  "This site is allowed, but the browser app itself has no location permission from your phone — so the padlock settings will not help. Open your phone's Settings → Apps → Chrome → Permissions → Location → Allow (\"while using the app\" is enough), then come back and tap Start Duty again.";
+
+// Never asked and already refused: either the box was dismissed, or the browser
+// never got as far as showing one. Both are worth naming, in that order.
+const PROMPT_DISMISSED_MESSAGE =
+  "The browser did not get permission. Tap Start Duty again and choose Allow when the box appears. If no box appears at all, your phone has not given the browser location permission: Settings → Apps → Chrome → Permissions → Location → Allow.";
+
+const EITHER_BLOCKED_MESSAGE =
+  "The browser refused to share your location. Two things to check: the padlock next to the web address → Location → Allow, and your phone's Settings → Apps → Chrome → Permissions → Location → Allow. Then tap Start Duty again.";
+
+/** Which of them it is, from what the browser has actually told us. */
+function permissionDeniedMessage(sitePermission) {
+  if (typeof window !== "undefined" && window.isSecureContext === false) {
+    return LOCATION_ON_HTTP_MESSAGE;
+  }
+  if (sitePermission === "denied") return LOCATION_BLOCKED_MESSAGE;
+  if (sitePermission === "granted") return BROWSER_APP_BLOCKED_MESSAGE;
+  if (sitePermission === "prompt") return PROMPT_DISMISSED_MESSAGE;
+  // No Permissions API to compare against, so name both switches.
+  return EITHER_BLOCKED_MESSAGE;
+}
+
+/**
+ * What the device actually said, in one short line the engineer can read out.
+ * An instant refusal is invisible otherwise — the tap looks like a dead button.
+ */
+function locationDiagnostic({ sitePermission, errorCode, at }) {
+  const secure =
+    typeof window === "undefined" || window.isSecureContext !== false ? "https yes" : "https NO";
+  return [
+    `site: ${sitePermission ?? "unknown"}`,
+    secure,
+    errorCode != null ? `error ${errorCode}` : null,
+    at ? `checked ${at}` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+/**
  * Watch whether this device will give us a location, so the engineer is told
  * BEFORE their shift rather than at the moment they tap Start Duty.
  *
@@ -62,7 +117,7 @@ function watchLocationPermission(onChange) {
  * granted permission with the phone's location switched off still never
  * produces one.
  */
-function requireLocationPermission() {
+function requireLocationPermission(sitePermission) {
   return new Promise((resolve, reject) => {
     if (!("geolocation" in navigator)) {
       reject(locationError("This device cannot share its location, so duty cannot be tracked."));
@@ -72,19 +127,21 @@ function requireLocationPermission() {
       resolve,
       (err) => {
         if (err.code === err.PERMISSION_DENIED) {
-          reject(locationError(LOCATION_BLOCKED_MESSAGE));
+          const error = locationError(permissionDeniedMessage(sitePermission));
+          error.errorCode = err.code;
+          reject(error);
         } else if (err.code === err.POSITION_UNAVAILABLE) {
-          reject(
-            locationError(
-              "Your phone's location is switched off. Turn it on, then tap Start Duty again.",
-            ),
+          const error = locationError(
+            "Your phone's location is switched off. Turn it on, then tap Start Duty again.",
           );
+          error.errorCode = err.code;
+          reject(error);
         } else {
-          reject(
-            locationError(
-              "Could not get your location. Step outside or check your signal, then tap Start Duty again.",
-            ),
+          const error = locationError(
+            "Could not get your location. Step outside or check your signal, then tap Start Duty again.",
           );
+          error.errorCode = err.code;
+          reject(error);
         }
       },
       // Generous: a cold GPS outdoors can take a while, and refusing duty over
@@ -102,6 +159,9 @@ export function DutyProvider({ children }) {
   const [dutyError, setDutyError] = useState(null);
   // "granted" | "prompt" | "denied" | null (browser cannot tell us)
   const [locationPermission, setLocationPermission] = useState(null);
+  // What the device said on the last refused attempt, for the engineer to read
+  // out when the instructions have not helped.
+  const [diagnostic, setDiagnostic] = useState(null);
 
   // start/stop identities change with the hook's internals; keep the latest in
   // a ref so the resume effect below runs exactly once, on load.
@@ -150,12 +210,18 @@ export function DutyProvider({ children }) {
   const startDuty = useCallback(async () => {
     setBusy(true);
     setDutyError(null);
+    setDiagnostic(null);
+    // A blocked permission is refused in the same frame as the tap, so the
+    // button flickered and settled back on the message already on screen — the
+    // engineer read that as a dead button and kept tapping. Hold the "Getting
+    // location…" state long enough to be seen, so every tap plainly does something.
+    const tapped = Date.now();
     try {
       // Location FIRST, and duty only if it is granted. Starting duty without it
       // put an engineer on the board as "on duty, waiting for GPS" for the rest
       // of the shift — the office could see they were out but never where, and
       // their distance stayed at zero. Duty without a position is not tracking.
-      await requireLocationPermission();
+      await requireLocationPermission(locationPermission);
       applyState(await trackingService.startDuty());
       tracking.start();
     } catch (e) {
@@ -164,10 +230,21 @@ export function DutyProvider({ children }) {
           ? e.message
           : e?.response?.data?.detail || "Could not start duty",
       );
+      if (e?.locationDenied) {
+        setDiagnostic(
+          locationDiagnostic({
+            sitePermission: locationPermission,
+            errorCode: e.errorCode,
+            at: new Date().toLocaleTimeString(),
+          }),
+        );
+      }
     } finally {
+      const shown = Date.now() - tapped;
+      if (shown < 500) await new Promise((r) => setTimeout(r, 500 - shown));
       setBusy(false);
     }
-  }, [applyState, tracking]);
+  }, [applyState, tracking, locationPermission]);
 
   const endDuty = useCallback(async () => {
     setBusy(true);
@@ -196,6 +273,8 @@ export function DutyProvider({ children }) {
     // Lets the screen disable Start Duty while it is pointless, rather than
     // letting the engineer tap it and be refused.
     locationBlocked: locationPermission === "denied",
+    // Only set after a refusal, so the screen can show what the device said.
+    locationDiagnostic: diagnostic,
     startDuty,
     endDuty,
     setContext: tracking.setContext,
