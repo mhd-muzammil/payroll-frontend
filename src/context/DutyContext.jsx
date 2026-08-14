@@ -62,6 +62,38 @@ const EITHER_BLOCKED_MESSAGE =
  * guide mentions. An engineer told to fix the padlock when the padlock is not
  * the problem just taps Start Duty forever.
  */
+/**
+ * Which browser this really is, because two of them can never show a location
+ * box at all and no amount of settings will change that.
+ *
+ * An Android WebView — the browser inside WhatsApp, Instagram, Snapchat and any
+ * app that opens links in-app — reports the site permission as "prompt" and then
+ * refuses, because the host app never implemented the permission dialog. That is
+ * indistinguishable from a Chrome setting being off unless you look at the UA,
+ * and it is the one case where the fix is "open it somewhere else".
+ */
+function browserSurface() {
+  if (typeof navigator === "undefined") return "unknown";
+  const ua = navigator.userAgent || "";
+  // "; wv)" is Android's own marker for a WebView. The rest are in-app browsers
+  // that identify themselves.
+  if (/;\s*wv\)/i.test(ua) || /\b(FBAN|FBAV|Instagram|Line\/|Snapchat|MicroMessenger)\b/i.test(ua)) {
+    return "in-app";
+  }
+  if (typeof window !== "undefined" && window.matchMedia?.("(display-mode: standalone)")?.matches) {
+    return "installed";
+  }
+  return "browser";
+}
+
+const IN_APP_BROWSER_MESSAGE =
+  "You are not in Chrome — this page is open inside another app's browser (WhatsApp, Instagram and the like), and those cannot show a location box at all. No setting will fix it here. Open the same link in Chrome and Start Duty will ask you normally.";
+
+const OPEN_IN_CHROME_FROM_IN_APP_STEP =
+  "Tap ⋮ (or ⋯) at the top of this screen and choose \"Open in Chrome\" / \"Open in browser\".";
+const COPY_LINK_STEP =
+  "No such option? Copy the web address, open Chrome yourself, and paste it there. Log in once and Chrome will remember you.";
+
 const CHROME_SITE_SETTING_STEP =
   "In Chrome: ⋮ (top right) → Settings → Site settings → Location — turn it ON. If this is off, no permission box will ever appear.";
 const ANDROID_APP_STEP =
@@ -75,6 +107,14 @@ const PADLOCK_STEP =
 function permissionDeniedFix(sitePermission) {
   if (typeof window !== "undefined" && window.isSecureContext === false) {
     return { message: LOCATION_ON_HTTP_MESSAGE, steps: [] };
+  }
+  // Checked before the site permission: an in-app browser cannot be fixed by any
+  // permission at all, so telling them to change one wastes their time.
+  if (browserSurface() === "in-app") {
+    return {
+      message: IN_APP_BROWSER_MESSAGE,
+      steps: [OPEN_IN_CHROME_FROM_IN_APP_STEP, COPY_LINK_STEP],
+    };
   }
   if (sitePermission === "denied") {
     return { message: LOCATION_BLOCKED_MESSAGE, steps: [] };
@@ -105,6 +145,9 @@ function locationDiagnostic({ sitePermission, errorCode, at }) {
   return [
     `site: ${sitePermission ?? "unknown"}`,
     secure,
+    // Which browser it really is: "in-app" can never show a location box, and
+    // that is invisible from the message alone.
+    browserSurface(),
     errorCode != null ? `error ${errorCode}` : null,
     at ? `checked ${at}` : null,
   ]
