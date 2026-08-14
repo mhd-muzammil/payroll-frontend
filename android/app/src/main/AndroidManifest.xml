@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8" ?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
@@ -87,9 +89,19 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
-    <!-- Hardware the app uses when it is there, but must never be a reason an
-         install is refused. -->
-    <uses-feature android:name="android.hardware.location.gps" android:required="false" />
+    <!--
+      Hardware the app uses when it is there, but must never be a reason an
+      install is refused.
+
+      tools:replace is load-bearing: the background-geolocation plugin declares
+      this feature WITHOUT required="false", and a merged required="true" would
+      make Android refuse to install the app on any device it thinks has no GPS.
+      Our own declaration has to win.
+    -->
+    <uses-feature
+        android:name="android.hardware.location.gps"
+        android:required="false"
+        tools:replace="android:required" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
 </manifest>
