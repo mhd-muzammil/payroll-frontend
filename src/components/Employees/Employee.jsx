@@ -185,6 +185,7 @@ const EmployeesPage = () => {
   const dupInfo = useMemo(() => {
     const nameCount = {};
     const emailCount = {};
+    const phoneCount = {};
     employeeRows.forEach((e) => {
       const n = norm(e.employee_name);
       if (n) {
@@ -193,17 +194,30 @@ const EmployeesPage = () => {
       }
       const em = norm(e.email);
       if (em) emailCount[em] = (emailCount[em] || 0) + 1;
+      // Phone is checked across ALL branches, like email and unlike name,
+      // because it is a globally unique column. It is also the key onboarding
+      // falls back to, so two rows sharing a number is how an onboarding update
+      // ends up on the wrong person — see the note in getIssues.
+      const ph = norm(e.phone);
+      if (ph) phoneCount[ph] = (phoneCount[ph] || 0) + 1;
     });
-    return { nameCount, emailCount };
+    return { nameCount, emailCount, phoneCount };
   }, [employeeRows]);
 
   const getIssues = (e) => {
     const issues = [];
     const n = norm(e.employee_name);
     const em = norm(e.email);
+    const ph = norm(e.phone);
     const nameKey = `${norm(e.branch)}|${n}`;
     if (n && dupInfo.nameCount[nameKey] > 1) issues.push({ label: "Duplicate name", tone: "red" });
     if (em && dupInfo.emailCount[em] > 1) issues.push({ label: "Duplicate email", tone: "red" });
+    // Onboarding matches an employee by email, then emp_code, then phone. So two
+    // rows sharing a phone number means an onboarding update lands on whichever
+    // one the lookup reaches first — that row takes the name and the joining
+    // date, and the other is left blank with no explanation. This was invisible
+    // until now: names were flagged, emails were flagged, phones were not.
+    if (ph && dupInfo.phoneCount[ph] > 1) issues.push({ label: "Duplicate phone", tone: "red" });
     if (!em) issues.push({ label: "No email", tone: "amber" });
     if (!norm(e.phone)) issues.push({ label: "No phone", tone: "amber" });
     if (!e.date_of_joining) issues.push({ label: "No DOJ", tone: "amber" });
@@ -212,8 +226,11 @@ const EmployeesPage = () => {
   };
 
   const issueStats = useMemo(() => {
-    const s = { dupNameGroups: 0, noEmail: 0, noPhone: 0, noDOJ: 0, noUser: 0, flagged: 0 };
+    const s = { dupNameGroups: 0, dupContactGroups: 0, noEmail: 0, noPhone: 0, noDOJ: 0, noUser: 0, flagged: 0 };
     s.dupNameGroups = Object.values(dupInfo.nameCount).filter((c) => c > 1).length;
+    s.dupContactGroups =
+      Object.values(dupInfo.emailCount).filter((c) => c > 1).length +
+      Object.values(dupInfo.phoneCount).filter((c) => c > 1).length;
     employeeRows.forEach((e) => {
       if (getIssues(e).length) s.flagged += 1;
       if (!norm(e.email)) s.noEmail += 1;
@@ -383,13 +400,23 @@ const EmployeesPage = () => {
                 {issueStats.dupNameGroups} duplicate name group(s)
               </span>
             )}
+            {issueStats.dupContactGroups > 0 && (
+              <span
+                className="px-2 py-1 rounded-md bg-red-50 text-red-600 border border-red-200 font-medium"
+                title="Two rows sharing an email or phone. Onboarding matches on those, so its details land on one row and leave the other blank."
+              >
+                {issueStats.dupContactGroups} shared email/phone
+              </span>
+            )}
             <span className="px-2 py-1 rounded-md bg-amber-50 text-amber-700 border border-amber-200">No email: {issueStats.noEmail}</span>
             <span className="px-2 py-1 rounded-md bg-amber-50 text-amber-700 border border-amber-200">No phone: {issueStats.noPhone}</span>
             <span className="px-2 py-1 rounded-md bg-amber-50 text-amber-700 border border-amber-200">No joining date: {issueStats.noDOJ}</span>
             <span className="px-2 py-1 rounded-md bg-amber-50 text-amber-700 border border-amber-200">No login: {issueStats.noUser}</span>
           </div>
           <p className="mt-2 text-[11px] text-muted-foreground">
-            The "Issues" column flags each row. Fix by editing the employee (add email/phone/joining date) or merging duplicates.
+            The "Issues" column flags each row. Fix by editing the employee (add email/phone/joining date) or merging
+            duplicates. A row flagged "Duplicate phone" or "Duplicate email" is why another row can show a blank joining
+            date: onboarding matches on those keys, so its details went to the other copy.
           </p>
         </div>
       )}
