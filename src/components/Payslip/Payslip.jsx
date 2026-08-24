@@ -210,6 +210,17 @@ const PayslipsPage = () => {
     return "*".repeat(str.length - 4) + str.slice(-4);
   };
 
+  // Matches how the API already formats dob, so the two dates on the slip read
+  // the same way.
+  const formatSlipDate = (value) => {
+    if (!value) return "—";
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return "—";
+    const dd = String(d.getDate()).padStart(2, "0");
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    return `${dd}-${mm}-${d.getFullYear()}`;
+  };
+
   const formatINR = (amount) => {
     if (!amount) return "0.00";
     return parseFloat(amount).toLocaleString("en-IN", { 
@@ -1030,31 +1041,31 @@ const PayslipsPage = () => {
                       {/* Meta Info Row 1 */}
                       <tr>
                         <td style={labelStyle}>Employee Name</td>
-                        <td style={{ ...valStyle, textTransform: "uppercase", fontWeight: "bold" }}>{selectedSlip.employee_details?.employee_name || "GAYATHRI R"}</td>
+                        <td style={{ ...valStyle, textTransform: "uppercase", fontWeight: "bold" }}>{selectedSlip.employee_details?.employee_name || "—"}</td>
                         <td style={labelStyle}>Employee Code</td>
-                        <td style={{ ...valStyle, fontFamily: "monospace" }}>RT-{100 + selectedSlip.employee_details?.id}</td>
+                        <td style={{ ...valStyle, fontFamily: "monospace" }}>{selectedSlip.employee_details?.emp_code || "—"}</td>
                       </tr>
 
                       {/* Meta Info Row 2 */}
                       <tr>
                         <td style={labelStyle}>DOJ</td>
-                        <td style={valStyle}>{selectedSlip.employee_details?.joining_date || "01-06-2025"}</td>
+                        <td style={valStyle}>{formatSlipDate(selectedSlip.employee_details?.date_of_joining)}</td>
                         <td style={labelStyle}>DOB</td>
-                        <td style={valStyle}>{selectedSlip.employee_details?.dob || "N/A"}</td>
+                        <td style={valStyle}>{selectedSlip.employee_details?.dob || "—"}</td>
                       </tr>
 
                       {/* Meta Info Row 3 */}
                       <tr>
                         <td style={labelStyle}>Department</td>
-                        <td style={valStyle}>{selectedSlip.employee_details?.department || "Admin"}</td>
+                        <td style={valStyle}>{selectedSlip.employee_details?.department || "—"}</td>
                         <td style={labelStyle}>Pan No.</td>
-                        <td style={{ ...valStyle, fontFamily: "monospace" }}>PANEX-{selectedSlip.employee_details?.id}</td>
+                        <td style={{ ...valStyle, fontFamily: "monospace" }}>—</td>
                       </tr>
 
                       {/* Meta Info Row 4 */}
                       <tr>
                         <td style={labelStyle}>Designation</td>
-                        <td style={valStyle}>{selectedSlip.employee_details?.role || "Manager"}</td>
+                        <td style={valStyle}>{selectedSlip.employee_details?.role || "—"}</td>
                         <td style={labelStyle}>Paymode</td>
                         <td style={valStyle}>Bank Transfer</td>
                       </tr>
@@ -1062,15 +1073,15 @@ const PayslipsPage = () => {
                       {/* Meta Info Row 5 */}
                       <tr>
                         <td style={labelStyle}>Location</td>
-                        <td style={valStyle}>{selectedSlip.employee_details?.work_location || "Tamilnadu"}</td>
+                        <td style={valStyle}>{selectedSlip.employee_details?.work_location || selectedSlip.employee_details?.branch || "—"}</td>
                         <td style={labelStyle}>Bank Name</td>
-                        <td style={valStyle}>{selectedSlip.employee_details?.bank_name || "N/A"}</td>
+                        <td style={valStyle}>{selectedSlip.employee_details?.bank_name || "—"}</td>
                       </tr>
 
                       {/* Meta Info Row 6 */}
                       <tr>
                         <td style={labelStyle}>Region</td>
-                        <td style={valStyle}>{selectedSlip.employee_details?.branch || "Chennai"}</td>
+                        <td style={valStyle}>{selectedSlip.employee_details?.branch || "—"}</td>
                         <td style={labelStyle}>Bank Account No</td>
                         <td style={{ ...valStyle, fontFamily: "monospace" }}>{formatBankAccount(selectedSlip.employee_details?.account_number)}</td>
                       </tr>

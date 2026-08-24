@@ -13,6 +13,7 @@ const initialFormState = {
   department: "",
   salary: "",
   status: "active",
+  date_of_joining: "",
   work_lat: "",
   work_lon: "",
   // Detailed breakdown defaults
@@ -85,6 +86,7 @@ const EmployeeForm = ({ initialData = null, onSubmit, onCancel, loading = false 
         department: initialData.department || "",
         salary: initialData.salary || "",
         status: initialData.status || "active",
+        date_of_joining: initialData.date_of_joining || "",
         work_lat: initialData.work_lat || "",
         work_lon: initialData.work_lon || "",
         basic: formatForInput(initialData.basic),
@@ -142,6 +144,10 @@ const EmployeeForm = ({ initialData = null, onSubmit, onCancel, loading = false 
     }
     if (payload.work_lon === "") {
       payload.work_lon = null;
+    }
+    // A blank date has to travel as null; the API rejects "" for a DateField.
+    if (payload.date_of_joining === "") {
+      payload.date_of_joining = null;
     }
     onSubmit(payload);
   };
@@ -342,6 +348,25 @@ const EmployeeForm = ({ initialData = null, onSubmit, onCancel, loading = false 
                 className="h-10 w-full rounded-xl border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-glow"
               />
             </div>
+          </div>
+
+          <div>
+            {/* The Employees list flags "No DOJ" and tells HR to fix it by
+                editing the employee — and there was no field here to do it in.
+                This is the real hire date (date_of_joining), the one casual-leave
+                accrual and the payslip read; the separate joining_date column is
+                auto-stamped at row creation and cannot be set by anyone. */}
+            <label className="mb-1.5 block text-sm font-medium">Date of Joining</label>
+            <input
+              type="date"
+              name="date_of_joining"
+              value={formData.date_of_joining}
+              onChange={handleChange}
+              className="h-10 w-full rounded-xl border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-glow"
+            />
+            <p className="mt-1 text-xs text-muted-foreground">
+              Filled automatically from Onboarding. Used for casual-leave accrual and the payslip.
+            </p>
           </div>
 
           <div>

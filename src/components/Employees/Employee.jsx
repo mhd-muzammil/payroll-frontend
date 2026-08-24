@@ -110,7 +110,7 @@ const EmployeesPage = () => {
         department: employee.department || "",
         salary: employee.salary || "",
         status: employee.status || "active",
-        joining_date: employee.joining_date || "",
+        date_of_joining: employee.date_of_joining || "",
       })),
     [safeRecords]
   );
@@ -472,11 +472,18 @@ const EmployeesPage = () => {
           { key: "phone", label: "Phone", render: (e) => <span className="text-sm">{e.phone || "-"}</span> },
           { key: "salary", label: "Salary", render: (e) => <span className="font-medium text-sm">{e.salary}</span> },
           {
-            key: "joining_date",
+            // date_of_joining, NOT joining_date. joining_date is auto_now_add:
+            // the day the row was created, which is the day HR happened to
+            // onboard them and has nothing to do with when they were hired. It
+            // read 19-08 for everyone onboarded that afternoon while their
+            // onboarding form plainly said 10-08. The "No DOJ" flag below was
+            // already reading the right field, so a row could read OK and still
+            // show a date nobody entered.
+            key: "date_of_joining",
             label: "Joined",
             render: (e) => (
               <span className="text-sm text-muted-foreground">
-                {e.joining_date ? new Date(e.joining_date).toLocaleDateString("en-US") : "-"}
+                {e.date_of_joining ? new Date(e.date_of_joining).toLocaleDateString("en-GB") : "-"}
               </span>
             ),
           },
