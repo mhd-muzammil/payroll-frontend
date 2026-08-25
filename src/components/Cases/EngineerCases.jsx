@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { caseService } from "../../services/caseService";
 import { useDuty } from "../../context/DutyContext";
-import { User, Phone, MapPin } from "lucide-react";
 
 const STATUS_LABEL = {
   assigned: "Assigned",
@@ -68,10 +67,10 @@ function CaseDetails({ details }) {
 }
 
 const PRIORITY_COLOR = {
-  urgent: "bg-rose-50 text-rose-700 border border-rose-200/70",
-  high: "bg-orange-50 text-orange-700 border border-orange-200/70",
-  medium: "bg-amber-50 text-amber-700 border border-amber-200/70",
-  low: "bg-emerald-50 text-emerald-700 border border-emerald-200/70",
+  urgent: "bg-red-100 text-red-700",
+  high: "bg-orange-100 text-orange-700",
+  medium: "bg-yellow-100 text-yellow-700",
+  low: "bg-green-100 text-green-700",
 };
 
 /**
@@ -147,33 +146,25 @@ export default function EngineerCases() {
   };
 
   return (
-    <div className="space-y-4 pb-4">
-      {/* Brand panel, in the app's own primary gradient hue. The duty control
-          lives inside it because starting duty is the first thing an engineer
-          does on this screen, and it was competing with the page title for
-          attention out on the white. */}
-      <div className="-mt-4 -mx-4 rounded-b-3xl bg-gradient-to-br from-indigo-800 via-indigo-950 to-slate-950 px-5 pt-6 pb-5 text-white sm:mx-0 sm:mt-0 sm:rounded-3xl">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-indigo-300/80">
-          Renderways
-        </p>
-        <div className="mt-1 flex items-center justify-between flex-wrap gap-3">
-          <h1 className="text-2xl font-semibold tracking-tight">My Cases</h1>
-          <div className="flex items-center gap-3 text-sm">
+    <div className="p-4 space-y-4">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <h1 className="text-xl font-semibold">My Cases</h1>
+        <div className="flex items-center gap-3 text-sm">
           {/* Three states, not two: off duty; on duty and sending; on duty but
               the phone has no fix yet (office wants to know the difference). */}
           <span
-            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border ${
+            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full ${
               !onDuty
-                ? "bg-white/10 text-indigo-100 border-white/15"
+                ? "bg-gray-100 text-gray-600"
                 : streaming && lastFix
-                ? "bg-emerald-400/15 text-emerald-200 border-emerald-300/25"
-                : "bg-amber-400/15 text-amber-200 border-amber-300/25"
+                ? "bg-green-100 text-green-700"
+                : "bg-amber-100 text-amber-700"
             }`}
             title={startedAt ? `On duty since ${new Date(startedAt).toLocaleTimeString()}` : undefined}
           >
             <span
               className={`w-2 h-2 rounded-full ${
-                !onDuty ? "bg-white/40" : streaming && lastFix ? "bg-emerald-400 animate-pulse" : "bg-amber-400"
+                !onDuty ? "bg-gray-400" : streaming && lastFix ? "bg-green-500 animate-pulse" : "bg-amber-500"
               }`}
             />
             {!onDuty ? "Off duty" : streaming && lastFix ? "On duty" : "On duty · waiting for GPS"}
@@ -182,7 +173,7 @@ export default function EngineerCases() {
             <button
               onClick={endDuty}
               disabled={dutyBusy}
-              className="min-h-11 px-5 py-2.5 text-sm font-semibold rounded-full bg-white/15 border border-white/25 text-white hover:bg-white/25 transition-colors disabled:opacity-60"
+              className="min-h-11 px-4 py-2.5 text-sm rounded-lg bg-red-600 text-white disabled:opacity-60"
             >
               {dutyBusy ? "…" : "Stop Duty"}
             </button>
@@ -194,18 +185,16 @@ export default function EngineerCases() {
             <button
               onClick={startDuty}
               disabled={dutyBusy}
-              className="min-h-11 px-5 py-2.5 text-sm font-semibold rounded-full bg-gradient-to-r from-pink-600 to-pink-500 text-white shadow-lg shadow-pink-900/30 hover:from-pink-500 hover:to-pink-400 transition-colors disabled:opacity-60"
+              className="min-h-11 px-4 py-2.5 text-sm rounded-lg bg-green-600 text-white disabled:opacity-60"
             >
               {/* Named, because getting a first fix outdoors can take a while and
                   a bare spinner reads as the app having hung. */}
               {dutyBusy ? "Getting location…" : "Start Duty"}
             </button>
           )}
-          </div>
         </div>
       </div>
 
-      <div className="px-4 space-y-4">
       {lastFix && (
         <p className="text-xs text-gray-500">
           Last location: {lastFix.latitude.toFixed(5)}, {lastFix.longitude.toFixed(5)}
@@ -259,35 +248,27 @@ export default function EngineerCases() {
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {cases.map((c) => (
-            <div key={c.id} className="rounded-2xl border border-border/70 bg-white p-4 shadow-sm space-y-3">
+            <div key={c.id} className="rounded-xl border bg-white p-4 shadow-sm space-y-2">
               <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="font-mono text-[11px] tracking-wide text-gray-400">{c.case_number}</p>
-                  <p className="font-semibold leading-snug mt-0.5">{c.title}</p>
+                <div>
+                  <p className="font-mono text-xs text-gray-400">{c.case_number}</p>
+                  <p className="font-semibold">{c.title}</p>
                 </div>
-                <span className={`text-[10px] font-semibold uppercase tracking-wide px-2 py-1 rounded-full shrink-0 ${PRIORITY_COLOR[c.priority] || ""}`}>
+                <span className={`text-xs px-2 py-0.5 rounded-full ${PRIORITY_COLOR[c.priority] || ""}`}>
                   {c.priority}
                 </span>
               </div>
 
-              <div className="text-sm text-gray-600 space-y-2">
-                <p className="flex items-center gap-2 font-medium text-gray-900">
-                  <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-indigo-50 text-indigo-600">
-                    <User className="h-3.5 w-3.5" />
-                  </span>
-                  {c.customer_name}
-                </p>
+              <div className="text-sm text-gray-600 space-y-1">
+                <p className="font-medium text-gray-800">👤 {c.customer_name}</p>
                 {/* Tappable, because the first thing an engineer does is ring
                     the customer and then navigate to them. */}
                 {c.customer_phone && (
                   <a
                     href={`tel:${c.customer_phone}`}
-                    className="flex items-center gap-2 min-h-11 font-medium text-indigo-700 hover:text-indigo-800"
+                    className="inline-flex items-center min-h-9 text-blue-600"
                   >
-                    <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-indigo-50 text-indigo-600">
-                      <Phone className="h-3.5 w-3.5" />
-                    </span>
-                    {c.customer_phone}
+                    📞 {c.customer_phone}
                   </a>
                 )}
                 {c.address && (
@@ -295,12 +276,9 @@ export default function EngineerCases() {
                     href={mapsUrl(c.address)}
                     target="_blank"
                     rel="noreferrer"
-                    className="flex items-start gap-2 min-h-11 text-indigo-700 hover:text-indigo-800"
+                    className="block text-blue-600"
                   >
-                    <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-indigo-50 text-indigo-600">
-                      <MapPin className="h-3.5 w-3.5" />
-                    </span>
-                    <span className="pt-1">{c.address}</span>
+                    📍 {c.address}
                   </a>
                 )}
                 {c.description && <p className="text-gray-500">{c.description}</p>}
@@ -309,7 +287,7 @@ export default function EngineerCases() {
               <CaseDetails details={c.details} />
 
               <div className="flex items-center justify-between">
-                <span className="text-[11px] font-semibold uppercase tracking-wide text-indigo-700">{STATUS_LABEL[c.status] || c.status}</span>
+                <span className="text-xs font-medium text-blue-700">{STATUS_LABEL[c.status] || c.status}</span>
                 {c.latitude != null && (
                   <button
                     onClick={() => openInMaps(c)}
@@ -373,7 +351,6 @@ export default function EngineerCases() {
           ))}
         </div>
       )}
-    </div>
     </div>
   );
 }
