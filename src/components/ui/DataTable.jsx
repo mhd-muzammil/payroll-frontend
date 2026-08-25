@@ -29,6 +29,9 @@ const DataTable = ({ columns, data, emptyMessage = "No records found." }) => {
             </tr>
           </thead>
           <tbody>
+            {/* render is called with (row, index): a column showing a row
+                number has no other way to know its position, and without the
+                index it rendered NaN in every cell. */}
             {data.length === 0 ? (
               <tr className="border-t border-border">
                 <td colSpan={columns.length} className="px-5 py-10 text-center text-sm text-muted-foreground">
@@ -40,7 +43,7 @@ const DataTable = ({ columns, data, emptyMessage = "No records found." }) => {
                 <tr key={i} className="border-t border-border hover:bg-muted/40 transition">
                   {columns.map((c) => (
                     <td key={c.key} className={`px-5 py-4 ${c.className || ""}`}>
-                      {c.render ? c.render(row) : row[c.key]}
+                      {c.render ? c.render(row, i) : row[c.key]}
                     </td>
                   ))}
                 </tr>
@@ -61,7 +64,7 @@ const DataTable = ({ columns, data, emptyMessage = "No records found." }) => {
             <div key={i} className="p-4 space-y-3">
               {primary && (
                 <div className="min-w-0">
-                  {primary.render ? primary.render(row) : row[primary.key]}
+                  {primary.render ? primary.render(row, i) : row[primary.key]}
                 </div>
               )}
 
@@ -73,7 +76,7 @@ const DataTable = ({ columns, data, emptyMessage = "No records found." }) => {
                         {c.label}
                       </dt>
                       <dd className="mt-0.5 text-sm break-words">
-                        {c.render ? c.render(row) : row[c.key]}
+                        {c.render ? c.render(row, i) : row[c.key]}
                       </dd>
                     </div>
                   ))}
@@ -86,7 +89,7 @@ const DataTable = ({ columns, data, emptyMessage = "No records found." }) => {
                 <div className="flex flex-wrap items-center gap-2 pt-1 [&_button]:h-10 [&_button]:min-w-10 [&_button]:px-3">
                   {actionColumns.map((c) => (
                     <div key={c.key} className="min-w-0">
-                      {c.render ? c.render(row) : row[c.key]}
+                      {c.render ? c.render(row, i) : row[c.key]}
                     </div>
                   ))}
                 </div>
