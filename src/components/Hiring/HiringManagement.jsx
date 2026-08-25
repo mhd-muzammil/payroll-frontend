@@ -91,6 +91,17 @@ export default function HiringManagement() {
 
   const [saving, setSaving] = useState(false);
 
+  // Spreadsheet import. Two steps on purpose: the first upload only reports what
+  // WOULD happen, because several hundred rows landing in the wrong columns is a
+  // day of work to undo by hand.
+  const [importOpen, setImportOpen] = useState(false);
+  const [importFile, setImportFile] = useState(null);
+  const [importSource, setImportSource] = useState("");
+  const [importPreview, setImportPreview] = useState(null);
+  const [importBusy, setImportBusy] = useState(false);
+  const [importError, setImportError] = useState("");
+  const [importDone, setImportDone] = useState(null);
+
   useEffect(() => {
     fetchCandidates();
   }, []);
@@ -259,6 +270,55 @@ export default function HiringManagement() {
     rejected: candidates.filter(c => c.action === "Rejected" || c.action === "Decline").length
   };
 
+  const runImport = async (commit) => {
+    if (!importFile) return;
+    setImportBusy(true);
+    setImportError("");
+    try {
+      const body = new FormData();
+      body.append("file", importFile);
+      if (importSource.trim()) body.append("source", importSource.trim());
+      if (commit) body.append("commit", "true");
+      const res = await api.post("/api/candidates/import-file/", body, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      if (commit) {
+        setImportDone(res.data);
+        setImportPreview(null);
+        await fetchCandidates();
+      } else {
+        setImportPreview(res.data);
+      }
+    } catch (err) {
+      setImportError(
+        err?.response?.data?.detail || "Could not read that file. Try an .xlsx or .csv export."
+      );
+    } finally {
+      setImportBusy(false);
+    }
+  };
+
+  const closeImport = () => {
+    setImportOpen(false);
+    setImportFile(null);
+    setImportSource("");
+    setImportPreview(null);
+    setImportError("");
+    setImportDone(null);
+  };
+
+  const pickImportFile = (file) => {
+    setImportFile(file || null);
+    setImportPreview(null);
+    setImportDone(null);
+    setImportError("");
+    // The file name is how HR already labels these lists, so it is the sensible
+    // default for "where did this person come from".
+    if (file && !importSource.trim()) {
+      setImportSource(file.name.replace(/\.[^.]+$/, ""));
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header Panel */}
@@ -272,14 +332,24 @@ export default function HiringManagement() {
             <p className="text-sm text-slate-300 mt-1">Track candidate profiles, salary structures, interviews, and verification documents.</p>
           </div>
         </div>
-        <Button 
-          variant="brand" 
-          onClick={handleOpenCreate} 
-          className="bg-white text-indigo-950 hover:bg-slate-100 font-semibold px-5 py-2.5 rounded-xl transition-all shadow-md shrink-0 flex items-center gap-2"
-        >
-          <Plus className="h-4 w-4 text-indigo-950" />
-          Add Candidate
-        </Button>
+        <div className="flex items-center gap-3 shrink-0">
+          <Button
+            variant="outline"
+            onClick={() => setImportOpen(true)}
+            className="bg-white/10 border-white/25 text-white hover:bg-white/20 font-semibold px-5 py-2.5 rounded-xl transition-all flex items-center gap-2"
+          >
+            <Upload className="h-4 w-4" />
+            Import Excel
+          </Button>
+          <Button
+            variant="brand"
+            onClick={handleOpenCreate}
+            className="bg-white text-indigo-950 hover:bg-slate-100 font-semibold px-5 py-2.5 rounded-xl transition-all shadow-md flex items-center gap-2"
+          >
+            <Plus className="h-4 w-4 text-indigo-950" />
+            Add Candidate
+          </Button>
+        </div>
       </div>
 
       {/* Statistics Cards */}
@@ -367,6 +437,21 @@ export default function HiringManagement() {
                     <Phone className="h-3 w-3 text-muted-foreground" />
                     {c.phone_number}
                   </div>
+                  {c.email && (
+                    <div className="text-xs text-muted-foreground truncate max-w-[190px] mt-0.5" title={c.email}>
+                      {c.email}
+                    </div>
+                  )}
+                  {c.source && (
+                    <div className="mt-1">
+                      {/* Where this person came from. With hundreds of imported
+                          leads sitting next to a campus list, an unlabelled
+                          portal is one undifferentiated pile. */}
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold bg-indigo-50 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-400 border border-indigo-200/50">
+                        {c.source}
+                      </span>
+                    </div>
+                  )}
                 </div>
               )
             },
@@ -710,6 +795,191 @@ export default function HiringManagement() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Spreadsheet import. Preview first, then commit — several hundred rows in
+          the wrong columns is a day of work to undo by hand, so nothing is
+          written until the numbers below have been read. */}
+      <Dialog open={importOpen} onOpenChange={(open) => (open ? setImportOpen(true) : closeImport())}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Upload className="h-5 w-5" />
+              Import candidates from a spreadsheet
+            </DialogTitle>
+            <DialogDescription>
+              Any .xlsx or .csv list of candidates — a college list, a Facebook lead export, a
+              WorkIndia download. Columns are matched by their heading, so the file needs no
+              particular layout, and anything without a column of its own is kept in Remarks.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div>
+              <Label className="mb-1.5 block">File</Label>
+              <input
+                type="file"
+                accept=".xlsx,.xlsm,.csv,.txt"
+                onChange={(e) => pickImportFile(e.target.files?.[0])}
+                className="block w-full text-sm rounded-xl border border-border bg-background px-3 py-2 file:mr-3 file:rounded-lg file:border-0 file:bg-indigo-50 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-indigo-700"
+              />
+            </div>
+
+            <div>
+              <Label className="mb-1.5 block">Where these came from</Label>
+              <Input
+                value={importSource}
+                onChange={(e) => setImportSource(e.target.value)}
+                placeholder="Prince College / FB Leads Aug 2026 / WorkIndia"
+              />
+              <p className="mt-1 text-xs text-muted-foreground">
+                Saved on every candidate from this file, so a paid lead and a campus walk-in stay
+                possible to tell apart later.
+              </p>
+            </div>
+
+            {importError && (
+              <div className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
+                <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+                <span>{importError}</span>
+              </div>
+            )}
+
+            {importDone && (
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
+                <div className="flex items-center gap-2 font-semibold">
+                  <CheckCircle className="h-4 w-4" />
+                  Imported {importDone.created} candidate(s)
+                </div>
+                {importDone.already_in_portal > 0 && (
+                  <p className="mt-1">
+                    {importDone.already_in_portal} were already in the portal and were left alone.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {importPreview && (
+              <div className="rounded-xl border border-border bg-muted/20 p-4 space-y-3 text-sm">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div>
+                    <div className="text-2xl font-bold text-emerald-600">{importPreview.new}</div>
+                    <div className="text-xs text-muted-foreground">will be added</div>
+                  </div>
+                  <div>
+                    <div className="text-2xl font-bold text-muted-foreground">
+                      {importPreview.already_in_portal}
+                    </div>
+                    <div className="text-xs text-muted-foreground">already here</div>
+                  </div>
+                  <div>
+                    <div className="text-2xl font-bold text-amber-600">
+                      {importPreview.duplicate_in_file_count}
+                    </div>
+                    <div className="text-xs text-muted-foreground">repeated in file</div>
+                  </div>
+                  <div>
+                    <div className="text-2xl font-bold text-rose-600">
+                      {importPreview.rejected_count}
+                    </div>
+                    <div className="text-xs text-muted-foreground">no usable number</div>
+                  </div>
+                </div>
+
+                {importPreview.sheets_read?.length > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    Read: {importPreview.sheets_read.join(", ")}
+                    {importPreview.sheets_skipped?.length > 0 &&
+                      " — skipped " +
+                        importPreview.sheets_skipped.length +
+                        " sheet(s) with no name/phone column"}
+                  </p>
+                )}
+
+                {importPreview.suspicious_salaries > 0 && (
+                  <p className="text-xs text-amber-700">
+                    {importPreview.suspicious_salaries} row(s) have a salary under 1,000 — likely
+                    written in thousands. Kept exactly as the sheet had it rather than guessed at;
+                    worth checking after importing.
+                  </p>
+                )}
+
+                {importPreview.unmapped_columns?.length > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    Kept in Remarks: {importPreview.unmapped_columns.slice(0, 8).join(", ")}
+                    {importPreview.unmapped_columns.length > 8 && " …"}
+                  </p>
+                )}
+
+                {importPreview.sample?.length > 0 && (
+                  <div className="rounded-lg border border-border/60 bg-background overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead className="bg-muted/40 text-muted-foreground">
+                        <tr>
+                          <th className="text-left px-3 py-2">Name</th>
+                          <th className="text-left px-3 py-2">Phone</th>
+                          <th className="text-left px-3 py-2">Qualification</th>
+                          <th className="text-left px-3 py-2">Location</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {importPreview.sample.map((c) => (
+                          <tr key={c.phone_number} className="border-t border-border/50">
+                            <td className="px-3 py-2 font-medium">{c.name}</td>
+                            <td className="px-3 py-2">{c.phone_number}</td>
+                            <td className="px-3 py-2">{c.qualification || "—"}</td>
+                            <td className="px-3 py-2">{c.present_address || "—"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    <p className="px-3 py-2 text-[11px] text-muted-foreground border-t border-border/50">
+                      First few of {importPreview.new}. Nothing has been saved yet.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="border-t border-border/60 pt-4 flex gap-2">
+            <Button type="button" variant="outline" onClick={closeImport}>
+              {importDone ? "Close" : "Cancel"}
+            </Button>
+            {!importDone && !importPreview && (
+              <Button
+                type="button"
+                variant="brand"
+                disabled={!importFile || importBusy}
+                onClick={() => runImport(false)}
+              >
+                {importBusy ? (
+                  <span className="flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" /> Checking the file…
+                  </span>
+                ) : (
+                  "Check the file"
+                )}
+              </Button>
+            )}
+            {!importDone && importPreview && (
+              <Button
+                type="button"
+                variant="brand"
+                disabled={importBusy || importPreview.new === 0}
+                onClick={() => runImport(true)}
+              >
+                {importBusy ? (
+                  <span className="flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" /> Importing…
+                  </span>
+                ) : (
+                  "Import " + importPreview.new + " candidate(s)"
+                )}
+              </Button>
+            )}
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
