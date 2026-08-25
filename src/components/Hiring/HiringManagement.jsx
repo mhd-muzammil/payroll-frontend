@@ -101,6 +101,14 @@ export default function HiringManagement() {
   const [importBusy, setImportBusy] = useState(false);
   const [importError, setImportError] = useState("");
   const [importDone, setImportDone] = useState(null);
+  // Off by default. Filling blanks touches records already being worked in, so
+  // it is asked for rather than assumed.
+  const [importFillBlanks, setImportFillBlanks] = useState(false);
+
+  // The candidate being read. Imported rows carry a lot that the table has no
+  // column for — a resume link, a gender, a college year — and it all lands in
+  // Remarks. Without somewhere to read it, it may as well not have been imported.
+  const [viewing, setViewing] = useState(null);
 
   useEffect(() => {
     fetchCandidates();
@@ -278,6 +286,7 @@ export default function HiringManagement() {
       const body = new FormData();
       body.append("file", importFile);
       if (importSource.trim()) body.append("source", importSource.trim());
+      if (importFillBlanks) body.append("update_existing", "true");
       if (commit) body.append("commit", "true");
       const res = await api.post("/api/candidates/import-file/", body, {
         headers: { "Content-Type": "multipart/form-data" },
@@ -298,6 +307,13 @@ export default function HiringManagement() {
     }
   };
 
+  const toggleFillBlanks = (checked) => {
+    setImportFillBlanks(checked);
+    // The preview was computed under the other setting, so it no longer
+    // describes what Import would do. Make them check again.
+    setImportPreview(null);
+  };
+
   const closeImport = () => {
     setImportOpen(false);
     setImportFile(null);
@@ -305,6 +321,7 @@ export default function HiringManagement() {
     setImportPreview(null);
     setImportError("");
     setImportDone(null);
+    setImportFillBlanks(false);
   };
 
   const pickImportFile = (file) => {
@@ -561,6 +578,13 @@ export default function HiringManagement() {
               label: "",
               render: (c) => (
                 <div className="flex items-center justify-end gap-1">
+                  <button
+                    onClick={() => setViewing(c)}
+                    className="h-8 px-2.5 rounded-lg border border-border hover:bg-muted text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                    title="View all details"
+                  >
+                    Details
+                  </button>
                   <button 
                     onClick={() => handleOpenEdit(c)}
                     className="grid h-8 w-8 place-items-center rounded-lg border border-border hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
@@ -798,6 +822,152 @@ export default function HiringManagement() {
         </DialogContent>
       </Dialog>
 
+      {/* Everything on one candidate, read-only. */}
+      <Dialog open={!!viewing} onOpenChange={(open) => !open && setViewing(null)}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 flex-wrap">
+              {viewing?.name}
+              {viewing?.source && (
+                <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold bg-indigo-50 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-400 border border-indigo-200/50">
+                  {viewing.source}
+                </span>
+              )}
+              <Badge className={`text-[10px] font-bold uppercase py-0.5 px-2 rounded-md ${actionBadgeStyles[viewing?.action] || ""}`}>
+                {viewing?.action}
+              </Badge>
+            </DialogTitle>
+            <DialogDescription>
+              Everything recorded for this candidate, including whatever the imported sheet carried
+              that has no column of its own.
+            </DialogDescription>
+          </DialogHeader>
+
+          {viewing && (
+            <div className="space-y-5">
+              <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">
+                {[
+                  ["Phone", viewing.phone_number],
+                  ["Email", viewing.email],
+                  ["Qualification", viewing.qualification],
+                  ["Experience", (viewing.years_of_experience ?? 0) + " years"],
+                  ["Segment", viewing.segment],
+                  ["Present address", viewing.present_address],
+                  ["Permanent address", viewing.permanent_address],
+                  ["Previous company", viewing.previous_company],
+                  ["Last salary", "\u20b9" + (viewing.last_salary ?? 0)],
+                  ["Expecting", "\u20b9" + (viewing.expecting_salary ?? 0)],
+                ].map(([label, value]) => (
+                  <div key={label} className="min-w-0">
+                    <dt className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      {label}
+                    </dt>
+                    <dd className="mt-0.5 break-words">{value || "\u2014"}</dd>
+                  </div>
+                ))}
+              </dl>
+
+              {/* Remarks arrive as "Heading: value" lines from the import, so they
+                  are laid out as such and links are made clickable — a WorkIndia
+                  row carries the candidate's actual resume URL in here. */}
+              {viewing.remarks && (
+                <div>
+                  <h4 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+                    From the sheet / notes
+                  </h4>
+                  <div className="rounded-xl border border-border bg-muted/20 divide-y divide-border/60">
+                    {String(viewing.remarks)
+                      .split("\n")
+                      .filter((line) => line.trim())
+                      .map((line, i) => {
+                        const at = line.indexOf(": ");
+                        const hasLabel = at > 0 && at < 40;
+                        const label = hasLabel ? line.slice(0, at) : "";
+                        const value = hasLabel ? line.slice(at + 2) : line;
+                        const isLink = /^https?:\/\//i.test(value.trim());
+                        return (
+                          <div key={i} className="px-3 py-2 text-sm flex flex-col sm:flex-row sm:gap-3">
+                            {label && (
+                              <span className="text-xs font-semibold text-muted-foreground sm:w-44 shrink-0">
+                                {label}
+                              </span>
+                            )}
+                            {isLink ? (
+                              <a
+                                href={value.trim()}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-indigo-600 hover:underline break-all inline-flex items-center gap-1"
+                              >
+                                Open <ExternalLink className="h-3 w-3" />
+                              </a>
+                            ) : (
+                              <span className="break-words">{value}</span>
+                            )}
+                          </div>
+                        );
+                      })}
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <h4 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+                  Uploaded proofs
+                </h4>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    ["Resume", viewing.resume],
+                    ["Salary slip", viewing.salary_slip],
+                    ["Offer letter", viewing.offer_letter],
+                    ["Bank statement", viewing.bank_statement],
+                  ].filter(([, url]) => url).length === 0 ? (
+                    <span className="text-sm text-muted-foreground">None uploaded.</span>
+                  ) : (
+                    [
+                      ["Resume", viewing.resume],
+                      ["Salary slip", viewing.salary_slip],
+                      ["Offer letter", viewing.offer_letter],
+                      ["Bank statement", viewing.bank_statement],
+                    ]
+                      .filter(([, url]) => url)
+                      .map(([label, url]) => (
+                        <a
+                          key={label}
+                          href={url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-xs font-medium hover:bg-muted"
+                        >
+                          <FileText className="h-3.5 w-3.5" />
+                          {label}
+                        </a>
+                      ))
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="border-t border-border/60 pt-4 flex gap-2">
+            <Button type="button" variant="outline" onClick={() => setViewing(null)}>
+              Close
+            </Button>
+            <Button
+              type="button"
+              variant="brand"
+              onClick={() => {
+                const candidate = viewing;
+                setViewing(null);
+                handleOpenEdit(candidate);
+              }}
+            >
+              Edit
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Spreadsheet import. Preview first, then commit — several hundred rows in
           the wrong columns is a day of work to undo by hand, so nothing is
           written until the numbers below have been read. */}
@@ -839,6 +1009,23 @@ export default function HiringManagement() {
               </p>
             </div>
 
+            <label className="flex items-start gap-3 rounded-xl border border-border bg-muted/20 p-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={importFillBlanks}
+                onChange={(e) => toggleFillBlanks(e.target.checked)}
+                className="mt-0.5 h-4 w-4 rounded border-border"
+              />
+              <span className="text-sm">
+                <span className="font-medium">Fill in blanks for people already in the portal</span>
+                <span className="block text-xs text-muted-foreground mt-0.5">
+                  For when a column was missing the first time — add the locations to the sheet and
+                  send it again. Only EMPTY fields are filled: anything already in the portal, and
+                  anyone’s status, is left exactly as it is.
+                </span>
+              </span>
+            </label>
+
             {importError && (
               <div className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
                 <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
@@ -852,9 +1039,13 @@ export default function HiringManagement() {
                   <CheckCircle className="h-4 w-4" />
                   Imported {importDone.created} candidate(s)
                 </div>
+                {importDone.updated > 0 && (
+                  <p className="mt-1">Filled in {importDone.updated} blank field(s) on existing candidates.</p>
+                )}
                 {importDone.already_in_portal > 0 && (
                   <p className="mt-1">
-                    {importDone.already_in_portal} were already in the portal and were left alone.
+                    {importDone.already_in_portal} were already in the portal
+                    {importDone.updated > 0 ? "." : " and were left alone."}
                   </p>
                 )}
               </div>
@@ -886,6 +1077,18 @@ export default function HiringManagement() {
                     <div className="text-xs text-muted-foreground">no usable number</div>
                   </div>
                 </div>
+
+                {importFillBlanks && (
+                  <p className="text-xs text-indigo-700">
+                    {importPreview.will_fill > 0
+                      ? importPreview.will_fill +
+                        " blank field(s) will be filled on people already here" +
+                        (importPreview.fill_fields?.length
+                          ? " (" + importPreview.fill_fields.join(", ") + ")"
+                          : "")
+                      : "No blanks to fill \u2014 the portal already has everything this sheet does."}
+                  </p>
+                )}
 
                 {importPreview.sheets_read?.length > 0 && (
                   <p className="text-xs text-muted-foreground">
@@ -967,7 +1170,7 @@ export default function HiringManagement() {
               <Button
                 type="button"
                 variant="brand"
-                disabled={importBusy || importPreview.new === 0}
+                disabled={importBusy || (importPreview.new === 0 && !(importPreview.will_fill > 0))}
                 onClick={() => runImport(true)}
               >
                 {importBusy ? (
@@ -975,7 +1178,9 @@ export default function HiringManagement() {
                     <Loader2 className="h-4 w-4 animate-spin" /> Importing…
                   </span>
                 ) : (
-                  "Import " + importPreview.new + " candidate(s)"
+                  importPreview.new > 0
+                    ? "Import " + importPreview.new + " candidate(s)"
+                    : "Fill " + importPreview.will_fill + " blank field(s)"
                 )}
               </Button>
             )}
