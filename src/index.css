@@ -61,10 +61,7 @@
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
-  /* The deep stop of --gradient-brand below. This was near-black while the
-     brand purple sat unused in --primary-glow, so every default button, focus
-     ring, text-primary and default badge in the app rendered grey. */
-  --primary: #6D28D9;
+  --primary: oklch(0.205 0 0);
   --primary-foreground: oklch(0.985 0 0);
   --primary-glow: oklch(0.7 0.2 295);
   --secondary: oklch(0.97 0 0);
@@ -80,7 +77,7 @@
   --info: oklch(0.72 0.13 210);
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
-  --ring: #8B5CF6;
+  --ring: oklch(0.708 0 0);
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-border: oklch(0.922 0 0);
@@ -88,12 +85,9 @@
   --gradient-primary: linear-gradient(135deg, oklch(0.62 0.22 290), oklch(0.7 0.2 295));
   --gradient-brand: linear-gradient(135deg, #7C4DFF 0%, #8B5CF6 50%, #6D28D9 100%);
   --gradient-surface: linear-gradient(180deg, oklch(1 0 0 / 0.6), oklch(1 0 0 / 0.3));
-  /* These three were `none`, so shadow-glow and glass-card's box-shadow — both
-     already applied across the app — painted nothing. Given real values, every
-     card lifts off the page and the brand button carries its glow. */
-  --shadow-glow: 0 8px 24px -6px rgb(124 77 255 / 0.45);
-  --shadow-card: 0 1px 2px rgb(16 12 40 / 0.04), 0 10px 26px -14px rgb(16 12 40 / 0.12);
-  --shadow-elevated: 0 2px 4px rgb(16 12 40 / 0.05), 0 18px 42px -18px rgb(16 12 40 / 0.20);
+  --shadow-glow: none;
+  --shadow-card: none;
+  --shadow-elevated: none;
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
@@ -113,11 +107,8 @@
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.205 0 0);
   --popover-foreground: oklch(0.985 0 0);
-  /* Lighter than the light-mode stop so it reads on a dark surface — and the
-     foreground flips to white, which it could not be while primary was
-     near-white itself. */
-  --primary: #8B5CF6;
-  --primary-foreground: oklch(0.99 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
   --primary-glow: oklch(0.78 0.18 295);
   --secondary: oklch(0.269 0 0);
   --secondary-foreground: oklch(0.985 0 0);
@@ -132,15 +123,15 @@
   --info: oklch(0.75 0.14 210);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
-  --ring: #A78BFA;
+  --ring: oklch(0.556 0 0);
   --sidebar: oklch(0.205 0 0);
   --sidebar-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
 
   --gradient-surface: linear-gradient(180deg, oklch(1 0 0 / 0.04), oklch(1 0 0 / 0.01));
-  --shadow-glow: 0 8px 26px -6px rgb(139 92 246 / 0.50);
-  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.40), 0 12px 30px -16px rgb(0 0 0 / 0.60);
-  --shadow-elevated: 0 2px 6px rgb(0 0 0 / 0.45), 0 22px 48px -20px rgb(0 0 0 / 0.70);
+  --shadow-glow: none;
+  --shadow-card: none;
+  --shadow-elevated: none;
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
