@@ -5,6 +5,7 @@ import { Avatar } from "@/components/ui/avatar";
 import {
   Banknote,
   Fuel,
+  Receipt,
   CircleDollarSign,
   MessageSquareWarning,
   Plus,
@@ -23,11 +24,24 @@ import { getUserRole, ROLES } from "../../auth/rbac";
 const TYPES = [
   { value: "salary_advance", label: "Salary advance", icon: Banknote, needsAmount: true },
   { value: "petrol_advance", label: "Petrol advance", icon: Fuel, needsAmount: true },
+  // Money already spent out of pocket and claimed back, as against an advance
+  // asked for up front. Same conversation, same approval, different question.
+  {
+    value: "expense",
+    label: "Expense claim",
+    icon: Receipt,
+    needsAmount: true,
+    amountLabel: "Amount spent (₹)",
+    reasonPlaceholder: "Bus fare to the Coimbatore site, ₹340 — bill attached below",
+  },
   { value: "other_amount", label: "Other amount", icon: CircleDollarSign, needsAmount: true },
   { value: "report", label: "Report / message", icon: MessageSquareWarning, needsAmount: false },
 ];
 
-const typeMeta = (value) => TYPES.find((t) => t.value === value) || TYPES[3];
+// A type the backend knows but this list does not must not fall through to
+// whichever entry happens to sit at an index, so name the fallback.
+const REPORT_META = TYPES[TYPES.length - 1];
+const typeMeta = (value) => TYPES.find((t) => t.value === value) || REPORT_META;
 
 const STATUS_VARIANT = { Pending: "warning", Approved: "success", Rejected: "destructive" };
 
@@ -178,7 +192,7 @@ export default function RequestsManagement() {
         title={isEmployee ? "My Requests" : "Employee Requests"}
         description={
           isEmployee
-            ? "Ask for a salary or petrol advance, or report something to the office."
+            ? "Ask for an advance, claim an expense you paid for, or report something to the office."
             : "Advance and report requests raised by employees. Approving records the decision — the payroll deduction is still entered on the employee record."
         }
         actions={
@@ -219,7 +233,7 @@ export default function RequestsManagement() {
 
       {showForm && (
         <form onSubmit={submit} className="mb-6 rounded-2xl border border-border bg-card p-5 space-y-4">
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
             {TYPES.map((t) => (
               <button
                 type="button"
@@ -239,7 +253,7 @@ export default function RequestsManagement() {
 
           {activeType.needsAmount && (
             <div>
-              <label className="text-sm font-medium">Amount (₹)</label>
+              <label className="text-sm font-medium">{activeType.amountLabel || "Amount (₹)"}</label>
               <input
                 type="number"
                 min="1"
@@ -263,7 +277,10 @@ export default function RequestsManagement() {
               value={form.reason}
               onChange={(e) => setForm((f) => ({ ...f, reason: e.target.value }))}
               className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
-              placeholder={activeType.needsAmount ? "Medical expense at home" : "Describe what happened"}
+              placeholder={
+                activeType.reasonPlaceholder ||
+                (activeType.needsAmount ? "Medical expense at home" : "Describe what happened")
+              }
             />
           </div>
 
