@@ -192,19 +192,30 @@ const LeaveManagement = () => {
   }, [safeRequests, selectedRegion]);
 
   const columns = [
-    {
-      key: "employee_name",
-      label: "Employee",
-      render: (record) => (
-        <div className="flex items-center gap-3">
-          <Avatar name={record.employee_name || "Unknown"} />
-          <div>
-             <div className="text-sm font-medium">{record.employee_name || "Unknown"}</div>
-             <div className="text-xs text-muted-foreground">Applied: {new Date(record.applied_on).toLocaleDateString()}</div>
-          </div>
-        </div>
-      )
-    },
+    // Whose request it is only matters to the reviewer. On your own list every
+    // row is you, so the name and the face are a column of the same answer —
+    // the date you applied is the part you actually came for.
+    isAdmin
+      ? {
+          key: "employee_name",
+          label: "Employee",
+          render: (record) => (
+            <div className="flex items-center gap-3">
+              <Avatar name={record.employee_name || "Unknown"} />
+              <div>
+                 <div className="text-sm font-medium">{record.employee_name || "Unknown"}</div>
+                 <div className="text-xs text-muted-foreground">Applied: {new Date(record.applied_on).toLocaleDateString()}</div>
+              </div>
+            </div>
+          )
+        }
+      : {
+          key: "applied_on",
+          label: "Applied",
+          render: (record) => (
+            <span className="text-sm">{new Date(record.applied_on).toLocaleDateString()}</span>
+          )
+        },
     {
       key: "type",
       label: "Type",
@@ -214,7 +225,9 @@ const LeaveManagement = () => {
          </Badge>
       )
     },
-    {
+    // Which branch a request came from is how a reviewer sorts a pile of them.
+    // On your own list it is your own branch, on every row.
+    isAdmin && {
       key: "region",
       label: "Region",
       render: (record) => <span className="text-sm font-medium">{record.branch || "Not Assigned"}</span>
@@ -318,7 +331,10 @@ const LeaveManagement = () => {
          <StatsCard label="Rejected" value={stats.rejected} icon={XCircle} accent="danger" />
       </div>
 
-      {/* Region-Wise Leave Distribution */}
+      {/* Region-Wise Leave Distribution — a branch-by-branch breakdown of the
+          company is the reviewer's view. Someone applying for their own leave
+          was being shown six regions of zeroes that say nothing about them. */}
+      {isAdmin && (
       <div className="bg-card border border-border/60 rounded-3xl p-6 shadow-xs mb-6">
         <div className="flex items-center gap-2 mb-4">
           <MapPin className="h-5 w-5 text-primary" />
@@ -352,6 +368,7 @@ const LeaveManagement = () => {
           })}
         </div>
       </div>
+      )}
 
       {showForm && (
          // A fixed overlay contributes no scroll to the document, so a panel
@@ -425,13 +442,19 @@ const LeaveManagement = () => {
          </div>
       )}
 
-      <DataTable data={filteredRequests} columns={columns} loading={loading} />
-      
-      {!loading && safeRequests.length === 0 && (
-         <div className="mt-4 p-8 border border-dashed rounded-2xl text-center text-muted-foreground">
-            No leave requests found.
-         </div>
-      )}
+      {/* One empty state, not two: DataTable already draws its own, so an empty
+          list was answering the question twice — "No records found." directly
+          above "No leave requests found." */}
+      <DataTable
+        data={filteredRequests}
+        columns={columns}
+        loading={loading}
+        emptyMessage={
+          isAdmin
+            ? "No leave requests to review."
+            : "You have not applied for any leave or permission yet."
+        }
+      />
     </div>
   );
 };

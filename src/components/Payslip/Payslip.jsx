@@ -3,6 +3,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import PageHeader from "../ui/PageHeader";
+import { getUserRole, ROLES } from "../../auth/rbac";
 import Toolbar from "../ui/Toolbar";
 import DataTable from "../ui/DataTable";
 import { Download, Eye, Sparkles, Loader2, Printer, MapPin, Users, Mail, Search, Play, RefreshCw, Calendar } from "lucide-react";
@@ -67,7 +68,11 @@ const PayslipsPage = () => {
   const [selectedRegion, setSelectedRegion] = useState("");
 
   // New States for Employee List and Month/Year generation
-  const [activeTab, setActiveTab] = useState("generate"); // "generate" | "history"
+  // An engineer has no business on the generation side of this screen: there is
+  // nothing here for them to run, and the controls for running it read as
+  // theirs. Their payslips ARE the history, so that is where they start and stay.
+  const isEmployee = getUserRole() === ROLES.EMPLOYEE;
+  const [activeTab, setActiveTab] = useState(isEmployee ? "history" : "generate"); // "generate" | "history"
   const [employees, setEmployees] = useState([]);
   const [employeesLoading, setEmployeesLoading] = useState(true);
   const [monthSlips, setMonthSlips] = useState([]);
@@ -601,11 +606,16 @@ const PayslipsPage = () => {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Payslips"
-        description="Generate, preview and distribute employee payslips."
+        title={isEmployee ? "My Payslips" : "Payslips"}
+        description={
+          isEmployee
+            ? "Your payslips, as they were issued. Open one to read it or save a copy."
+            : "Generate, preview and distribute employee payslips."
+        }
       />
 
-      {/* Tab Switcher */}
+      {/* Tab Switcher — there is only one side of this screen for an engineer. */}
+      {!isEmployee && (
       <div className="flex rounded-2xl overflow-hidden bg-muted/40 p-1.5 max-w-md border border-border flex-1 min-w-[280px]">
         <button
           onClick={() => setActiveTab("generate")}
@@ -628,8 +638,11 @@ const PayslipsPage = () => {
           Payslip History
         </button>
       </div>
+      )}
 
-      {/* Region-Wise Payslip/Employee Distribution */}
+      {/* Region-Wise Payslip/Employee Distribution — a breakdown of the whole
+          company is HR's view of payroll, not one engineer's own payslips. */}
+      {!isEmployee && (
       <div className="bg-card border border-border/60 rounded-3xl p-6 shadow-xs">
         <div className="flex items-center gap-2 mb-4">
           <MapPin className="h-5 w-5 text-primary" />
@@ -686,6 +699,7 @@ const PayslipsPage = () => {
           })}
         </div>
       </div>
+      )}
 
       {activeTab === "generate" ? (
         <>
@@ -851,7 +865,9 @@ const PayslipsPage = () => {
           <div className="flex flex-wrap items-center justify-between gap-4 bg-card border border-border/60 rounded-3xl p-5 shadow-xs">
             <div className="flex items-center gap-2">
               <Users className="h-5 w-5 text-muted-foreground" />
-              <span className="text-sm font-semibold text-foreground">Historical Payroll Records</span>
+              <span className="text-sm font-semibold text-foreground">
+                {isEmployee ? "Your payslips" : "Historical Payroll Records"}
+              </span>
             </div>
 
             <div className="relative w-full sm:w-[260px]">
@@ -859,7 +875,7 @@ const PayslipsPage = () => {
               <input
                 value={historyQuery}
                 onChange={(e) => setHistoryQuery(e.target.value)}
-                placeholder="Search history by name/code/month..."
+                placeholder={isEmployee ? "Search by month..." : "Search history by name/code/month..."}
                 className="h-10 w-full rounded-xl border border-border bg-background pl-9 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
               />
             </div>
@@ -876,30 +892,38 @@ const PayslipsPage = () => {
               data={filteredSlips}
               emptyMessage="No payslip history found."
               columns={[
+                // Whose payslip it is, and which branch it came from, are how HR
+                // reads a page of them. On your own list every row carries your
+                // name, your email and your branch — the same three answers, over
+                // and over, taking the width the month and the amount want.
+                isEmployee
+                  ? null
+                  : {
+                      key: "name",
+                      label: "Employee",
+                      render: (s) => (
+                        <div className="flex items-center gap-3">
+                          <Avatar name={s.employee_details?.employee_name || "Emp"} />
+                          <div>
+                            <div className="text-sm font-medium">{s.employee_details?.employee_name || "Unknown"}</div>
+                            <div className="text-[11px] text-muted-foreground truncate max-w-[200px]">{s.employee_details?.email || "no email"}</div>
+                            <div className="text-xs text-muted-foreground">{s.employee_details?.role || "N/A"}</div>
+                          </div>
+                        </div>
+                      ),
+                    },
                 {
-                  key: "name", 
-                  label: "Employee",
-                  render: (s) => (
-                    <div className="flex items-center gap-3">
-                      <Avatar name={s.employee_details?.employee_name || "Emp"} />
-                      <div>
-                        <div className="text-sm font-medium">{s.employee_details?.employee_name || "Unknown"}</div>
-                        <div className="text-[11px] text-muted-foreground truncate max-w-[200px]">{s.employee_details?.email || "no email"}</div>
-                        <div className="text-xs text-muted-foreground">{s.employee_details?.role || "N/A"}</div>
-                      </div>
-                    </div>
-                  ),
+                  key: "period",
+                  label: "Period",
+                  render: (s) => <span className="text-sm font-medium">{getMonthLabel(s.month).substring(0, 3)} {s.year}</span>
                 },
-                { 
-                  key: "period", 
-                  label: "Period", 
-                  render: (s) => <span className="text-sm font-medium">{getMonthLabel(s.month).substring(0, 3)} {s.year}</span> 
-                },
-                { 
-                  key: "region", 
-                  label: "Region", 
-                  render: (s) => <span className="text-sm font-medium text-foreground">{s.employee_details?.branch || "Not Assigned"}</span> 
-                },
+                isEmployee
+                  ? null
+                  : {
+                      key: "region",
+                      label: "Region",
+                      render: (s) => <span className="text-sm font-medium text-foreground">{s.employee_details?.branch || "Not Assigned"}</span>
+                    },
                 { 
                   key: "amount", 
                   label: "Net Salary", 
@@ -931,10 +955,13 @@ const PayslipsPage = () => {
                       >
                         <Eye className="h-4 w-4 text-muted-foreground" />
                       </button>
-                      <button 
+                      {/* Emailing a payslip out is HR's action, sent from the
+                          company. An engineer reads and downloads their own. */}
+                      {!isEmployee && (
+                      <button
                         onClick={() => handleEmailPayslip(s)}
                         disabled={emailingSlipId === s.id}
-                        title="Send Email" 
+                        title="Send Email"
                         className="grid h-8 w-8 place-items-center rounded-lg border border-border hover:bg-muted transition-colors cursor-pointer disabled:opacity-50"
                       >
                         {emailingSlipId === s.id ? (
@@ -943,6 +970,7 @@ const PayslipsPage = () => {
                           <Mail className="h-4 w-4 text-muted-foreground" />
                         )}
                       </button>
+                      )}
                       <button 
                         onClick={() => setSelectedSlip(s)}
                         title="Download/Print" 
@@ -953,7 +981,7 @@ const PayslipsPage = () => {
                     </div>
                   ),
                 },
-              ]}
+              ].filter(Boolean)}
             />
           )}
         </>
