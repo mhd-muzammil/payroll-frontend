@@ -18,14 +18,15 @@ import {
   UserCheck,
   Laptop,
   PhoneCall,
-  HandCoins
+  HandCoins,
+  MoreHorizontal
 } from "lucide-react";
 import { ROLES, clearAuth, getUserRole, normalizeRole, canAccessSection } from "@/auth/rbac";
 
 const nav = [
-  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { to: "/dashboard", label: "Dashboard", short: "Home", icon: LayoutDashboard },
   { to: "/users", label: "Users", icon: Users, roles: [ROLES.SUPER_ADMIN, ROLES.ADMIN] },
-  { to: "/hiring", label: "Hiring Portal", icon: UserCheck },
+  { to: "/hiring", label: "Hiring Portal", short: "Hiring", icon: UserCheck },
   { to: "/onboarding", label: "Onboarding", icon: UserPlus },
   { to: "/employees", label: "Employees", icon: Users },
   { to: "/tasks", label: "Tasks", icon: ClipboardList },
@@ -33,7 +34,7 @@ const nav = [
   { to: "/attendance", label: "Attendance", icon: CalendarCheck },
   { to: "/payroll", label: "Payroll", icon: Wallet },
   { to: "/payslips", label: "Payslips", icon: FileText },
-  { to: "/leaves", label: "Leave & Permissions", icon: CalendarDays },
+  { to: "/leaves", label: "Leave & Permissions", short: "Leave", icon: CalendarDays },
   { to: "/requests", label: "Requests", icon: HandCoins, roles: [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.HR, ROLES.EMPLOYEE] },
   { to: "/performance", label: "Performance", icon: TrendingUp },
   { to: "/assets", label: "Assets", icon: Laptop },
@@ -43,6 +44,26 @@ const nav = [
 ];
 
 const defaultRoles = [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.HR];
+
+// Four tabs is what fits under a thumb; the rest stays behind More. An engineer
+// on site opens different things from an admin at a desk, so they get different
+// four. Anything not visible to the role falls out and the list tops up from
+// whatever else that role can see, so the bar is never short.
+const MOBILE_TABS = {
+  employee: ["/dashboard", "/cases", "/attendance", "/requests"],
+  staff: ["/dashboard", "/employees", "/payslips", "/requests"],
+};
+
+function pickMobileTabs(visibleNav, role) {
+  const preferred = role === ROLES.EMPLOYEE ? MOBILE_TABS.employee : MOBILE_TABS.staff;
+  const byPath = new Map(visibleNav.map((item) => [item.to, item]));
+  const tabs = preferred.map((to) => byPath.get(to)).filter(Boolean);
+  for (const item of visibleNav) {
+    if (tabs.length >= 4) break;
+    if (!tabs.includes(item)) tabs.push(item);
+  }
+  return tabs.slice(0, 4);
+}
 
 const navWithRoles = nav.map((item) => {
   if (
@@ -73,6 +94,11 @@ export function Sidebar({ collapsed, setCollapsed, mobileOpen, setMobileOpen }) 
     // apart — the link showed but the route bounced straight back.
     return canAccessSection(section);
   });
+
+  const mobileTabs = pickMobileTabs(visibleNav, role);
+  // Where you are, when it is not one of the four: More carries the highlight
+  // rather than nothing carrying it.
+  const onATab = mobileTabs.some((item) => path.startsWith(item.to));
 
   const content = (mobile = false) => (
     <div className="flex h-full flex-col gap-2 p-4">
@@ -185,6 +211,60 @@ export function Sidebar({ collapsed, setCollapsed, mobileOpen, setMobileOpen }) 
           </>
         )}
       </AnimatePresence>
+
+      {/* Bottom tab bar. A drawer behind a hamburger is a website's answer to
+          navigation; inside the APK this is an app, and the handful of screens
+          someone actually opens belong one thumb-reach away. Everything else
+          is still there, behind More, which opens the same drawer. */}
+      <nav
+        className="lg:hidden fixed bottom-0 inset-x-0 z-30 glass border-t border-border/60"
+        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+      >
+        <div className="grid grid-cols-5">
+          {mobileTabs.map((item) => {
+            const active = path.startsWith(item.to);
+            const Icon = item.icon;
+            return (
+              <Link
+                key={item.to}
+                to={item.to}
+                onClick={() => setMobileOpen(false)}
+                className={`relative flex flex-col items-center justify-center gap-1 py-2.5 transition-colors ${
+                  active ? "text-primary" : "text-muted-foreground"
+                }`}
+              >
+                {active && (
+                  <motion.span
+                    // Its own layoutId: the desktop sidebar's pill is still
+                    // mounted behind display:none at this width, and sharing
+                    // an id would have them animating into each other.
+                    layoutId="mobile-tab-indicator"
+                    className="absolute inset-x-4 top-0 h-[3px] rounded-b-full gradient-brand"
+                    transition={{ type: "spring", stiffness: 380, damping: 32 }}
+                  />
+                )}
+                <Icon className="h-[21px] w-[21px]" />
+                <span className="text-[10px] font-medium leading-none truncate max-w-full px-0.5">
+                  {item.short || item.label}
+                </span>
+              </Link>
+            );
+          })}
+
+          <button
+            onClick={() => setMobileOpen(true)}
+            className={`relative flex flex-col items-center justify-center gap-1 py-2.5 transition-colors ${
+              onATab ? "text-muted-foreground" : "text-primary"
+            }`}
+          >
+            {!onATab && (
+              <span className="absolute inset-x-4 top-0 h-[3px] rounded-b-full gradient-brand" />
+            )}
+            <MoreHorizontal className="h-[21px] w-[21px]" />
+            <span className="text-[10px] font-medium leading-none">More</span>
+          </button>
+        </div>
+      </nav>
     </>
   );
 }

@@ -1,7 +1,5 @@
 import { useState } from "react";
 import { Sidebar } from "@/layout/Sidebar";
-import { Menu } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import UserManagement from "@/components/Users/UserManagement";
 
 const UserManagementPage = () => {
@@ -16,9 +14,6 @@ const UserManagementPage = () => {
         <main className="flex flex-col h-screen overflow-hidden w-full">
           <header className="flex h-16 shrink-0 items-center justify-between border-b px-4 lg:hidden">
             <div className="flex items-center gap-3">
-              <Button variant="ghost" size="icon" onClick={() => setMobileOpen(true)} className="-ml-2">
-                <Menu className="h-5 w-5" />
-              </Button>
               <div className="font-semibold text-base">PayrollX</div>
             </div>
           </header>

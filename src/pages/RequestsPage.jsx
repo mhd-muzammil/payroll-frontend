@@ -1,7 +1,5 @@
 import React, { useState } from 'react'
 import { Sidebar } from '../layout/Sidebar'
-import { Menu } from 'lucide-react'
-import { Button } from '../components/ui/button'
 import RequestsManagement from '../components/Requests/RequestsManagement'
 
 // One screen for both sides: an employee raises advance / report requests here,
@@ -23,9 +21,6 @@ const RequestsPage = () => {
         <main className="flex flex-col h-screen overflow-hidden w-full">
             <header className="flex h-16 shrink-0 items-center justify-between border-b px-4 lg:hidden">
               <div className="flex items-center gap-3">
-                <Button variant="ghost" size="icon" onClick={() => setMobileOpen(true)} className="-ml-2">
-                  <Menu className="h-5 w-5" />
-                </Button>
                 <div className="font-semibold text-base">Requests</div>
               </div>
             </header>

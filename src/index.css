@@ -220,3 +220,13 @@
 [class*="shadow-"] {
   box-shadow: none !important;
 }
+/* The bottom tab bar is fixed, so it sits over the last inch of whatever is
+   scrolling behind it. Every screen builds the same shell — a <main> holding
+   one scroll container — so one rule keeps the bar from swallowing the end of
+   a list, a Send button, or the last row of a table, on every one of them.
+   The bar itself is lg:hidden, so this stops where it does. */
+@media (max-width: 1023px) {
+  main > .overflow-y-auto {
+    padding-bottom: calc(4.75rem + env(safe-area-inset-bottom));
+  }
+}
