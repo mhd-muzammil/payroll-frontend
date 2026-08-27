@@ -204,7 +204,7 @@ export function Sidebar({ collapsed, setCollapsed, mobileOpen, setMobileOpen }) 
               animate={{ x: 0 }}
               exit={{ x: "-100%" }}
               transition={{ type: "spring", damping: 28, stiffness: 280 }}
-              className="fixed inset-y-0 left-0 z-50 w-[280px] glass border-r lg:hidden"
+              className="fixed inset-y-0 left-0 z-50 w-[280px] bg-background border-r lg:hidden"
             >
               {content(true)}
             </motion.aside>
@@ -217,7 +217,7 @@ export function Sidebar({ collapsed, setCollapsed, mobileOpen, setMobileOpen }) 
           someone actually opens belong one thumb-reach away. Everything else
           is still there, behind More, which opens the same drawer. */}
       <nav
-        className="lg:hidden fixed bottom-0 inset-x-0 z-30 glass border-t border-border/60"
+        className="lg:hidden fixed bottom-0 inset-x-0 z-30 bg-background border-t border-border"
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       >
         <div className="grid grid-cols-5">
