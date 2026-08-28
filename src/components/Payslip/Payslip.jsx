@@ -1274,6 +1274,35 @@ const PayslipsPage = () => {
                                         <td style={{ ...tdStyle, textAlign: "right", fontFamily: "monospace" }}>{formatINR(selectedSlip.gross_salary)}</td>
                                         <td style={{ ...tdStyle, textAlign: "right", fontFamily: "monospace" }}>{formatINR(selectedSlip.gross_earnings)}</td>
                                       </tr>
+                                      {/* Earned casual leave, paid on top rather than by quietly
+                                          raising the day count: the days above stay the days the
+                                          office counted, and this row says what was covered.
+                                          Hidden when there is none, so an ordinary slip is
+                                          unchanged. */}
+                                      {parseFloat(selectedSlip.casual_leave_pay || 0) > 0 && (
+                                      <tr style={{ backgroundColor: "#ecfdf5", fontWeight: "bold" }}>
+                                        <td style={tdStyle}>
+                                          Casual Leave ({parseFloat(selectedSlip.casual_leave_used)} day
+                                          {parseFloat(selectedSlip.casual_leave_used) === 1 ? "" : "s"})
+                                        </td>
+                                        <td style={{ ...tdStyle, textAlign: "right", fontFamily: "monospace" }}>-</td>
+                                        <td style={{ ...tdStyle, textAlign: "right", fontFamily: "monospace", color: "#047857" }}>
+                                          +{formatINR(selectedSlip.casual_leave_pay)}
+                                        </td>
+                                      </tr>
+                                      )}
+                                      {parseFloat(selectedSlip.casual_leave_pay || 0) > 0 && (
+                                      <tr style={{ backgroundColor: "#f3f4f6", fontWeight: "900", fontSize: "12px" }}>
+                                        <td style={tdStyle}>Total Earnings</td>
+                                        <td style={{ ...tdStyle, textAlign: "right", fontFamily: "monospace" }}>-</td>
+                                        <td style={{ ...tdStyle, textAlign: "right", fontFamily: "monospace" }}>
+                                          {formatINR(
+                                            parseFloat(selectedSlip.gross_earnings || 0) +
+                                              parseFloat(selectedSlip.casual_leave_pay || 0)
+                                          )}
+                                        </td>
+                                      </tr>
+                                      )}
                                     </tbody>
                                   </table>
                                 </td>
