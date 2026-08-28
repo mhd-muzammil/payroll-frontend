@@ -972,7 +972,7 @@ export default function HiringManagement() {
           the wrong columns is a day of work to undo by hand, so nothing is
           written until the numbers below have been read. */}
       <Dialog open={importOpen} onOpenChange={(open) => (open ? setImportOpen(true) : closeImport())}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl max-h-[90vh] grid-rows-[auto_minmax(0,1fr)_auto]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Upload className="h-5 w-5" />
@@ -985,12 +985,15 @@ export default function HiringManagement() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4">
+          <div className="space-y-4 min-h-0 overflow-y-auto -mx-1 px-1">
             <div>
               <Label className="mb-1.5 block">File</Label>
+              {/* No accept filter: the WorkIndia download arrives with no
+                  extension at all, and a filter hides such a file from the
+                  picker entirely. The server reads the bytes and says plainly
+                  when it cannot. */}
               <input
                 type="file"
-                accept=".xlsx,.xlsm,.csv,.txt"
                 onChange={(e) => pickImportFile(e.target.files?.[0])}
                 className="block w-full text-sm rounded-xl border border-border bg-background px-3 py-2 file:mr-3 file:rounded-lg file:border-0 file:bg-indigo-50 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-indigo-700"
               />
