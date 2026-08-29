@@ -241,6 +241,7 @@ const PayslipsPage = () => {
   const [editLop, setEditLop] = useState("");
   const [editPaidDays, setEditPaidDays] = useState("");
   const [editOtherDed, setEditOtherDed] = useState("");
+  const [editSpecialWork, setEditSpecialWork] = useState("");
   const [recalculating, setRecalculating] = useState(false);
   const [reverting, setReverting] = useState(false);
 
@@ -251,6 +252,7 @@ const PayslipsPage = () => {
       setEditLop(String(parseFloat(selectedSlip.lop_days ?? 0)));
       setEditPaidDays(String(parseFloat(selectedSlip.paid_days ?? 0)));
       setEditOtherDed(String(parseFloat(selectedSlip.deduction_other ?? 0)));
+      setEditSpecialWork(String(parseFloat(selectedSlip.special_work_days ?? 0)));
     }
   }, [selectedSlip]);
 
@@ -299,6 +301,15 @@ const PayslipsPage = () => {
       payload.lop_days = parseFloat(editLop) || 0;
     } else if (field === "total_days") {
       // Only the cycle length changed; keep the existing LOP split.
+      payload.lop_days = parseFloat(editLop) || 0;
+    } else if (field === "special_work_days") {
+      const v = parseFloat(editSpecialWork);
+      if (isNaN(v) || v < 0 || v > totalDays) {
+        alert(`Special Work must be between 0 and ${totalDays} days.`);
+        return;
+      }
+      payload.special_work_days = v;
+      // Keep the current absence split: only the extra work changed.
       payload.lop_days = parseFloat(editLop) || 0;
     }
 
@@ -1208,6 +1219,19 @@ const PayslipsPage = () => {
                                         "paid_days",
                                         { step: "0.01" }
                                       )}
+                                      {/* Extra days worked beyond the cycle. Nothing
+                                          in attendance can say a day was extra rather
+                                          than ordinary, so it is HR's to enter — and
+                                          it is additive, which is why it is green
+                                          where LOP is red. */}
+                                      {renderEditableDaysRow(
+                                        "Special Work",
+                                        parseFloat(selectedSlip.special_work_days || 0).toFixed(2),
+                                        editSpecialWork,
+                                        setEditSpecialWork,
+                                        "special_work_days",
+                                        { color: "#047857", labelBg: "#ecfdf5", step: "0.5" }
+                                      )}
                                     </tbody>
                                   </table>
                                 </td>
@@ -1291,14 +1315,31 @@ const PayslipsPage = () => {
                                         </td>
                                       </tr>
                                       )}
-                                      {parseFloat(selectedSlip.casual_leave_pay || 0) > 0 && (
+                                      {/* Extra days worked, paid on top. Same shape as
+                                          the leave line above and equally hidden when
+                                          there is none. */}
+                                      {parseFloat(selectedSlip.special_work_pay || 0) > 0 && (
+                                      <tr style={{ backgroundColor: "#ecfdf5", fontWeight: "bold" }}>
+                                        <td style={tdStyle}>
+                                          Special Work ({parseFloat(selectedSlip.special_work_days)} day
+                                          {parseFloat(selectedSlip.special_work_days) === 1 ? "" : "s"})
+                                        </td>
+                                        <td style={{ ...tdStyle, textAlign: "right", fontFamily: "monospace" }}>-</td>
+                                        <td style={{ ...tdStyle, textAlign: "right", fontFamily: "monospace", color: "#047857" }}>
+                                          +{formatINR(selectedSlip.special_work_pay)}
+                                        </td>
+                                      </tr>
+                                      )}
+                                      {(parseFloat(selectedSlip.casual_leave_pay || 0) > 0 ||
+                                        parseFloat(selectedSlip.special_work_pay || 0) > 0) && (
                                       <tr style={{ backgroundColor: "#f3f4f6", fontWeight: "900", fontSize: "12px" }}>
                                         <td style={tdStyle}>Total Earnings</td>
                                         <td style={{ ...tdStyle, textAlign: "right", fontFamily: "monospace" }}>-</td>
                                         <td style={{ ...tdStyle, textAlign: "right", fontFamily: "monospace" }}>
                                           {formatINR(
                                             parseFloat(selectedSlip.gross_earnings || 0) +
-                                              parseFloat(selectedSlip.casual_leave_pay || 0)
+                                              parseFloat(selectedSlip.casual_leave_pay || 0) +
+                                              parseFloat(selectedSlip.special_work_pay || 0)
                                           )}
                                         </td>
                                       </tr>
