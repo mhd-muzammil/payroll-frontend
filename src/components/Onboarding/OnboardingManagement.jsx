@@ -263,6 +263,17 @@ const OnboardingManagement = () => {
     };
   }, [safeRecords]);
 
+  // Someone Relieved has left, so they are not part of the working view at
+  // all: not in the region counts, not in the table. The Relieved card is the
+  // only way to see them, which is what that card is for. Every other view —
+  // including "Show all" — is the people still with the company.
+  const statusScoped = useMemo(() => {
+    if (selectedStatus) {
+      return safeRecords.filter((r) => employmentStatusOf(r) === selectedStatus);
+    }
+    return safeRecords.filter((r) => employmentStatusOf(r) !== "Relieved");
+  }, [safeRecords, selectedStatus]);
+
   const regionStats = useMemo(() => {
     const regions = ["Chennai", "Vellore", "Salem", "Kanchipuram", "Hosur"];
     const stats = {
@@ -273,7 +284,7 @@ const OnboardingManagement = () => {
       Hosur: 0,
       "Not Assigned": 0,
     };
-    safeRecords.forEach((r) => {
+    statusScoped.forEach((r) => {
       const loc = r.work_location;
       if (loc) {
         const matched = regions.find((reg) => reg.toLowerCase() === loc.trim().toLowerCase());
@@ -287,13 +298,12 @@ const OnboardingManagement = () => {
       }
     });
     return stats;
-  }, [safeRecords]);
+  }, [statusScoped]);
 
   const filteredRecords = useMemo(() => {
-    let list = safeRecords;
-    if (selectedStatus) {
-      list = list.filter((r) => employmentStatusOf(r) === selectedStatus);
-    }
+    // Status is already applied by statusScoped, which is also what the region
+    // counts are built from — so a region box and the table can never disagree.
+    let list = statusScoped;
     if (selectedRegion) {
       list = list.filter((r) => (r.work_location || "Not Assigned").toLowerCase() === selectedRegion.toLowerCase());
     }
@@ -309,7 +319,7 @@ const OnboardingManagement = () => {
       );
     }
     return list;
-  }, [safeRecords, selectedRegion, selectedStatus, searchQuery]);
+  }, [statusScoped, selectedRegion, searchQuery]);
 
   if (showForm || editingRecord) {
     return (
@@ -427,6 +437,11 @@ const OnboardingManagement = () => {
           Showing <strong className="text-foreground">{filteredRecords.length}</strong> of {stats.total}
           {selectedStatus && <> · <strong className="text-foreground">{selectedStatus}</strong></>}
           {selectedRegion && <> · {selectedRegion}</>}
+          {/* Otherwise the missing rows read as records that have gone, which is
+              exactly what this line exists to prevent. */}
+          {!selectedStatus && stats.relieved > 0 && (
+            <> · {stats.relieved} relieved hidden</>
+          )}
         </span>
         {(searchQuery || selectedRegion || selectedStatus) && (
           <button
