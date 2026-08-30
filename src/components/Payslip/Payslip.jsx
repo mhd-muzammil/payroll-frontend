@@ -1462,12 +1462,17 @@ const PayslipsPage = () => {
                               <tr>
                                 <td style={{ ...tdStyle, fontWeight: "bold", backgroundColor: "#fafafa" }}>Employer EPF Contribution</td>
                                 <td style={{ ...tdStyle, textAlign: "right", fontFamily: "monospace" }}>{parseFloat(selectedSlip.employer_epf) > 0 ? formatINR(selectedSlip.employer_epf) : "-"}</td>
+                                {/* Petrol allowance is shown on its own row below but is
+                                    deliberately NOT summed here or into the CTC: it is
+                                    reimbursed against actual travel, not part of what the
+                                    employee is paid, so counting it made the slip claim a
+                                    cost the employee never sees in their bank. It stays a
+                                    line to read, nothing more. */}
                                 <td rowSpan="4" style={{ ...tdStyle, textAlign: "right", fontFamily: "monospace", verticalAlign: "middle", fontWeight: "bold", backgroundColor: "#f9fafb" }}>
                                   {formatINR(
-                                    parseFloat(selectedSlip.employer_epf || 0) + 
-                                    parseFloat(selectedSlip.employer_esi || 0) + 
-                                    parseFloat(selectedSlip.employer_insurance || 0) + 
-                                    parseFloat(selectedSlip.petrol_allowance || 0)
+                                    parseFloat(selectedSlip.employer_epf || 0) +
+                                    parseFloat(selectedSlip.employer_esi || 0) +
+                                    parseFloat(selectedSlip.employer_insurance || 0)
                                   )}
                                 </td>
                               </tr>
@@ -1488,10 +1493,9 @@ const PayslipsPage = () => {
                                 <td style={{ ...tdStyle, textAlign: "right", fontFamily: "monospace", fontSize: "12px", color: "#92400e" }}>
                                   ₹{formatINR(
                                     parseFloat(selectedSlip.gross_earnings || 0) +
-                                    (parseFloat(selectedSlip.employer_epf || 0) + 
-                                     parseFloat(selectedSlip.employer_esi || 0) + 
-                                     parseFloat(selectedSlip.employer_insurance || 0) + 
-                                     parseFloat(selectedSlip.petrol_allowance || 0))
+                                    (parseFloat(selectedSlip.employer_epf || 0) +
+                                     parseFloat(selectedSlip.employer_esi || 0) +
+                                     parseFloat(selectedSlip.employer_insurance || 0))
                                   )}
                                 </td>
                               </tr>
