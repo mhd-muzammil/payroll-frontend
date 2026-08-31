@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Capacitor, registerPlugin } from "@capacitor/core";
 import { trackingService } from "../services/trackingService";
+import { enqueue, forget, loadQueue, newClientKey } from "../Utility/pingQueue";
+import { batteryState } from "../Utility/phoneBattery";
 
 const PING_INTERVAL_MS = 30000; // send a position every 30s while on duty
 const MAX_ACCURACY_M = 100; // drop noisy readings worse than this
@@ -9,6 +11,9 @@ const MAX_ACCURACY_M = 100; // drop noisy readings worse than this
 // the 30s ping keeps re-sending the last fix either way, so the office still
 // sees them alive and standing where they are.
 const NATIVE_DISTANCE_FILTER_M = 10;
+// Most fixes to hand over in one batch. Matches MAX_BATCH in cases/pings.py —
+// the server refuses more, and a refused batch would leave the queue stuck.
+const MAX_BATCH = 500;
 
 // Registered by hand because the plugin ships only its native halves and type
 // definitions — there is no JS entry point to import.
@@ -39,6 +44,9 @@ export function useLiveTracking() {
   const [tracking, setTracking] = useState(false);
   const [lastFix, setLastFix] = useState(null); // {latitude, longitude, accuracy, speed}
   const [error, setError] = useState(null);
+  // How many fixes are waiting on the phone. Surfaced so the duty screen can say
+  // "12 saved, will send when you have signal" instead of looking broken.
+  const [queued, setQueued] = useState(() => loadQueue().length);
 
   const watchIdRef = useRef(null); // browser watchPosition id
   const nativeWatcherRef = useRef(null); // foreground service watcher id
@@ -46,6 +54,9 @@ export function useLiveTracking() {
   const nativeStartingRef = useRef(false);
   const intervalRef = useRef(null);
   const latestRef = useRef(null);
+  // When we last actually attempted a send, so the native callback and the timer
+  // cannot double-send between them.
+  const lastSendAtRef = useRef(0);
   // Kept in refs so the running interval always reads current values.
   const caseIdRef = useRef(null);
   const statusRef = useRef("");
@@ -55,35 +66,96 @@ export function useLiveTracking() {
     statusRef.current = status ?? "";
   }, []);
 
+  /**
+   * Hand over whatever the phone could not send earlier.
+   *
+   * Runs BEFORE the newest fix, so a recovered signal fills the route in in
+   * travel order rather than putting the current position ahead of the journey
+   * that led to it.
+   *
+   * Failure is silent on purpose. Still offline is not news — the engineer is
+   * being told that by the fix that is about to be queued behind it.
+   */
+  const drainQueue = useCallback(async () => {
+    const pending = loadQueue();
+    if (!pending.length) return;
+    const batch = pending.slice(0, MAX_BATCH);
+    try {
+      await trackingService.pingBatch(batch);
+      // By key, not by count: the watcher may have added fixes while the request
+      // was in flight, and dropping "the first N" would throw those away.
+      forget(batch.map((fix) => fix.client_key));
+      setQueued(loadQueue().length);
+    } catch {
+      // Still no signal. The fixes stay where they are.
+    }
+  }, []);
+
   const sendPing = useCallback(async () => {
     const fix = latestRef.current;
     if (!fix) return;
     if (fix.accuracy != null && fix.accuracy > MAX_ACCURACY_M) return; // too noisy
+
+    await drainQueue();
+
+    lastSendAtRef.current = Date.now();
     try {
-      await trackingService.ping({
-        latitude: fix.latitude,
-        longitude: fix.longitude,
-        accuracy: fix.accuracy,
-        speed: fix.speed,
+      await trackingService.ping(fix);
+      setError(null);
+    } catch (e) {
+      // The fix is not lost. It goes to the queue with the time it was TAKEN and
+      // its own id, so when the signal comes back the route fills in behind the
+      // engineer instead of showing a hole where they were.
+      const total = enqueue(fix);
+      setQueued(total);
+      setError(e?.response?.data?.detail || "No signal - saved on the phone");
+    }
+  }, [drainQueue]);
+
+  /**
+   * Every source funnels through here, so the cadence and the "report the first
+   * fix at once" rule are the same wherever the position came from.
+   *
+   * The fix is stamped HERE, not at send time. A fix that spends twenty minutes
+   * in the queue has to arrive saying when it was taken, or the route is drawn
+   * in the order the network recovered rather than the order it was travelled.
+   * The id is minted here for the same reason: a retry must be the same fix, not
+   * a second one.
+   */
+  const acceptFix = useCallback(
+    async (raw) => {
+      const isFirstFix = latestRef.current == null;
+      const { level, charging } = await batteryState();
+      const fix = {
+        latitude: raw.latitude,
+        longitude: raw.longitude,
+        accuracy: raw.accuracy,
+        speed: raw.speed,
         status: statusRef.current,
         case_id: caseIdRef.current,
-      });
-    } catch (e) {
-      // A single failed ping shouldn't stop tracking; surface it and keep going.
-      setError(e?.response?.data?.detail || "Failed to send location");
-    }
-  }, []);
-
-  // Every source funnels through here, so the ping cadence and the "report the
-  // first fix at once" rule are the same wherever the position came from.
-  const acceptFix = useCallback(
-    (fix) => {
-      const isFirstFix = latestRef.current == null;
+        timestamp: new Date().toISOString(),
+        client_key: newClientKey(),
+        battery_level: level,
+        is_charging: charging,
+      };
       latestRef.current = fix;
       setLastFix(fix);
+
       // Waiting a full interval left an engineer who just went on duty invisible
       // on the live board for 30s, which reads as "duty didn't work".
-      if (isFirstFix) void sendPing();
+      if (isFirstFix) {
+        void sendPing();
+        return;
+      }
+
+      // Send from HERE as well as from the timer. Android throttles a
+      // backgrounded WebView's timers - which is exactly when the phone is in a
+      // pocket and the route matters most - but it does not throttle a callback
+      // arriving from a native service. Without this the fixes were taken and
+      // never sent.
+      if (Date.now() - lastSendAtRef.current >= PING_INTERVAL_MS) {
+        void sendPing();
+      }
     },
     [sendPing],
   );
@@ -192,5 +264,5 @@ export function useLiveTracking() {
   // Clean up if the component unmounts while still tracking.
   useEffect(() => stop, [stop]);
 
-  return { tracking, lastFix, error, start, stop, setContext };
+  return { tracking, lastFix, error, queued, start, stop, setContext };
 }

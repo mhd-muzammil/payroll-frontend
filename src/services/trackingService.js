@@ -20,8 +20,37 @@ export const trackingService = {
     return data;
   },
 
-  // Engineer sends one live position reading.
-  ping: async ({ latitude, longitude, accuracy, speed, status, case_id }) => {
+  /**
+   * A backlog of fixes the phone took while it had no signal.
+   *
+   * Each one carries the time it was TAKEN and the phone's own id for it, so the
+   * route draws in travel order and a batch the server already accepted — after
+   * a timeout the phone never saw the answer to — is not stored twice.
+   */
+  pingBatch: async (pings) => {
+    const { data } = await api.post(`${BASE}ping/batch/`, { pings });
+    return data;
+  },
+
+  /**
+   * One live position reading.
+   *
+   * `timestamp` and `client_key` are sent for a live fix too, not only a queued
+   * one: a fix that fails and is retried from the queue must be the SAME fix,
+   * with the same time and the same id, or the route gains a duplicate.
+   */
+  ping: async ({
+    latitude,
+    longitude,
+    accuracy,
+    speed,
+    status,
+    case_id,
+    timestamp,
+    client_key,
+    battery_level,
+    is_charging,
+  }) => {
     const { data } = await api.post(`${BASE}ping/`, {
       latitude,
       longitude,
@@ -29,6 +58,10 @@ export const trackingService = {
       speed,
       status,
       case_id,
+      timestamp,
+      client_key,
+      battery_level,
+      is_charging,
     });
     return data;
   },
