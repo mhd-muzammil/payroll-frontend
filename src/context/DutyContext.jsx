@@ -250,6 +250,9 @@ export function DutyProvider({ children }) {
   const [startedAt, setStartedAt] = useState(null);
   const [busy, setBusy] = useState(false);
   const [dutyError, setDutyError] = useState(null);
+  // Null until the backend says, so a screen can tell "no distance yet" from
+  // "the backend does not report one".
+  const [todayKm, setTodayKm] = useState(null);
   // "granted" | "prompt" | "denied" | null (browser cannot tell us)
   const [locationPermission, setLocationPermission] = useState(null);
   // What the device said on the last refused attempt, for the engineer to read
@@ -266,6 +269,10 @@ export function DutyProvider({ children }) {
   const applyState = useCallback((state) => {
     setOnDuty(Boolean(state?.on_duty));
     setStartedAt(state?.started_at ?? null);
+    // Sent on every duty response, so the figure refreshes with the state the
+    // app already fetches. Absent from an older backend, in which case the
+    // screen simply does not show a distance rather than showing zero.
+    if (typeof state?.today_km === "number") setTodayKm(state.today_km);
     return Boolean(state?.on_duty);
   }, []);
 
@@ -373,6 +380,10 @@ export function DutyProvider({ children }) {
     // Only set after a refusal, so the screen can show what the device said.
     locationDiagnostic: diagnostic,
     locationSteps,
+    // How far they have travelled today, from the same helper the office's
+    // board uses — so the engineer and their manager cannot read two different
+    // numbers for the same day.
+    todayKm,
     startDuty,
     endDuty,
     setContext: tracking.setContext,

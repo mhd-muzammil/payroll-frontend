@@ -124,6 +124,7 @@ export default function EngineerCases() {
     startDuty,
     endDuty,
     setContext,
+    todayKm,
   } = useDuty();
 
   const load = async () => {
@@ -223,6 +224,16 @@ export default function EngineerCases() {
         </div>
       </div>
 
+      {/* How far they have gone today. The engineer's own figure, computed by
+          the same helper that produces the one on the office's board — an
+          engineer and their manager reading two different numbers for the same
+          day is worse than neither of them having one. */}
+      {todayKm != null && (
+        <p className="text-sm">
+          <span className="font-semibold text-gray-900">{todayKm.toFixed(1)} km</span>
+          <span className="text-gray-500"> travelled today</span>
+        </p>
+      )}
       {lastFix && (
         <p className="text-xs text-gray-500">
           Last location: {lastFix.latitude.toFixed(5)}, {lastFix.longitude.toFixed(5)}
