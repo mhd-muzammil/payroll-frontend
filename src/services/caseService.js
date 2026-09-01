@@ -65,6 +65,13 @@ export const caseService = {
       })
     ).data,
 
+  /**
+   * The engineer's own Assigned / Attended / Closed for today, plus how they
+   * are tracking against the close target. Computed in OpenCall and pushed
+   * across, so this and the Engineer Productivity dashboard cannot disagree.
+   */
+  myScorecard: async () => (await api.get(`${BASE}my_scorecard/`)).data,
+
   accept: async (id) => (await api.post(`${byId(id)}accept/`)).data,
   startTravel: async (id) => (await api.post(`${byId(id)}start_travel/`)).data,
   reached: async (id) => (await api.post(`${byId(id)}reached/`)).data,

@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Route,
   ClipboardList,
+  Target,
   Phone,
   Navigation,
   Building2,
@@ -124,6 +125,40 @@ const PRIORITY = {
 const PRIORITY_RANK = { urgent: 0, high: 1, medium: 2, low: 3 };
 
 /**
+ * One line of the close target: the two numbers, and how far along the bar is.
+ *
+ * The bar is capped at 100% so an engineer who beats the target sees a full bar
+ * rather than one that has overflowed its track -- but the figures beside it
+ * are never capped, because "9 / 7" is the good news and rounding it away would
+ * be the one thing worth showing.
+ */
+function TargetBar({ label, value, target }) {
+  const safeTarget = target > 0 ? target : 0;
+  const pct = safeTarget > 0 ? Math.min(100, (value / safeTarget) * 100) : 0;
+  const met = safeTarget > 0 && value >= safeTarget;
+
+  return (
+    <div>
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="text-xs text-gray-600">{label}</span>
+        <span className="text-xs tabular-nums text-gray-500">
+          <span className={`text-sm font-semibold ${met ? "text-emerald-700" : "text-gray-900"}`}>
+            {value}
+          </span>
+          {safeTarget > 0 ? ` / ${safeTarget}` : ""}
+        </span>
+      </div>
+      <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
+        <div
+          className={`h-full rounded-full ${met ? "bg-emerald-500" : "bg-indigo-500"}`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+/**
  * The order an engineer needs, which is not the order the API returns.
  *
  * Anything still to do comes first, most urgent at the top; within a priority
@@ -181,25 +216,10 @@ export default function EngineerCases() {
     todayKm,
   } = useDuty();
 
-  // What the day looks like, in three numbers that always add up to the
-  // total. The buckets are exhaustive by construction rather than by three
-  // separate filters, because a breakdown that does not sum to the figure
-  // above it is worse than no breakdown.
-  //
-  // "Cases today" is literal: the API gives an engineer exactly their assigned
-  // calls for today, one per ticket, cancelled ones already dropped -- so a
-  // cancelled case cannot reach the Done bucket in practice.
-  const counts = useMemo(() => {
-    let toDo = 0;
-    let onSite = 0;
-    let done = 0;
-    for (const c of cases) {
-      if (c.status === "completed" || c.status === "cancelled") done += 1;
-      else if (c.reached_at) onSite += 1;
-      else toDo += 1;
-    }
-    return { toDo, onSite, done };
-  }, [cases]);
+  // Assigned / Attended / Closed as OpenCall counts them, not as this app
+  // could guess them. Null until the first fetch lands, so the card shows
+  // nothing rather than a confident row of zeros.
+  const [scorecard, setScorecard] = useState(null);
 
   const load = async () => {
     setLoading(true);
@@ -214,7 +234,60 @@ export default function EngineerCases() {
     }
   };
 
+  const loadScorecard = async () => {
+    try {
+      setScorecard(await caseService.myScorecard());
+    } catch {
+      // An older backend has no such endpoint, and a missing scorecard is not
+      // worth an error banner over the engineer's case list. The card simply
+      // does not appear.
+      setScorecard(null);
+    }
+  };
+
+  // "Realtime" in the sense that matters here: the numbers move as the day
+  // does, without the engineer thinking to reload. OpenCall pushes every two
+  // minutes, so asking every sixty seconds cannot miss much, and it stops
+  // entirely while the app is in the background -- this is a phone, and a
+  // screen nobody is looking at should not be spending battery on polling.
   useEffect(() => {
+    let timer = null;
+
+    const tick = () => {
+      if (document.visibilityState !== "visible") return;
+      load();
+      loadScorecard();
+    };
+
+    const start = () => {
+      if (timer) return;
+      timer = setInterval(tick, 60000);
+    };
+    const stop = () => {
+      if (!timer) return;
+      clearInterval(timer);
+      timer = null;
+    };
+
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") {
+        tick();
+        start();
+      } else {
+        stop();
+      }
+    };
+
+    start();
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      stop();
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, []);
+
+  useEffect(() => {
+    loadScorecard();
     load();
   }, []);
 
@@ -292,11 +365,12 @@ export default function EngineerCases() {
         </div>
       </div>
 
-      {/* How many calls they have been given today, and where each one stands.
-          The count is the first thing an engineer wants off this screen -- is
-          it a two-call day or a seven-call day -- and it was only obtainable by
-          scrolling the list and counting. */}
-      {!loading && (
+      {/* Today's numbers, straight from OpenCall's Engineer Productivity --
+          the same Assigned / Attended / Closed the office is looking at, not a
+          second count derived from this app's punch buttons. Absent rather than
+          zeroed when the sync has not run, because a stale figure wearing
+          today's label is a lie the engineer cannot detect. */}
+      {scorecard && !scorecard.stale && (
         <div className="rounded-xl border bg-white p-4 shadow-sm">
           <div className="flex items-center gap-4">
             <div className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-indigo-50 text-indigo-600">
@@ -304,30 +378,62 @@ export default function EngineerCases() {
             </div>
             <div className="min-w-0">
               <div className="text-3xl font-semibold leading-none text-gray-900 tabular-nums">
-                {cases.length}
+                {scorecard.assigned}
               </div>
               <p className="mt-1 text-xs text-gray-500">
-                {cases.length === 1 ? "Case today" : "Cases today"}
+                {scorecard.assigned === 1 ? "Case assigned today" : "Cases assigned today"}
               </p>
             </div>
           </div>
 
-          {cases.length > 0 && (
-            <div className="mt-3 grid grid-cols-3 divide-x divide-gray-100 border-t border-gray-100 pt-3 text-center">
-              <div>
-                <div className="text-lg font-semibold tabular-nums text-gray-900">{counts.toDo}</div>
-                <div className="text-[11px] text-gray-500">To do</div>
+          <div className="mt-3 grid grid-cols-3 divide-x divide-gray-100 border-t border-gray-100 pt-3 text-center">
+            <div>
+              <div className="text-lg font-semibold tabular-nums text-gray-900">
+                {scorecard.assigned}
               </div>
-              <div>
-                <div className="text-lg font-semibold tabular-nums text-indigo-700">{counts.onSite}</div>
-                <div className="text-[11px] text-gray-500">On site</div>
-              </div>
-              <div>
-                <div className="text-lg font-semibold tabular-nums text-emerald-700">{counts.done}</div>
-                <div className="text-[11px] text-gray-500">Done</div>
-              </div>
+              <div className="text-[11px] text-gray-500">Assigned</div>
             </div>
-          )}
+            <div>
+              <div className="text-lg font-semibold tabular-nums text-indigo-700">
+                {scorecard.attended}
+              </div>
+              <div className="text-[11px] text-gray-500">Attended</div>
+            </div>
+            <div>
+              <div className="text-lg font-semibold tabular-nums text-emerald-700">
+                {scorecard.closed}
+              </div>
+              <div className="text-[11px] text-gray-500">Closed</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* The close target, today and month to date. Both bars read the same way
+          -- closes over target -- and the targets travel with the numbers
+          rather than being written down here, so changing them in OpenCall
+          changes them on every engineer's phone without a release. */}
+      {scorecard && !scorecard.stale && scorecard.daily_target > 0 && (
+        <div className="rounded-xl border bg-white p-4 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-amber-50 text-amber-600">
+              <Target className="h-5 w-5" strokeWidth={2} />
+            </div>
+            <p className="text-sm font-semibold text-gray-900">Close target</p>
+          </div>
+
+          <div className="mt-3 space-y-3">
+            <TargetBar
+              label="Today"
+              value={scorecard.closed}
+              target={scorecard.daily_target}
+            />
+            <TargetBar
+              label="Month to date"
+              value={scorecard.month_closed}
+              target={scorecard.monthly_target}
+            />
+          </div>
         </div>
       )}
 
