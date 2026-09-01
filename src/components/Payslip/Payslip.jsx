@@ -1010,6 +1010,14 @@ const PayslipsPage = () => {
                   <p className="text-xs text-muted-foreground">{selectedSlip.employee_details?.employee_name} - {getMonthLabel(selectedSlip.month)} {selectedSlip.year}</p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2 sm:gap-3 sm:pr-8">
+                  {/* Running payroll and sending it out are the office's job.
+                      An engineer opening their own payslip was being offered
+                      "Undo Edits" and "Send Email" — one recalculates their pay
+                      from attendance, the other posts it from the company. The
+                      list behind this modal was gated already; the modal itself
+                      was not, so the eye icon let them straight through to
+                      both. All they need here is to read it and keep a copy. */}
+                  {!isEmployee && (
                   <Button
                     variant="outline"
                     size="sm"
@@ -1020,6 +1028,8 @@ const PayslipsPage = () => {
                   >
                     {reverting ? "Reverting..." : "Undo Edits"}
                   </Button>
+                  )}
+                  {!isEmployee && (
                   <Button
                     variant="brand"
                     size="sm"
@@ -1029,6 +1039,7 @@ const PayslipsPage = () => {
                   >
                     {emailingSlipId === selectedSlip.id ? "Sending..." : "Send Email"}
                   </Button>
+                  )}
                   <Button variant="brand" size="sm" icon={Printer} onClick={handlePrintIframe}>
                     Download / Print PDF
                   </Button>
