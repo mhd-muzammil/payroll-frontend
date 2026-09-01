@@ -7,7 +7,7 @@ import { getUserRole, ROLES } from "../../auth/rbac";
 import Toolbar from "../ui/Toolbar";
 import DataTable from "../ui/DataTable";
 import { Download, Eye, Sparkles, Loader2, Printer, MapPin, Users, Mail, Search, Play, RefreshCw, Calendar, ArrowLeft, Maximize2, Minimize2 } from "lucide-react";
-import { api } from "@/api/Api";
+import { api, Base_URL } from "@/api/Api";
 import {
   Dialog,
   DialogContent,
@@ -248,6 +248,7 @@ const PayslipsPage = () => {
   };
 
   const [emailingSlipId, setEmailingSlipId] = useState(null);
+  const [downloading, setDownloading] = useState(false);
 
   // Manual editing of days / other-deduction on the payslip preview dialog.
   const [editTotalDays, setEditTotalDays] = useState("");
@@ -420,6 +421,41 @@ const PayslipsPage = () => {
     observer.observe(previewEl);
     return () => observer.disconnect();
   }, [previewEl]);
+
+  // The real download. window.print() — what the button used to call — does
+  // nothing at all inside an Android WebView, and neither does an <a download>
+  // with a blob, because Capacitor registers no DownloadListener: in the app
+  // the button was simply inert.
+  //
+  // What Capacitor DOES do is hand any URL whose host differs from the site's
+  // to the system browser (Bridge.launchIntent), and the API is on a different
+  // host from the site. So this navigates to a backend URL that answers with
+  // application/pdf, which opens Chrome and saves the file. On a desktop the
+  // same navigation just downloads, because the response is an attachment.
+  //
+  // A navigation carries no Authorization header, so the JWT cannot authorise
+  // it. Instead we spend the authenticated channel we already have on a
+  // short-lived signed ticket naming this one payslip.
+  const handleDownloadPdf = async () => {
+    if (!selectedSlip || downloading) return;
+    setDownloading(true);
+    try {
+      const res = await api.get(`/api/payslips/${selectedSlip.id}/pdf_ticket/`);
+      const path = res?.data?.path;
+      if (!path) throw new Error("No download link came back.");
+      // Absolute and on the API host — a relative URL would stay inside the
+      // WebView, where nothing can save a file.
+      window.location.href = `${Base_URL}${path}`;
+    } catch (err) {
+      console.error("Payslip PDF download failed:", err);
+      alert(
+        err?.response?.data?.detail ||
+          "Could not prepare the PDF. Please check your connection and try again."
+      );
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   const handlePrintIframe = () => {
     const printableElement = document.getElementById("printable-payslip-core");
@@ -1129,8 +1165,26 @@ const PayslipsPage = () => {
                       {fitToWidth ? "Zoom in" : "Fit"}
                     </Button>
                   )}
-                  <Button variant="brand" size="sm" icon={Printer} onClick={handlePrintIframe}>
-                    Download / Print PDF
+                  {/* Print stays, but only where it works. window.print() is
+                      inert in the app's WebView, so on a phone it was a button
+                      that did nothing. */}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    icon={Printer}
+                    onClick={handlePrintIframe}
+                    className="hidden md:inline-flex"
+                  >
+                    Print
+                  </Button>
+                  <Button
+                    variant="brand"
+                    size="sm"
+                    icon={downloading ? Loader2 : Download}
+                    disabled={downloading}
+                    onClick={handleDownloadPdf}
+                  >
+                    {downloading ? "Preparing..." : "Download PDF"}
                   </Button>
                 </div>
               </div>
