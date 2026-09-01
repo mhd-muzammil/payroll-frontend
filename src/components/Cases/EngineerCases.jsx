@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Route,
+  ClipboardList,
   Phone,
   Navigation,
   Building2,
@@ -180,6 +181,26 @@ export default function EngineerCases() {
     todayKm,
   } = useDuty();
 
+  // What the day looks like, in three numbers that always add up to the
+  // total. The buckets are exhaustive by construction rather than by three
+  // separate filters, because a breakdown that does not sum to the figure
+  // above it is worse than no breakdown.
+  //
+  // "Cases today" is literal: the API gives an engineer exactly their assigned
+  // calls for today, one per ticket, cancelled ones already dropped -- so a
+  // cancelled case cannot reach the Done bucket in practice.
+  const counts = useMemo(() => {
+    let toDo = 0;
+    let onSite = 0;
+    let done = 0;
+    for (const c of cases) {
+      if (c.status === "completed" || c.status === "cancelled") done += 1;
+      else if (c.reached_at) onSite += 1;
+      else toDo += 1;
+    }
+    return { toDo, onSite, done };
+  }, [cases]);
+
   const load = async () => {
     setLoading(true);
     try {
@@ -270,6 +291,45 @@ export default function EngineerCases() {
           )}
         </div>
       </div>
+
+      {/* How many calls they have been given today, and where each one stands.
+          The count is the first thing an engineer wants off this screen -- is
+          it a two-call day or a seven-call day -- and it was only obtainable by
+          scrolling the list and counting. */}
+      {!loading && (
+        <div className="rounded-xl border bg-white p-4 shadow-sm">
+          <div className="flex items-center gap-4">
+            <div className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-indigo-50 text-indigo-600">
+              <ClipboardList className="h-6 w-6" strokeWidth={2} />
+            </div>
+            <div className="min-w-0">
+              <div className="text-3xl font-semibold leading-none text-gray-900 tabular-nums">
+                {cases.length}
+              </div>
+              <p className="mt-1 text-xs text-gray-500">
+                {cases.length === 1 ? "Case today" : "Cases today"}
+              </p>
+            </div>
+          </div>
+
+          {cases.length > 0 && (
+            <div className="mt-3 grid grid-cols-3 divide-x divide-gray-100 border-t border-gray-100 pt-3 text-center">
+              <div>
+                <div className="text-lg font-semibold tabular-nums text-gray-900">{counts.toDo}</div>
+                <div className="text-[11px] text-gray-500">To do</div>
+              </div>
+              <div>
+                <div className="text-lg font-semibold tabular-nums text-indigo-700">{counts.onSite}</div>
+                <div className="text-[11px] text-gray-500">On site</div>
+              </div>
+              <div>
+                <div className="text-lg font-semibold tabular-nums text-emerald-700">{counts.done}</div>
+                <div className="text-[11px] text-gray-500">Done</div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* How far they have gone today, on a card of its own. The engineer's
           own figure, computed by the same helper that produces the one on the
