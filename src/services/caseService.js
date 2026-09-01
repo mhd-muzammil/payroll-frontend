@@ -3,6 +3,12 @@ import { api } from "../api/Api";
 const BASE = "/api/cases/";
 const byId = (id) => `${BASE}${id}/`;
 
+/** Only send a position when the phone actually has one. */
+function fixBody(fix) {
+  if (!fix || fix.latitude == null || fix.longitude == null) return {};
+  return { latitude: fix.latitude, longitude: fix.longitude, accuracy: fix.accuracy ?? null };
+}
+
 export const caseService = {
   getAll: async (params = {}) => {
     const { data } = await api.get(BASE, { params });
@@ -41,6 +47,24 @@ export const caseService = {
   },
 
   // Field-driven status transitions (engineer or staff).
+  /**
+   * At the customer, starting work — and where the phone says that is.
+   *
+   * The coordinates are sent when there is a fix and left out when there is
+   * not: a punch must never fail for want of GPS, because that leaves an
+   * engineer standing at a customer unable to record that they are there.
+   */
+  punchIn: async (id, fix) =>
+    (await api.post(`${byId(id)}punch_in/`, fixBody(fix))).data,
+
+  punchOut: async (id, fix, resolutionNotes = "") =>
+    (
+      await api.post(`${byId(id)}punch_out/`, {
+        ...fixBody(fix),
+        ...(resolutionNotes ? { resolution_notes: resolutionNotes } : {}),
+      })
+    ).data,
+
   accept: async (id) => (await api.post(`${byId(id)}accept/`)).data,
   startTravel: async (id) => (await api.post(`${byId(id)}start_travel/`)).data,
   reached: async (id) => (await api.post(`${byId(id)}reached/`)).data,

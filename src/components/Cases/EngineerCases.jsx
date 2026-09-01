@@ -2,15 +2,40 @@ import { useEffect, useState } from "react";
 import { caseService } from "../../services/caseService";
 import { useDuty } from "../../context/DutyContext";
 
-const STATUS_LABEL = {
-  assigned: "Assigned",
-  accepted: "Accepted",
-  on_the_way: "On the way",
-  reached: "Reached",
-  working: "Working",
-  completed: "Completed",
-  cancelled: "Cancelled",
-};
+/** Time of day, the way somebody reads it back to you. */
+function clockTime(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime())
+    ? ""
+    : d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
+
+/**
+ * When this call was punched in and out, in place of the status word.
+ *
+ * "Assigned" told the engineer something they already knew — they are looking at
+ * their own case list. What is worth the space is what they have recorded
+ * against this call so far, because that is the thing they might have forgotten
+ * to do. A case with no punch says so plainly rather than showing nothing.
+ */
+function PunchRecord({ c }) {
+  if (c.status === "cancelled") {
+    return <span className="text-xs font-medium text-gray-500">Cancelled</span>;
+  }
+  if (!c.reached_at) {
+    return <span className="text-xs font-medium text-gray-500">Not punched in</span>;
+  }
+  return (
+    <span className="text-xs font-medium text-gray-700">
+      <span className="text-indigo-700">In {clockTime(c.reached_at)}</span>
+      {c.completed_at && (
+        <span className="text-green-700"> · Out {clockTime(c.completed_at)}</span>
+      )}
+    </span>
+  );
+}
+
 
 /**
  * Where an engineer is sent to navigate. A plain Google Maps link — no API key,
@@ -132,11 +157,14 @@ export default function EngineerCases() {
     }
   };
 
-  const onStartTravel = (c) => {
-    // Heading to a job implies being on duty; start it if they haven't.
+  const onPunchIn = (c) => {
+    // Punching in at a customer implies being on duty, so start it if they have
+    // not. This carried over from Start Travel, and it matters more here: with
+    // duty off there is no GPS running, so the punch would record a time and no
+    // place — which is the one thing these buttons exist to capture.
     if (!onDuty) startDuty();
-    setContext(c.id, "on_the_way");
-    runAction(() => caseService.startTravel(c.id), c, "on_the_way");
+    setContext(c.id, "working");
+    runAction(() => caseService.punchIn(c.id, lastFix), c, "working");
   };
 
   const openInMaps = (c) => {
@@ -287,7 +315,7 @@ export default function EngineerCases() {
               <CaseDetails details={c.details} />
 
               <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-blue-700">{STATUS_LABEL[c.status] || c.status}</span>
+                <PunchRecord c={c} />
                 {c.latitude != null && (
                   <button
                     onClick={() => openInMaps(c)}
@@ -298,52 +326,33 @@ export default function EngineerCases() {
                 )}
               </div>
 
-              {/* Gloved thumbs outdoors: every control on this screen is a
-                  44px target with real space between, not a 24px chip. */}
+              {/* Two buttons, not five.
+                  Accept, Start Travel, Reached and Start Work asked an engineer
+                  in gloves outside a customer's premises to drive a four-step
+                  workflow, and the office only ever needed two facts from it:
+                  that they got there, and that they finished. Each punch also
+                  records WHERE it was made, which is what turns "reached 2:40pm"
+                  from a claim into something that can be checked.
+
+                  Gloved thumbs outdoors: every control here is a 44px target
+                  with real space between, not a 24px chip. */}
               <div className="flex flex-wrap gap-2.5 pt-1">
-                {c.status === "assigned" && (
+                {!c.reached_at && c.status !== "completed" && (
                   <button
                     disabled={busyId === c.id}
-                    onClick={() => runAction(() => caseService.accept(c.id), c)}
-                    className="min-h-11 px-4 py-2.5 text-sm rounded-lg bg-indigo-600 text-white disabled:opacity-50"
+                    onClick={() => onPunchIn(c)}
+                    className="min-h-11 px-5 py-2.5 text-sm font-semibold rounded-lg bg-indigo-600 text-white disabled:opacity-50"
                   >
-                    Accept
+                    Punch In
                   </button>
                 )}
-                {(c.status === "assigned" || c.status === "accepted") && (
+                {c.reached_at && c.status !== "completed" && (
                   <button
                     disabled={busyId === c.id}
-                    onClick={() => onStartTravel(c)}
-                    className="min-h-11 px-4 py-2.5 text-sm rounded-lg bg-blue-600 text-white disabled:opacity-50"
+                    onClick={() => runAction(() => caseService.punchOut(c.id, lastFix), c, "")}
+                    className="min-h-11 px-5 py-2.5 text-sm font-semibold rounded-lg bg-green-600 text-white disabled:opacity-50"
                   >
-                    Start Travel
-                  </button>
-                )}
-                {c.status === "on_the_way" && (
-                  <button
-                    disabled={busyId === c.id}
-                    onClick={() => runAction(() => caseService.reached(c.id), c, "working")}
-                    className="min-h-11 px-4 py-2.5 text-sm rounded-lg bg-teal-600 text-white disabled:opacity-50"
-                  >
-                    Reached
-                  </button>
-                )}
-                {(c.status === "reached" || c.status === "on_the_way") && (
-                  <button
-                    disabled={busyId === c.id}
-                    onClick={() => runAction(() => caseService.startWork(c.id), c, "working")}
-                    className="min-h-11 px-4 py-2.5 text-sm rounded-lg bg-amber-600 text-white disabled:opacity-50"
-                  >
-                    Start Work
-                  </button>
-                )}
-                {(c.status === "working" || c.status === "reached") && (
-                  <button
-                    disabled={busyId === c.id}
-                    onClick={() => runAction(() => caseService.complete(c.id), c, "")}
-                    className="min-h-11 px-4 py-2.5 text-sm rounded-lg bg-green-600 text-white disabled:opacity-50"
-                  >
-                    Complete
+                    Punch Out
                   </button>
                 )}
               </div>
