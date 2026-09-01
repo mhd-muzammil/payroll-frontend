@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -6,7 +6,7 @@ import PageHeader from "../ui/PageHeader";
 import { getUserRole, ROLES } from "../../auth/rbac";
 import Toolbar from "../ui/Toolbar";
 import DataTable from "../ui/DataTable";
-import { Download, Eye, Sparkles, Loader2, Printer, MapPin, Users, Mail, Search, Play, RefreshCw, Calendar } from "lucide-react";
+import { Download, Eye, Sparkles, Loader2, Printer, MapPin, Users, Mail, Search, Play, RefreshCw, Calendar, ArrowLeft, Maximize2, Minimize2 } from "lucide-react";
 import { api } from "@/api/Api";
 import {
   Dialog,
@@ -72,6 +72,19 @@ const PayslipsPage = () => {
   // nothing here for them to run, and the controls for running it read as
   // theirs. Their payslips ARE the history, so that is where they start and stay.
   const isEmployee = getUserRole() === ROLES.EMPLOYEE;
+
+  // The payslip is a 760px document. On a phone that is either an overview or
+  // it is readable, and which one you want depends on whether you are checking
+  // the net figure or reading the whole thing, so it is a control rather than a
+  // decision made for you. Starts fitted, because the first thing you want is
+  // to see that the sheet is the right shape.
+  // A callback ref, not useRef: the sheet renders through a Radix portal that
+  // is not in the DOM yet when the effect after setSelectedSlip runs, so a
+  // plain ref reads null exactly once and the measurement never happens. This
+  // fires when the node actually attaches.
+  const [previewEl, setPreviewEl] = useState(null);
+  const [fitToWidth, setFitToWidth] = useState(true);
+  const [fitScale, setFitScale] = useState(1);
   const [activeTab, setActiveTab] = useState(isEmployee ? "history" : "generate"); // "generate" | "history"
   const [employees, setEmployees] = useState([]);
   const [employeesLoading, setEmployeesLoading] = useState(true);
@@ -368,6 +381,46 @@ const PayslipsPage = () => {
 
   // Bulletproof Direct Print Engine: Clones target HTML inside a hidden iframe and triggers browser printing.
   // This isolates styles perfectly and prevents styles leakage or unaligned outputs when saving as PDF!
+  // Everything that closes the sheet goes through here so the history entry
+  // pushed below is always unwound the same way.
+  const closeSlip = useCallback(() => setSelectedSlip(null), []);
+
+  // Android's hardware Back. Radix closes this sheet on Escape, which no phone
+  // has, so Back would otherwise leave the payslips page entirely -- or quit
+  // the app. One history entry while the sheet is open turns Back into "close
+  // the payslip", which is what it means to the person holding the phone.
+  useEffect(() => {
+    if (!selectedSlip) return undefined;
+
+    window.history.pushState({ payslipSheet: true }, "");
+    const onPop = () => setSelectedSlip(null);
+    window.addEventListener("popstate", onPop);
+
+    return () => {
+      window.removeEventListener("popstate", onPop);
+      // Closed by the Back button or the X rather than by the system gesture:
+      // our entry is still on the stack, so drop it. Otherwise the next Back
+      // would do nothing visible and have to be pressed twice.
+      if (window.history.state?.payslipSheet) window.history.back();
+    };
+  }, [selectedSlip]);
+
+  // How much the 760px document has to shrink to fit the space it is given.
+  // Measured rather than assumed: the same sheet is a phone, a tablet in a
+  // split view, and a desktop dialog.
+  useEffect(() => {
+    if (!previewEl || typeof ResizeObserver === "undefined") return undefined;
+
+    const measure = () => {
+      const padding = 32; // p-4 either side; md:p-8 only applies where it fits anyway
+      setFitScale(Math.min(1, (previewEl.clientWidth - padding) / 760));
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(previewEl);
+    return () => observer.disconnect();
+  }, [previewEl]);
+
   const handlePrintIframe = () => {
     const printableElement = document.getElementById("printable-payslip-core");
     if (!printableElement) return;
@@ -504,7 +557,13 @@ const PayslipsPage = () => {
       <tr>
         <td style={{ ...tdStyle, fontWeight: "bold", color, backgroundColor: labelBg }}>{label}</td>
         <td style={{ ...tdStyle, textAlign: "center", color, fontFamily: "monospace", fontWeight: "bold" }}>
-          <span className="editable-print-value" style={{ display: "none" }}>{value}</span>
+          {/* Every one of these Save buttons recalculates the payslip from the
+              number typed beside it. An engineer reading their own payslip was
+              being handed their own LOP days to retype. The plain value that
+              the print path already renders is exactly what they should see
+              instead, so it is the same span, just shown. */}
+          <span className="editable-print-value" style={{ display: isEmployee ? "inline" : "none" }}>{value}</span>
+          {!isEmployee && (
           <span data-print-hide="true" style={{ display: "inline-flex", alignItems: "center", gap: "4px", justifyContent: "center" }}>
             <input
               type="number"
@@ -545,6 +604,7 @@ const PayslipsPage = () => {
               {recalculating ? "..." : "Save"}
             </button>
           </span>
+          )}
         </td>
       </tr>
     );
@@ -1005,9 +1065,24 @@ const PayslipsPage = () => {
             <>
               {/* Top Control Action Bar */}
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-border px-4 sm:px-6 py-4 sticky top-0 bg-background/95 backdrop-blur-md z-20 rounded-t-xl flex-shrink-0">
-                <div className="flex flex-col pr-8">
-                  <h3 className="text-base font-semibold tracking-tight text-foreground">Employee Payslip</h3>
-                  <p className="text-xs text-muted-foreground">{selectedSlip.employee_details?.employee_name} - {getMonthLabel(selectedSlip.month)} {selectedSlip.year}</p>
+                <div className="flex items-center gap-2 pr-8 min-w-0">
+                  {/* The dialog's own close X sits at absolute top-2 right-2 and
+                      this header is sticky with z-20, which paints over it --
+                      so on a phone there was visibly no way back out of the
+                      payslip. Named, and first, where a back control belongs. */}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    icon={ArrowLeft}
+                    onClick={closeSlip}
+                    className="shrink-0 -ml-2"
+                  >
+                    Back
+                  </Button>
+                  <div className="flex flex-col min-w-0">
+                    <h3 className="text-base font-semibold tracking-tight text-foreground truncate">Employee Payslip</h3>
+                    <p className="text-xs text-muted-foreground truncate">{selectedSlip.employee_details?.employee_name} - {getMonthLabel(selectedSlip.month)} {selectedSlip.year}</p>
+                  </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-2 sm:gap-3 sm:pr-8">
                   {/* Running payroll and sending it out are the office's job.
@@ -1040,6 +1115,20 @@ const PayslipsPage = () => {
                     {emailingSlipId === selectedSlip.id ? "Sending..." : "Send Email"}
                   </Button>
                   )}
+                  {/* Only worth offering where the document does not already
+                      fit; on a desktop dialog fitScale is 1 and this would be a
+                      button that does nothing. */}
+                  {fitScale < 1 && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      icon={fitToWidth ? Maximize2 : Minimize2}
+                      onClick={() => setFitToWidth((v) => !v)}
+                      title={fitToWidth ? "Show at full size and scroll" : "Fit the whole payslip on screen"}
+                    >
+                      {fitToWidth ? "Zoom in" : "Fit"}
+                    </Button>
+                  )}
                   <Button variant="brand" size="sm" icon={Printer} onClick={handlePrintIframe}>
                     Download / Print PDF
                   </Button>
@@ -1047,21 +1136,32 @@ const PayslipsPage = () => {
               </div>
 
               {/* Responsive preview container */}
-              <div className="flex-grow p-4 md:p-8 overflow-auto bg-muted/20 flex justify-center items-start min-h-0">
+              {/* justify-start below md. Centring a flex child wider than its
+                  container puts the child's left edge at a negative offset that
+                  scrolling cannot reach, which is why the company name and the
+                  whole first column were cut off with no way to get to them. */}
+              <div
+                ref={setPreviewEl}
+                className="flex-grow p-4 md:p-8 overflow-auto bg-muted/20 flex justify-start md:justify-center items-start min-h-0"
+              >
                 
                 {/* 
                   Pure HTML Table Implementation: 
                   This guarantees 100% perfect layout, borders, alignment, and styling preserved 
                   whether on-screen, in smaller windows, or exported via PDF print engine!
                 */}
-                <div 
-                  id="printable-payslip-core" 
-                  style={{ 
-                    padding: "3px", 
-                    backgroundColor: "#fff", 
-                    boxShadow: "0 1px 3px rgba(0,0,0,0.1)", 
-                    width: "100%", 
-                    maxWidth: "760px" 
+                {/* The zoom is on this wrapper, never on the printable node
+                    itself: handlePrintIframe copies that node's outerHTML into
+                    an iframe, so a zoom baked into it would shrink the paper. */}
+                <div style={{ zoom: fitToWidth ? fitScale : 1 }}>
+                <div
+                  id="printable-payslip-core"
+                  style={{
+                    padding: "3px",
+                    backgroundColor: "#fff",
+                    boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+                    width: "760px",
+                    maxWidth: "760px",
                   }}
                 >
                   <table style={tableMainStyle}>
@@ -1400,9 +1500,10 @@ const PayslipsPage = () => {
                                       <tr>
                                         <td style={{ ...tdStyle, fontWeight: "bold" }}>Other Deduction</td>
                                         <td style={{ ...tdStyle, textAlign: "right", fontFamily: "monospace", color: "#b91c1c" }}>
-                                          <span className="editable-print-value" style={{ display: "none" }}>
+                                          <span className="editable-print-value" style={{ display: isEmployee ? "inline" : "none" }}>
                                             {parseFloat(selectedSlip.deduction_other) > 0 ? formatINR(selectedSlip.deduction_other) : "-"}
                                           </span>
+                                          {!isEmployee && (
                                           <span data-print-hide="true" style={{ display: "inline-flex", alignItems: "center", gap: "4px", justifyContent: "flex-end" }}>
                                             <input
                                               type="number"
@@ -1443,6 +1544,7 @@ const PayslipsPage = () => {
                                               {recalculating ? "..." : "Save"}
                                             </button>
                                           </span>
+                                          )}
                                         </td>
                                       </tr>
                                       <tr style={{ backgroundColor: "#f3f4f6", fontWeight: "900", fontSize: "12px" }}>
@@ -1534,6 +1636,7 @@ const PayslipsPage = () => {
 
                     </tbody>
                   </table>
+                </div>
                 </div>
               </div>
             </>
