@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Route } from "lucide-react";
 import { caseService } from "../../services/caseService";
 import { useDuty } from "../../context/DutyContext";
 
@@ -224,15 +225,27 @@ export default function EngineerCases() {
         </div>
       </div>
 
-      {/* How far they have gone today. The engineer's own figure, computed by
-          the same helper that produces the one on the office's board — an
-          engineer and their manager reading two different numbers for the same
-          day is worse than neither of them having one. */}
+      {/* How far they have gone today, on a card of its own. The engineer's
+          own figure, computed by the same helper that produces the one on the
+          office's board — an engineer and their manager reading two different
+          numbers for the same day is worse than neither of them having one.
+          Absent from an older backend, in which case the card does not appear
+          rather than claiming a confident zero. */}
       {todayKm != null && (
-        <p className="text-sm">
-          <span className="font-semibold text-gray-900">{todayKm.toFixed(1)} km</span>
-          <span className="text-gray-500"> travelled today</span>
-        </p>
+        <div className="rounded-xl border bg-white p-4 shadow-sm flex items-center gap-4">
+          <div className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-indigo-50 text-indigo-600">
+            <Route className="h-6 w-6" strokeWidth={2} />
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-3xl font-semibold leading-none text-gray-900 tabular-nums">
+                {todayKm.toFixed(1)}
+              </span>
+              <span className="text-base font-medium text-gray-500">km</span>
+            </div>
+            <p className="mt-1 text-xs text-gray-500">Travelled today</p>
+          </div>
+        </div>
       )}
       {lastFix && (
         <p className="text-xs text-gray-500">
