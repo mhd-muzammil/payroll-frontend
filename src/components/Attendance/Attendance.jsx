@@ -37,6 +37,16 @@ const getDatePart = (dateTimeValue) => {
   return String(dateTimeValue).slice(0, 10);
 };
 
+// Mirrors StatsCard's own accent map, for the compact phone tiles below. Kept
+// here rather than exported so nothing outside Attendance changes shape.
+const STAT_ACCENT = {
+  primary: "bg-primary-glow/10 text-primary-glow",
+  success: "bg-success/10 text-success",
+  warning: "bg-warning/10 text-warning",
+  info: "bg-info/10 text-info",
+  danger: "bg-destructive/10 text-destructive",
+};
+
 const Attendance = () => {
   const {
     records,
@@ -66,6 +76,9 @@ const Attendance = () => {
   const [importProgress, setImportProgress] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedRegion, setSelectedRegion] = useState("");
+  // Phone only: the From/To inputs and the region select start folded away.
+  // From sm: up they are always visible and this is ignored.
+  const [showFilters, setShowFilters] = useState(false);
 
   const handleImportSubmit = async (e) => {
     e.preventDefault();
@@ -364,6 +377,20 @@ const Attendance = () => {
     [stats.snapshotDate]
   );
 
+  // Defined once, rendered twice - full cards from sm: up, compact tiles on a
+  // phone. Stacked at full size these five cost 690px of scrolling before the
+  // page reaches anything you can act on.
+  const statCards = useMemo(() => {
+    const live = snapshotDayLabel ? `Live · ${snapshotDayLabel}` : "Live headcount";
+    return [
+      { label: "Present", value: stats.presentToday.toString(), subtitle: live, icon: CheckCircle2, accent: "success" },
+      { label: "On Leave", value: stats.onLeave.toString(), subtitle: live, icon: Timer, accent: "warning" },
+      { label: "Absent", value: stats.absent.toString(), subtitle: live, icon: AlertCircle, accent: "danger" },
+      { label: "Overtime Hours", value: `${stats.overtimeHours}h`, subtitle: "This cycle", icon: Clock, accent: "info" },
+      { label: "Total Hours", value: `${stats.totalWorkedHours}h`, subtitle: "Worked this cycle", icon: Timer, accent: "primary" },
+    ];
+  }, [stats, snapshotDayLabel]);
+
   const selectedDateLabel = useMemo(() => {
     const formatRangeDate = (dStr) => {
       if (!dStr) return "";
@@ -429,7 +456,7 @@ const Attendance = () => {
     <div>
       {/* Notification Toast */}
       {success && (
-        <div className="fixed top-4 right-4 z-50 animate-in slide-in-from-top">
+        <div className="fixed top-4 inset-x-4 sm:inset-x-auto sm:right-4 z-50 animate-in slide-in-from-top">
           <div className="flex items-center gap-2 bg-emerald-500 text-white px-4 py-3 rounded-2xl shadow-lg">
             <Check className="h-4 w-4" />
             <span className="text-sm font-medium">{success}</span>
@@ -441,7 +468,7 @@ const Attendance = () => {
       )}
 
       {error && (
-        <div className="fixed top-4 right-4 z-50 animate-in slide-in-from-top">
+        <div className="fixed top-4 inset-x-4 sm:inset-x-auto sm:right-4 z-50 animate-in slide-in-from-top">
           <div className="flex items-center gap-2 bg-red-500 text-white px-4 py-3 rounded-2xl shadow-lg">
             <AlertCircle className="h-4 w-4" />
             <span className="text-sm font-medium">{error}</span>
@@ -459,14 +486,16 @@ const Attendance = () => {
         description="Track daily attendance, overtime and absences."
         actions={
           !isEmployee ? (
-            <div className="flex gap-2">
+            // Three pill buttons in a row ran to 400px on a 390px screen, so Add
+            // Record hung off the edge. Two up, primary across the bottom.
+            <div className="grid grid-cols-2 gap-2 w-full sm:flex sm:w-auto">
               <Button variant="destructive" size="pill" icon={Trash2} onClick={() => setShowDeleteAllConfirm(true)}>
                 Delete All
               </Button>
               <Button variant="outline" size="pill" icon={Upload} onClick={() => setShowImportModal(true)}>
                 Import Excel
               </Button>
-              <Button variant="brand" size="pill" icon={Plus} onClick={() => setShowForm(true)}>
+              <Button variant="brand" size="pill" icon={Plus} onClick={() => setShowForm(true)} className="col-span-2 sm:col-span-1">
                 Add Record
               </Button>
             </div>
@@ -476,17 +505,20 @@ const Attendance = () => {
 
       {isEmployee && (
         <div className="mb-6 rounded-3xl gradient-brand p-1 shadow-glow">
-          <div className="bg-card dark:bg-[#1A1C23] rounded-[22px] p-6 md:p-8 relative overflow-hidden">
+          <div className="bg-card dark:bg-[#1A1C23] rounded-[22px] p-5 md:p-8 relative overflow-hidden">
             
-            <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+            <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-5 md:gap-6">
               <div>
                 <div className="flex items-center gap-2 mb-2">
                   <div className="h-2 w-2 rounded-full bg-success animate-pulse" />
                   <span className="text-[10px] uppercase font-bold tracking-widest text-success">Live Location Mode</span>
                 </div>
-                <h3 className="text-xl font-bold tracking-tight mb-2">Smart Attendance Gate</h3>
+                <h3 className="text-lg md:text-xl font-bold tracking-tight mb-1.5">Smart Attendance Gate</h3>
+                {/* Four lines of "physical validation parameters confirm
+                    on-premise entry" pushed the button most of a screen down.
+                    Same meaning, one line. */}
                 <p className="text-sm text-muted-foreground max-w-md">
-                  Attendance submission controls automatically unlock only when physical validation parameters confirm on-premise entry.
+                  Punch in when you reach and out when you leave. Your location is recorded with each punch.
                 </p>
               </div>
 
@@ -498,7 +530,7 @@ const Attendance = () => {
                     icon={geoLocating ? null : Timer}
                     onClick={handleGeoPunchIn}
                     disabled={loading || geoLocating}
-                    className="!h-14 px-8 shadow-glow-brand min-w-[180px]"
+                    className="!h-14 px-8 shadow-glow-brand w-full sm:w-auto sm:min-w-[180px]"
                   >
                     {geoLocating ? "Authorizing..." : "Secure Punch In"}
                   </Button>
@@ -511,14 +543,14 @@ const Attendance = () => {
                     icon={geoLocating ? null : Timer}
                     onClick={handleGeoPunchOut}
                     disabled={loading || geoLocating}
-                    className="!h-14 px-8 shadow-glow-brand min-w-[180px]"
+                    className="!h-14 px-8 shadow-glow-brand w-full sm:w-auto sm:min-w-[180px]"
                   >
                     {geoLocating ? "Authorizing..." : "Secure Punch Out"}
                   </Button>
                 )}
 
                 {(hasInTimeToday && hasOutTimeToday) && (
-                  <div className="flex items-center gap-2 px-6 py-3 bg-success/10 text-success rounded-2xl font-medium border border-success/20">
+                  <div className="flex w-full sm:w-auto items-center justify-center gap-2 px-6 py-3 bg-success/10 text-success rounded-2xl font-medium border border-success/20">
                     <CheckCircle2 className="h-5 w-5" />
                     Schedule Completed for Today
                   </div>
@@ -527,7 +559,7 @@ const Attendance = () => {
             </div>
 
             {employeeSelectedDateRecord && (
-              <div className="mt-8 grid grid-cols-2 sm:grid-cols-4 gap-4 bg-muted/30 p-4 rounded-2xl border border-border/50 relative z-10">
+              <div className="mt-6 md:mt-8 grid grid-cols-2 sm:grid-cols-4 gap-4 bg-muted/30 p-4 rounded-2xl border border-border/50 relative z-10">
                 <div>
                   <p className="text-[10px] uppercase text-muted-foreground font-bold tracking-wider mb-1">Shift Entry</p>
                   <p className="font-semibold">{formatTime(employeeSelectedDateRecord.intime) || "-- : --"}</p>
@@ -552,48 +584,50 @@ const Attendance = () => {
         </div>
       )}
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4 md:gap-6 mb-6">
-        <StatsCard
-          label="Present"
-          value={stats.presentToday.toString()}
-          subtitle={snapshotDayLabel ? `Live · ${snapshotDayLabel}` : "Live headcount"}
-          icon={CheckCircle2}
-          accent="success"
-        />
-        <StatsCard
-          label="On Leave"
-          value={stats.onLeave.toString()}
-          subtitle={snapshotDayLabel ? `Live · ${snapshotDayLabel}` : "Live headcount"}
-          icon={Timer}
-          accent="warning"
-        />
-        <StatsCard
-          label="Absent"
-          value={stats.absent.toString()}
-          subtitle={snapshotDayLabel ? `Live · ${snapshotDayLabel}` : "Live headcount"}
-          icon={AlertCircle}
-          accent="danger"
-        />
-        <StatsCard
-          label="Overtime Hours"
-          value={`${stats.overtimeHours}h`}
-          subtitle="This cycle"
-          icon={Clock}
-          accent="info"
-        />
-        <StatsCard
-          label="Total Hours"
-          value={`${stats.totalWorkedHours}h`}
-          subtitle="Worked this cycle"
-          icon={Timer}
-          accent="primary"
-        />
+      {/* Stats - full cards from a tablet up */}
+      <div className="hidden sm:grid grid-cols-2 xl:grid-cols-5 gap-4 md:gap-6 mb-6">
+        {statCards.map((c) => (
+          <StatsCard
+            key={c.label}
+            label={c.label}
+            value={c.value}
+            subtitle={c.subtitle}
+            icon={c.icon}
+            accent={c.accent}
+          />
+        ))}
+      </div>
+
+      {/* Stats - phone. The same five numbers in 200px instead of 690px, with
+          the snapshot day said once above them instead of three times inside
+          them. */}
+      <div className="sm:hidden mb-5">
+        <p className="mb-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+          {snapshotDayLabel ? `Live headcount · ${snapshotDayLabel}` : "Live headcount"}
+        </p>
+        <div className="grid grid-cols-2 gap-2.5">
+          {statCards.map((c, i) => (
+            <div
+              key={c.label}
+              className={`glass-card rounded-2xl p-3 flex items-center gap-3 ${
+                i === statCards.length - 1 ? "col-span-2" : ""
+              }`}
+            >
+              <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl ${STAT_ACCENT[c.accent]}`}>
+                <c.icon className="h-[18px] w-[18px]" strokeWidth={2.2} />
+              </div>
+              <div className="min-w-0">
+                <div className="text-xl font-semibold leading-tight">{c.value}</div>
+                <div className="text-[11px] text-muted-foreground truncate">{c.label}</div>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Region-Wise Breakdown */}
       {!isEmployee && stats.regionBreakdown && (
-        <div className="mb-6 bg-card border border-border rounded-3xl p-6 shadow-sm">
+        <div className="mb-6 bg-card border border-border rounded-3xl p-4 md:p-6 shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
             <h3 className="text-base font-bold tracking-tight flex items-center gap-2">
               <Clock className="h-5 w-5 text-primary" />
@@ -606,12 +640,14 @@ const Attendance = () => {
             </span>
           </div>
           {/* xl, not lg — five tracks do not fit beside the sidebar at 1024px. */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
+          {/* Two up on a phone. One per row put five regions across five
+              screens, and each card is only three short lines. */}
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-2.5 md:gap-4">
             {Object.entries(stats.regionBreakdown).map(([region, data]) => (
-              <div key={region} className="bg-muted/30 border border-border/50 rounded-2xl p-4 flex flex-col justify-between">
+              <div key={region} className="bg-muted/30 border border-border/50 rounded-2xl p-3 md:p-4 flex flex-col justify-between">
                 <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-bold text-sm text-foreground capitalize">{region}</span>
+                  <div className="flex flex-wrap items-center justify-between gap-1 mb-2">
+                    <span className="font-bold text-sm text-foreground capitalize truncate">{region}</span>
                     <Badge variant="outline" className="text-[10px] px-1.5 py-0.5 border-primary/20 text-primary bg-primary/5">
                       {data.total} Total
                     </Badge>
@@ -644,50 +680,35 @@ const Attendance = () => {
         </div>
       )}
 
-      {/* Date Navigation & Search */}
-      <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            onClick={() => moveSelectedDate(-1)}
-            title="Previous Cycle Month"
-            className="grid h-9 w-9 place-items-center rounded-lg border border-border hover:bg-muted"
-            type="button"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </button>
-          
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs font-semibold text-muted-foreground">From:</span>
-            <input
-              type="date"
-              value={fromDate}
-              onChange={(e) => setFromDate(e.target.value)}
-              className="h-9 rounded-xl border border-border bg-card px-3 text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
-            />
-          </div>
+      {/* Date navigation & search. Eight controls in one flex-wrap landed on
+          five ragged rows at 390px, with the two arrows people actually use
+          stranded on different rows from the label they move. */}
+      <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-4">
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-2">
+          {/* Cycle stepper: one bar, arrows either side of the range it moves */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => moveSelectedDate(-1)}
+              title="Previous Cycle Month"
+              className="grid h-10 w-10 sm:h-9 sm:w-9 shrink-0 place-items-center rounded-xl sm:rounded-lg border border-border hover:bg-muted"
+              type="button"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
 
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs font-semibold text-muted-foreground">To:</span>
-            <input
-              type="date"
-              value={toDate}
-              onChange={(e) => setToDate(e.target.value)}
-              className="h-9 rounded-xl border border-border bg-card px-3 text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
-            />
-          </div>
+            <div className="flex-1 sm:flex-none rounded-xl border border-border bg-card px-3 sm:px-4 h-10 sm:h-9 flex items-center justify-center text-center text-[13px] sm:text-sm font-medium text-primary font-mono">
+              {selectedDateLabel}
+            </div>
 
-          <div className="rounded-xl border border-border bg-card px-4 h-9 flex items-center text-sm font-medium text-primary font-mono">
-            {selectedDateLabel}
+            <button
+              onClick={() => moveSelectedDate(1)}
+              title="Next Cycle Month"
+              className="grid h-10 w-10 sm:h-9 sm:w-9 shrink-0 place-items-center rounded-xl sm:rounded-lg border border-border hover:bg-muted"
+              type="button"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
           </div>
-          
-          <button
-            onClick={() => moveSelectedDate(1)}
-            title="Next Cycle Month"
-            className="grid h-9 w-9 place-items-center rounded-lg border border-border hover:bg-muted"
-            type="button"
-          >
-            <ChevronRight className="h-4 w-4" />
-          </button>
 
           {/* Search Input */}
           <input
@@ -695,26 +716,63 @@ const Attendance = () => {
             placeholder="Search employee or department..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="h-9 w-60 ml-2 rounded-xl border border-border bg-card px-3 text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+            className="h-10 sm:h-9 w-full sm:w-60 sm:ml-2 rounded-xl border border-border bg-card px-3 text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
           />
 
-          {/* Region Filter */}
-          {!isEmployee && (
-            <select
-              value={selectedRegion}
-              onChange={(e) => setSelectedRegion(e.target.value)}
-              className="h-9 rounded-xl border border-border bg-card px-3 text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 cursor-pointer"
-            >
-              <option value="">All Regions</option>
-              <option value="Chennai">Chennai</option>
-              <option value="Vellore">Vellore</option>
-              <option value="Salem">Salem</option>
-              <option value="Kanchipuram">Kanchipuram</option>
-              <option value="Hosur">Hosur</option>
-            </select>
-          )}
+          {/* Exact dates and region. Folded away on a phone behind Filters -
+              the stepper covers the ordinary case and these cost three rows. */}
+          <div
+            className={`flex-col gap-2 sm:flex-row sm:items-center sm:gap-2 ${
+              showFilters ? "flex" : "hidden sm:flex"
+            }`}
+          >
+            <div className="flex items-center gap-1.5">
+              <span className="w-9 sm:w-auto shrink-0 text-xs font-semibold text-muted-foreground">From:</span>
+              <input
+                type="date"
+                value={fromDate}
+                onChange={(e) => setFromDate(e.target.value)}
+                className="h-10 sm:h-9 flex-1 sm:flex-none rounded-xl border border-border bg-card px-3 text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+              />
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              <span className="w-9 sm:w-auto shrink-0 text-xs font-semibold text-muted-foreground">To:</span>
+              <input
+                type="date"
+                value={toDate}
+                onChange={(e) => setToDate(e.target.value)}
+                className="h-10 sm:h-9 flex-1 sm:flex-none rounded-xl border border-border bg-card px-3 text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+              />
+            </div>
+
+            {/* Region Filter */}
+            {!isEmployee && (
+              <select
+                value={selectedRegion}
+                onChange={(e) => setSelectedRegion(e.target.value)}
+                className="h-10 sm:h-9 w-full sm:w-auto rounded-xl border border-border bg-card px-3 text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 cursor-pointer"
+              >
+                <option value="">All Regions</option>
+                <option value="Chennai">Chennai</option>
+                <option value="Vellore">Vellore</option>
+                <option value="Salem">Salem</option>
+                <option value="Kanchipuram">Kanchipuram</option>
+                <option value="Hosur">Hosur</option>
+              </select>
+            )}
+          </div>
         </div>
-        <div className="flex items-center gap-2">
+
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:gap-2">
+          <Button
+            variant="outline"
+            className="sm:hidden"
+            onClick={() => setShowFilters((v) => !v)}
+            type="button"
+          >
+            {showFilters ? "Hide dates" : "Dates"}
+          </Button>
           <Button
             variant="outline"
             onClick={() => {
@@ -726,7 +784,14 @@ const Attendance = () => {
           >
             Current Cycle
           </Button>
-          <Button variant="outline" onClick={fetchAll} disabled={loading}>
+          {/* An employee has three buttons here, not four, so the last one
+              would sit half-width beside a gap. */}
+          <Button
+            variant="outline"
+            onClick={fetchAll}
+            disabled={loading}
+            className={isEmployee ? "col-span-2 sm:col-span-1" : ""}
+          >
             {loading ? "Refreshing..." : "Refresh"}
           </Button>
           {!isEmployee && (

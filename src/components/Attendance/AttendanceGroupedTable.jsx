@@ -29,6 +29,14 @@ const ROW_TINT = {
   Late: "bg-amber-500/10 hover:bg-amber-500/[0.16]",
 };
 
+// The same tints for the phone list, minus the hover halves - there is no
+// pointer to hover with, and on Android a :hover state sticks after a tap.
+const ROW_TINT_TOUCH = {
+  Absent: "bg-red-500/10",
+  Leave: "bg-amber-500/10",
+  Late: "bg-amber-500/10",
+};
+
 const StatusPill = ({ status }) => (
   <span
     className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
@@ -128,88 +136,95 @@ const AttendanceGroupedTable = ({
             key={g.key}
             className="glass-card rounded-3xl overflow-hidden border border-border/70"
           >
-            {/* Employee summary header */}
-            <button
-              type="button"
-              onClick={() => toggle(g.key)}
-              className="w-full flex flex-wrap items-center gap-4 px-4 md:px-5 py-4 text-left hover:bg-muted/40 transition"
-            >
-              {!singleGroup && (
-                <ChevronDown
-                  className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${
-                    open ? "rotate-0" : "-rotate-90"
-                  }`}
-                />
-              )}
-              <div className="flex items-center gap-3 min-w-[200px] flex-1">
-                <Avatar name={g.employee_name} />
-                <div>
-                  <div className="text-sm font-semibold">{g.employee_name}</div>
-                  <div className="text-[11px] text-muted-foreground truncate max-w-[200px]">
-                    {g.email || "no email"}
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    {g.role || "—"}
-                    {g.department ? ` · ${g.department}` : ""}
+            {/* Employee summary header. The toggle and the action are
+                siblings, not nested buttons: Mark Attendance used to sit inside
+                the <button> that expands the card, which is invalid nesting and
+                survived only on stopPropagation. */}
+            <div className="flex items-start gap-2 px-4 md:px-5 py-4">
+              <button
+                type="button"
+                onClick={() => toggle(g.key)}
+                className="flex-1 min-w-0 text-left md:flex md:items-center md:gap-4"
+              >
+                <div className="flex items-center gap-3 min-w-0 md:flex-1 md:min-w-[200px]">
+                  {!singleGroup && (
+                    <ChevronDown
+                      className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${
+                        open ? "rotate-0" : "-rotate-90"
+                      }`}
+                    />
+                  )}
+                  <Avatar name={g.employee_name} />
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-sm font-semibold truncate">
+                        {g.employee_name}
+                      </span>
+                      <Badge
+                        variant="outline"
+                        className="shrink-0 capitalize border-border/80 text-foreground text-[10px] px-1.5 py-0"
+                      >
+                        {g.branch}
+                      </Badge>
+                    </div>
+                    <div className="text-[11px] text-muted-foreground truncate">
+                      {g.email || "no email"}
+                    </div>
+                    <div className="text-xs text-muted-foreground truncate">
+                      {g.role || "—"}
+                      {g.department ? ` · ${g.department}` : ""}
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              <Badge
-                variant="outline"
-                className="capitalize border-border/80 text-foreground"
-              >
-                {g.branch}
-              </Badge>
-
-              {/* Cycle summary pills */}
-              <div className="flex flex-wrap items-center gap-2 text-xs">
-                <span className="rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-2.5 py-1 font-medium">
-                  Present {g.presentDays}
-                </span>
-                <span className="rounded-full bg-red-500/10 text-red-600 dark:text-red-400 px-2.5 py-1 font-medium">
-                  Absent {g.absentDays}
-                </span>
-                {g.leaveDays > 0 && (
-                  <span className="rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 px-2.5 py-1 font-medium">
-                    Leave {g.leaveDays}
+                {/* Cycle summary pills */}
+                <div className="mt-2.5 md:mt-0 flex flex-wrap items-center gap-1.5 md:gap-2 text-xs">
+                  <span className="rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-2.5 py-1 font-medium">
+                    Present {g.presentDays}
                   </span>
-                )}
-                <span className="rounded-full bg-muted px-2.5 py-1 font-medium text-muted-foreground">
-                  {g.totalHours.toFixed(1)}h total
-                </span>
-                {g.otHours > 0 && (
-                  <span className="rounded-full bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 px-2.5 py-1 font-medium">
-                    +{g.otHours.toFixed(1)}h OT
+                  <span className="rounded-full bg-red-500/10 text-red-600 dark:text-red-400 px-2.5 py-1 font-medium">
+                    Absent {g.absentDays}
                   </span>
-                )}
-              </div>
+                  {g.leaveDays > 0 && (
+                    <span className="rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 px-2.5 py-1 font-medium">
+                      Leave {g.leaveDays}
+                    </span>
+                  )}
+                  <span className="rounded-full bg-muted px-2.5 py-1 font-medium text-muted-foreground">
+                    {g.totalHours.toFixed(1)}h total
+                  </span>
+                  {g.otHours > 0 && (
+                    <span className="rounded-full bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 px-2.5 py-1 font-medium">
+                      +{g.otHours.toFixed(1)}h OT
+                    </span>
+                  )}
+                </div>
+              </button>
 
               {!isEmployee && onAddForEmployee && (
                 <Button
                   variant="brand"
                   size="sm"
-                  onClick={(e) => {
-                    e.stopPropagation();
+                  onClick={() =>
                     onAddForEmployee({
                       employee_name: g.employee_name,
                       role: g.role,
                       department: g.department,
                       salary: g.records[0]?.salary || "0.00",
-                    });
-                  }}
-                  className="ml-auto rounded-xl text-xs font-semibold shadow-glow-brand"
+                    })
+                  }
+                  className="shrink-0 h-10 w-10 md:h-8 md:w-auto md:px-3 rounded-xl text-xs font-semibold shadow-glow-brand"
                   title={`Mark Attendance for ${g.employee_name}`}
                 >
                   <Plus className="h-3.5 w-3.5" />
-                  <span>Mark Attendance</span>
+                  <span className="hidden md:inline">Mark Attendance</span>
                 </Button>
               )}
-            </button>
+            </div>
 
             {/* Daily breakdown */}
             {open && (
-              <div className="overflow-x-auto scrollbar-thin border-t border-border">
+              <div className="hidden md:block overflow-x-auto scrollbar-thin border-t border-border">
                 <table className="w-full text-sm">
                   <thead className="bg-muted/40">
                     <tr>
@@ -325,6 +340,88 @@ const AttendanceGroupedTable = ({
                     )}
                   </tbody>
                 </table>
+              </div>
+            )}
+
+            {/* Phone: one row per day. The table above measures 571px on a
+                390px screen, which made reading your own week a sideways
+                scroll inside a page that already scrolls down. */}
+            {open && (
+              <div className="md:hidden border-t border-border divide-y divide-border/60">
+                {g.records.length === 0 ? (
+                  <div className="px-4 py-6 text-center text-sm text-muted-foreground">
+                    No records in this range.
+                  </div>
+                ) : (
+                  g.records.map((r) => {
+                    const overtime = calculateOvertime(r.intime, r.outtime);
+                    return (
+                      <div
+                        key={r.id}
+                        className={`px-4 py-3 ${ROW_TINT_TOUCH[r.status] || ""}`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium flex-1 min-w-0 truncate">
+                            {formatDayLabel(r.intime || r.outtime)}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              !isEmployee && onToggleStatus?.(r.id, r.status)
+                            }
+                            disabled={isEmployee}
+                            className={`shrink-0 ${isEmployee ? "cursor-default" : "cursor-pointer"}`}
+                          >
+                            <StatusPill status={r.status} />
+                          </button>
+                          {!isEmployee && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => onEdit?.(r)}
+                                className="shrink-0 grid h-10 w-10 place-items-center rounded-xl border border-border"
+                                title="Edit"
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => onDelete?.(r.id)}
+                                className="shrink-0 grid h-10 w-10 place-items-center rounded-xl border border-border text-red-500"
+                                title="Delete"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </>
+                          )}
+                        </div>
+
+                        <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                          <span>
+                            In{" "}
+                            <span className="font-medium text-foreground">
+                              {formatTime(r.intime)}
+                            </span>
+                          </span>
+                          <span>
+                            Out{" "}
+                            <span className="font-medium text-foreground">
+                              {formatTime(r.outtime)}
+                            </span>
+                          </span>
+                          <span className="font-medium text-foreground">
+                            {calculateHours(r.intime, r.outtime)}h
+                          </span>
+                          {Number(overtime) > 0 && (
+                            <span className="font-medium text-cyan-600 dark:text-cyan-400">
+                              +{overtime}h OT
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
               </div>
             )}
           </div>
