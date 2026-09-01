@@ -16,6 +16,7 @@ const initialFormState = {
   date_of_joining: "",
   work_lat: "",
   work_lon: "",
+  flexible_location: false,
   // Detailed breakdown defaults
   basic: "",
   hra: "",
@@ -89,6 +90,7 @@ const EmployeeForm = ({ initialData = null, onSubmit, onCancel, loading = false 
         date_of_joining: initialData.date_of_joining || "",
         work_lat: initialData.work_lat || "",
         work_lon: initialData.work_lon || "",
+        flexible_location: Boolean(initialData.flexible_location),
         basic: formatForInput(initialData.basic),
         hra: formatForInput(initialData.hra),
         conveyance: formatForInput(initialData.conveyance),
@@ -115,8 +117,11 @@ const EmployeeForm = ({ initialData = null, onSubmit, onCancel, loading = false 
   }, [initialData]);
 
   const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    const { name, value, type, checked } = e.target;
+    // A checkbox carries its answer in `checked`; its `value` is the constant
+    // string "on" whether it is ticked or not, so reading value would save the
+    // same thing either way.
+    setFormData((prev) => ({ ...prev, [name]: type === "checkbox" ? checked : value }));
   };
 
   const handleSubmit = (e) => {
@@ -622,8 +627,45 @@ const EmployeeForm = ({ initialData = null, onSubmit, onCancel, loading = false 
               </div>
             </button>
 
+            {/* Outside the fold, directly under the heading: this is the switch
+                that decides whether the coordinates behind "Customize location"
+                mean anything at all, so burying it inside them would hide the
+                answer behind the question. */}
+            <label
+              className={`mt-3 flex items-start gap-3 rounded-xl border p-3 cursor-pointer transition-colors ${
+                formData.flexible_location
+                  ? "border-primary/40 bg-primary/5"
+                  : "border-border/60 bg-background hover:bg-muted/30"
+              }`}
+            >
+              <input
+                type="checkbox"
+                name="flexible_location"
+                checked={Boolean(formData.flexible_location)}
+                onChange={handleChange}
+                className="mt-0.5 h-4 w-4 shrink-0 rounded border-border accent-primary cursor-pointer"
+              />
+              <span className="min-w-0">
+                <span className="block text-sm font-medium">Flexible location</span>
+                <span className="block text-xs text-muted-foreground">
+                  This employee can mark attendance from anywhere. The work location below is
+                  ignored — for field engineers and anyone not tied to one office.
+                </span>
+              </span>
+            </label>
+
             {showLocationSettings && (
               <div className="mt-4 space-y-4 border-t border-border/50 pt-4 animate-in fade-in slide-in-from-top-1 duration-200">
+                {/* Kept editable rather than disabled: HR may well be setting an
+                    office for someone whose flexible flag comes off later, and
+                    a field that silently refuses to type in is worse than one
+                    that says plainly it is not being used. */}
+                {formData.flexible_location && (
+                  <p className="rounded-lg bg-amber-500/10 px-3 py-2 text-[11px] text-amber-700 dark:text-amber-400">
+                    Flexible location is on, so nothing below is enforced. Attendance will be
+                    accepted from anywhere.
+                  </p>
+                )}
                 
                 {/* Address Search Component */}
                 <div className="space-y-1.5">
