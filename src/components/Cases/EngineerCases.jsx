@@ -1,5 +1,14 @@
 import { useEffect, useState } from "react";
-import { Route } from "lucide-react";
+import {
+  Route,
+  Phone,
+  Navigation,
+  Building2,
+  MapPin,
+  CheckCircle2,
+  LogIn,
+  LogOut,
+} from "lucide-react";
 import { caseService } from "../../services/caseService";
 import { useDuty } from "../../context/DutyContext";
 
@@ -22,17 +31,27 @@ function clockTime(iso) {
  */
 function PunchRecord({ c }) {
   if (c.status === "cancelled") {
-    return <span className="text-xs font-medium text-gray-500">Cancelled</span>;
+    return (
+      <span className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-500">
+        Cancelled
+      </span>
+    );
   }
   if (!c.reached_at) {
-    return <span className="text-xs font-medium text-gray-500">Not punched in</span>;
+    return <span className="text-xs font-medium text-gray-400">Not punched in</span>;
+  }
+  if (c.completed_at) {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700">
+        <CheckCircle2 className="h-3.5 w-3.5" />
+        {clockTime(c.reached_at)} – {clockTime(c.completed_at)}
+      </span>
+    );
   }
   return (
-    <span className="text-xs font-medium text-gray-700">
-      <span className="text-indigo-700">In {clockTime(c.reached_at)}</span>
-      {c.completed_at && (
-        <span className="text-green-700"> · Out {clockTime(c.completed_at)}</span>
-      )}
+    <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-700">
+      <span className="h-1.5 w-1.5 rounded-full bg-indigo-500 animate-pulse" />
+      On site since {clockTime(c.reached_at)}
     </span>
   );
 }
@@ -92,12 +111,45 @@ function CaseDetails({ details }) {
   );
 }
 
-const PRIORITY_COLOR = {
-  urgent: "bg-red-100 text-red-700",
-  high: "bg-orange-100 text-orange-700",
-  medium: "bg-yellow-100 text-yellow-700",
-  low: "bg-green-100 text-green-700",
+// Solid, uppercase, and on a coloured rail down the side of the card, because
+// "urgent" whispered in a pale chip is the same as not saying it.
+const PRIORITY = {
+  urgent: { chip: "bg-red-600 text-white", rail: "bg-red-500" },
+  high: { chip: "bg-orange-500 text-white", rail: "bg-orange-400" },
+  medium: { chip: "bg-amber-400 text-amber-950", rail: "bg-amber-300" },
+  low: { chip: "bg-emerald-600 text-white", rail: "bg-emerald-400" },
 };
+
+const PRIORITY_RANK = { urgent: 0, high: 1, medium: 2, low: 3 };
+
+/**
+ * The order an engineer needs, which is not the order the API returns.
+ *
+ * Anything still to do comes first, most urgent at the top; within a priority
+ * the one already punched into goes above the ones not started, because that is
+ * the job in hand. Finished calls sink to the bottom -- they are a record, not
+ * work. The screenshot that prompted this had a completed PM visit above an
+ * urgent ATM outage with a branch manager standing over it.
+ */
+function orderForEngineer(list) {
+  return [...list].sort((a, b) => {
+    const doneA = a.status === "completed" || a.status === "cancelled";
+    const doneB = b.status === "completed" || b.status === "cancelled";
+    if (doneA !== doneB) return doneA ? 1 : -1;
+
+    if (!doneA) {
+      const rank =
+        (PRIORITY_RANK[a.priority] ?? 9) - (PRIORITY_RANK[b.priority] ?? 9);
+      if (rank !== 0) return rank;
+      const startedA = a.reached_at ? 0 : 1;
+      const startedB = b.reached_at ? 0 : 1;
+      if (startedA !== startedB) return startedA - startedB;
+    }
+
+    // Newest first among equals, so a fresh call does not hide under an old one.
+    return String(b.created_at || "").localeCompare(String(a.created_at || ""));
+  });
+}
 
 /**
  * Engineer's field view. Shows cases assigned to the logged-in engineer, lets
@@ -167,12 +219,6 @@ export default function EngineerCases() {
     if (!onDuty) startDuty();
     setContext(c.id, "working");
     runAction(() => caseService.punchIn(c.id, lastFix), c, "working");
-  };
-
-  const openInMaps = (c) => {
-    if (c.latitude != null && c.longitude != null) {
-      window.open(mapsUrl(`${c.latitude},${c.longitude}`), "_blank", "noopener");
-    }
   };
 
   return (
@@ -299,89 +345,130 @@ export default function EngineerCases() {
         <p className="text-gray-500">No cases assigned to you.</p>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {cases.map((c) => (
-            <div key={c.id} className="rounded-xl border bg-white p-4 shadow-sm space-y-2">
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <p className="font-mono text-xs text-gray-400">{c.case_number}</p>
-                  <p className="font-semibold">{c.title}</p>
+          {orderForEngineer(cases).map((c) => {
+            const done = c.status === "completed" || c.status === "cancelled";
+            const priority = PRIORITY[c.priority] || {
+              chip: "bg-gray-200 text-gray-700",
+              rail: "bg-gray-300",
+            };
+            const navTarget =
+              c.latitude != null && c.longitude != null
+                ? `${c.latitude},${c.longitude}`
+                : c.address;
+
+            return (
+              <div
+                key={c.id}
+                className={`relative overflow-hidden rounded-xl border bg-white pl-5 pr-4 py-4 shadow-sm space-y-3 ${
+                  done ? "opacity-70" : ""
+                }`}
+              >
+                {/* A rail down the side, so priority is visible before a single
+                    word is read and stays visible while scrolling past. */}
+                <span
+                  aria-hidden
+                  className={`absolute inset-y-0 left-0 w-1.5 ${done ? "bg-gray-300" : priority.rail}`}
+                />
+
+                <div className="flex items-start justify-between gap-2">
+                  <span
+                    className={`shrink-0 rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+                      done ? "bg-gray-200 text-gray-600" : priority.chip
+                    }`}
+                  >
+                    {done ? (c.status === "cancelled" ? "Cancelled" : "Done") : c.priority}
+                  </span>
+                  <span className="font-mono text-[11px] text-gray-400">{c.case_number}</span>
                 </div>
-                <span className={`text-xs px-2 py-0.5 rounded-full ${PRIORITY_COLOR[c.priority] || ""}`}>
-                  {c.priority}
-                </span>
-              </div>
 
-              <div className="text-sm text-gray-600 space-y-1">
-                <p className="font-medium text-gray-800">👤 {c.customer_name}</p>
-                {/* Tappable, because the first thing an engineer does is ring
-                    the customer and then navigate to them. */}
-                {c.customer_phone && (
-                  <a
-                    href={`tel:${c.customer_phone}`}
-                    className="inline-flex items-center min-h-9 text-blue-600"
-                  >
-                    📞 {c.customer_phone}
-                  </a>
+                <p className="font-semibold leading-snug text-gray-900">{c.title}</p>
+
+                <div className="space-y-1.5 text-sm">
+                  <p className="flex items-start gap-2 font-medium text-gray-800">
+                    <Building2 className="mt-0.5 h-4 w-4 shrink-0 text-gray-400" />
+                    <span className="min-w-0">{c.customer_name}</span>
+                  </p>
+                  {c.address && (
+                    <p className="flex items-start gap-2 text-gray-600">
+                      <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-gray-400" />
+                      <span className="min-w-0">{c.address}</span>
+                    </p>
+                  )}
+                  {c.description && (
+                    <p className="text-gray-500">{c.description}</p>
+                  )}
+                </div>
+
+                {/* Ring them, then drive to them. These were a phone number in
+                    small blue text and an address in small blue text, while
+                    "Open in map" -- which opens the same map the address did --
+                    got the only button on the card. */}
+                {(c.customer_phone || navTarget) && (
+                  <div className="grid grid-cols-2 gap-2">
+                    {c.customer_phone && (
+                      <a
+                        href={`tel:${c.customer_phone}`}
+                        className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 text-sm font-semibold text-gray-800 active:bg-gray-100"
+                      >
+                        <Phone className="h-4 w-4" />
+                        Call
+                      </a>
+                    )}
+                    {navTarget && (
+                      <a
+                        href={mapsUrl(navTarget)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 text-sm font-semibold text-blue-700 active:bg-blue-100 ${
+                          c.customer_phone ? "" : "col-span-2"
+                        }`}
+                      >
+                        <Navigation className="h-4 w-4" />
+                        Navigate
+                      </a>
+                    )}
+                  </div>
                 )}
-                {c.address && (
-                  <a
-                    href={mapsUrl(c.address)}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="block text-blue-600"
-                  >
-                    📍 {c.address}
-                  </a>
-                )}
-                {c.description && <p className="text-gray-500">{c.description}</p>}
-              </div>
 
-              <CaseDetails details={c.details} />
+                <CaseDetails details={c.details} />
 
-              <div className="flex items-center justify-between">
                 <PunchRecord c={c} />
-                {c.latitude != null && (
-                  <button
-                    onClick={() => openInMaps(c)}
-                    className="inline-flex items-center min-h-10 px-3 rounded-lg border border-blue-200 text-sm text-blue-600"
-                  >
-                    Open in map
-                  </button>
-                )}
-              </div>
 
-              {/* Two buttons, not five.
-                  Accept, Start Travel, Reached and Start Work asked an engineer
-                  in gloves outside a customer's premises to drive a four-step
-                  workflow, and the office only ever needed two facts from it:
-                  that they got there, and that they finished. Each punch also
-                  records WHERE it was made, which is what turns "reached 2:40pm"
-                  from a claim into something that can be checked.
+                {/* Two buttons, not five.
+                    Accept, Start Travel, Reached and Start Work asked an
+                    engineer in gloves outside a customer's premises to drive a
+                    four-step workflow, and the office only ever needed two
+                    facts from it: that they got there, and that they finished.
+                    Each punch also records WHERE it was made, which is what
+                    turns "reached 2:40pm" from a claim into something that can
+                    be checked.
 
-                  Gloved thumbs outdoors: every control here is a 44px target
-                  with real space between, not a 24px chip. */}
-              <div className="flex flex-wrap gap-2.5 pt-1">
+                    Full width now rather than a button floated at the bottom
+                    left: this is the one thing the card exists to do, and it is
+                    pressed by a gloved thumb outdoors. */}
                 {!c.reached_at && c.status !== "completed" && (
                   <button
                     disabled={busyId === c.id}
                     onClick={() => onPunchIn(c)}
-                    className="min-h-11 px-5 py-2.5 text-sm font-semibold rounded-lg bg-indigo-600 text-white disabled:opacity-50"
+                    className="flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-indigo-600 text-sm font-semibold text-white disabled:opacity-50"
                   >
-                    Punch In
+                    <LogIn className="h-4 w-4" />
+                    {busyId === c.id ? "Punching in\u2026" : "Punch In"}
                   </button>
                 )}
                 {c.reached_at && c.status !== "completed" && (
                   <button
                     disabled={busyId === c.id}
                     onClick={() => runAction(() => caseService.punchOut(c.id, lastFix), c, "")}
-                    className="min-h-11 px-5 py-2.5 text-sm font-semibold rounded-lg bg-green-600 text-white disabled:opacity-50"
+                    className="flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-green-600 text-sm font-semibold text-white disabled:opacity-50"
                   >
-                    Punch Out
+                    <LogOut className="h-4 w-4" />
+                    {busyId === c.id ? "Punching out\u2026" : "Punch Out"}
                   </button>
                 )}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
