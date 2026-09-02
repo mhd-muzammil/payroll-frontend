@@ -91,6 +91,7 @@ const Attendance = () => {
   const [importProgress, setImportProgress] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedRegion, setSelectedRegion] = useState("");
+  const [selectedRole, setSelectedRole] = useState("");
   // Phone only: the From/To inputs and the region select start folded away.
   // From sm: up they are always visible and this is ignored.
   const [showFilters, setShowFilters] = useState(false);
@@ -237,12 +238,23 @@ const Attendance = () => {
         if (!selectedRegion) return true;
         return (record.branch || "Chennai").toLowerCase() === selectedRegion.toLowerCase();
       })
+      .filter((record) => {
+        if (!selectedRole) return true;
+        return String(record.role || "").toLowerCase() === selectedRole.toLowerCase();
+      })
       .sort((a, b) =>
         String(a.employee_name || "").localeCompare(String(b.employee_name || "")),
       );
 
     if (rows.length === 0) {
-      alert("No attendance has been marked today yet.");
+      // Naming the filters, because "nothing today" and "nothing today for
+      // Salem service engineers" send somebody looking in different places.
+      const scope = [selectedRegion, selectedRole].filter(Boolean).join(" / ");
+      alert(
+        scope
+          ? `No attendance marked today for ${scope}.`
+          : "No attendance has been marked today yet.",
+      );
       return;
     }
 
@@ -265,10 +277,6 @@ const Attendance = () => {
           in: formatTime(record.intime) || "—",
           out: formatTime(record.outtime) || "—",
           hours: `${calculateHours(record.intime, record.outtime)}h`,
-          ot:
-            Number(calculateOvertime(record.intime, record.outtime)) > 0
-              ? `+${calculateOvertime(record.intime, record.outtime)}h`
-              : "—",
           status: getStatusDisplay(record.status),
         })),
         dayLabel: new Date().toLocaleDateString("en-IN", {
@@ -277,10 +285,18 @@ const Attendance = () => {
           month: "long",
           year: "numeric",
         }),
-        scopeLabel: selectedRegion ? `${selectedRegion} branch` : "All branches",
+        scopeLabel:
+          [
+            selectedRegion ? `${selectedRegion} branch` : "All branches",
+            selectedRole || null,
+          ]
+            .filter(Boolean)
+            .join("  ·  "),
         totals,
       });
-      saveBlob(blob, `Attendance_${today}${selectedRegion ? `_${selectedRegion}` : ""}.png`);
+      const slug = (value) => value.replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "");
+      const parts = [today, selectedRegion, selectedRole].filter(Boolean).map(slug);
+      saveBlob(blob, `Attendance_${parts.join("_")}.png`);
     } catch (err) {
       console.error("Attendance image export failed:", err);
       alert("Could not build the image. Please try again.");
@@ -399,6 +415,10 @@ const Attendance = () => {
         const recordBranch = record.branch || "Chennai";
         if (recordBranch.toLowerCase() !== selectedRegion.toLowerCase()) return false;
       }
+
+      if (!isEmployee && selectedRole) {
+        if (String(record.role || "").toLowerCase() !== selectedRole.toLowerCase()) return false;
+      }
       
       if (searchQuery) {
         const query = searchQuery.toLowerCase();
@@ -419,7 +439,23 @@ const Attendance = () => {
       const recordDateStr = getDatePart(recordDate);
       return recordDateStr >= fromDate && recordDateStr <= toDate;
     });
-  }, [records, fromDate, toDate, isEmployee, username, employeeId, searchQuery, selectedRegion]);
+  }, [records, fromDate, toDate, isEmployee, username, employeeId, searchQuery, selectedRegion, selectedRole]);
+
+  // Built from what is actually in the records rather than a list written here.
+  // The role on an attendance row is free text copied off the employee -- it is
+  // "Service engineer", "developer", "RMA", "Staff" -- so a hard-coded set would
+  // go stale the first time somebody types a new one.
+  const roleOptions = useMemo(() => {
+    // Derived in here rather than closing over safeRecords: that is rebuilt on
+    // every render, so listing it as a dependency would make the memo pointless.
+    const list = Array.isArray(records) ? records : [];
+    const seen = new Map();
+    for (const record of list) {
+      const role = String(record.role || "").trim();
+      if (role && !seen.has(role.toLowerCase())) seen.set(role.toLowerCase(), role);
+    }
+    return [...seen.values()].sort((a, b) => a.localeCompare(b));
+  }, [records]);
 
   const employeeFixedValues = useMemo(() => {
     if (!isEmployee) return {};
@@ -911,6 +947,24 @@ const Attendance = () => {
                 <option value="Salem">Salem</option>
                 <option value="Kanchipuram">Kanchipuram</option>
                 <option value="Hosur">Hosur</option>
+              </select>
+            )}
+
+            {/* Role Filter. Same place and same behaviour as the region one, so
+                the day's image export carries it for free -- what you can see is
+                what you download. */}
+            {!isEmployee && roleOptions.length > 0 && (
+              <select
+                value={selectedRole}
+                onChange={(e) => setSelectedRole(e.target.value)}
+                className="h-10 sm:h-9 w-full sm:w-auto rounded-xl border border-border bg-card px-3 text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 cursor-pointer"
+              >
+                <option value="">All Roles</option>
+                {roleOptions.map((role) => (
+                  <option key={role} value={role}>
+                    {role}
+                  </option>
+                ))}
               </select>
             )}
           </div>

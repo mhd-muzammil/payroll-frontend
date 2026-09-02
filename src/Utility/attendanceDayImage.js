@@ -11,6 +11,10 @@
  *
  * The palette here is deliberately literal for the same reason: an exported
  * image is not themed. It is one fixed thing on white, readable printed.
+ *
+ * No overtime column: the sheet that gets sent round is a register of who was
+ * in and for how long. Overtime is a payroll figure and it belongs on a
+ * payslip, where it can be argued with.
  */
 
 const SCALE = 2; // for a crisp image on any screen and in print
@@ -33,11 +37,10 @@ const COLUMNS = [
   { key: "name", label: "Employee", width: 250, align: "left" },
   { key: "department", label: "Department", width: 150, align: "left" },
   { key: "branch", label: "Branch", width: 110, align: "left" },
-  { key: "in", label: "Clock In", width: 100, align: "center" },
-  { key: "out", label: "Clock Out", width: 100, align: "center" },
-  { key: "hours", label: "Hours", width: 80, align: "right" },
-  { key: "ot", label: "OT", width: 70, align: "right" },
-  { key: "status", label: "Status", width: 100, align: "center" },
+  { key: "in", label: "Clock In", width: 110, align: "center" },
+  { key: "out", label: "Clock Out", width: 110, align: "center" },
+  { key: "hours", label: "Hours", width: 90, align: "right" },
+  { key: "status", label: "Status", width: 110, align: "center" },
 ];
 
 const TABLE_W = COLUMNS.reduce((sum, c) => sum + c.width, 0);
