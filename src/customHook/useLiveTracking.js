@@ -44,6 +44,13 @@ export function useLiveTracking() {
   const [tracking, setTracking] = useState(false);
   const [lastFix, setLastFix] = useState(null); // {latitude, longitude, accuracy, speed}
   const [error, setError] = useState(null);
+  // Set the moment the OS stops giving us positions -- the engineer switched
+  // their phone's location off, or withdrew the permission -- and carried until
+  // the next fix arrives, which is then stamped `after_gap`. That stamp is the
+  // only way the server can tell an untracked leg from an engineer who simply
+  // stood still: both produce no new rows, and they have to be counted
+  // oppositely.
+  const stoppedTrackingRef = useRef(false);
   // How many fixes are waiting on the phone. Surfaced so the duty screen can say
   // "12 saved, will send when you have signal" instead of looking broken.
   const [queued, setQueued] = useState(() => loadQueue().length);
@@ -126,11 +133,16 @@ export function useLiveTracking() {
     async (raw) => {
       const isFirstFix = latestRef.current == null;
       const { level, charging } = await batteryState();
+      const afterGap = stoppedTrackingRef.current;
+      stoppedTrackingRef.current = false;
+
       const fix = {
         latitude: raw.latitude,
         longitude: raw.longitude,
         accuracy: raw.accuracy,
         speed: raw.speed,
+        // Whatever happened between the last fix and this one was not tracked.
+        after_gap: afterGap,
         status: statusRef.current,
         case_id: caseIdRef.current,
         timestamp: new Date().toISOString(),
@@ -192,6 +204,13 @@ export function useLiveTracking() {
       // an orphaned watch/interval that would double-send pings and leak.
       clearSources();
 
+      // Coming on duty is a boundary too. Whatever the engineer covered while
+      // off duty is not travel this session measured, so the first fix of a
+      // session is stamped the same way rather than being joined to the last
+      // fix of the previous one. Set BEFORE the watcher is registered: a cached
+      // position can arrive in the same tick.
+      stoppedTrackingRef.current = true;
+
       if (IS_NATIVE) {
         nativeStartingRef.current = true;
         BackgroundGeolocation.addWatcher(
@@ -210,6 +229,7 @@ export function useLiveTracking() {
           },
           (position, watcherError) => {
             if (watcherError) {
+              stoppedTrackingRef.current = true;
               setError(watcherError.message || "Unable to get location");
               return;
             }
@@ -244,7 +264,10 @@ export function useLiveTracking() {
               accuracy: pos.coords.accuracy,
               speed: pos.coords.speed,
             }),
-          (err) => setError(err.message || "Unable to get location"),
+          (err) => {
+            stoppedTrackingRef.current = true;
+            setError(err.message || "Unable to get location");
+          },
           { enableHighAccuracy: true, maximumAge: 10000, timeout: 20000 },
         );
       }
