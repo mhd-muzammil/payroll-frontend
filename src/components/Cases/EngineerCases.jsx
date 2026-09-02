@@ -343,9 +343,15 @@ export default function EngineerCases() {
             <button
               onClick={endDuty}
               disabled={dutyBusy}
+              // Not "Stop Duty" any more. The day now starts and ends with
+              // Login / Logout on Attendance, which record attendance as well
+              // as duty; this pair only ever moves the GPS stream, so it is
+              // named for what it actually does. Calling it Login here would be
+              // a second button with the same word and half the effect.
+              title="Stop sending your location. Your day ends with Logout on Attendance."
               className="min-h-11 px-4 py-2.5 text-sm rounded-lg bg-red-600 text-white disabled:opacity-60"
             >
-              {dutyBusy ? "…" : "Stop Duty"}
+              {dutyBusy ? "…" : "Pause tracking"}
             </button>
           ) : (
             // Never disabled by the cached permission state. The browser does not
@@ -355,11 +361,12 @@ export default function EngineerCases() {
             <button
               onClick={startDuty}
               disabled={dutyBusy}
+              title="Start sending your location again. Your day starts with Login on Attendance."
               className="min-h-11 px-4 py-2.5 text-sm rounded-lg bg-green-600 text-white disabled:opacity-60"
             >
               {/* Named, because getting a first fix outdoors can take a while and
                   a bare spinner reads as the app having hung. */}
-              {dutyBusy ? "Getting location…" : "Start Duty"}
+              {dutyBusy ? "Getting location…" : "Resume tracking"}
             </button>
           )}
         </div>
@@ -474,7 +481,7 @@ export default function EngineerCases() {
           <p className="mt-1">
             Tap the padlock next to the web address and set <strong>Location</strong> to{" "}
             <strong>Allow</strong> — a one-time setting.{" "}
-            <strong>Already allowed it? Just tap Start Duty</strong> — this notice can lag behind
+            <strong>Already allowed it? Just tap Resume tracking</strong> — this notice can lag behind
             the browser until the page is reloaded.
           </p>
           {locationDiagnostic && (

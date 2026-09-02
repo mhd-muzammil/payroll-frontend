@@ -8,7 +8,7 @@ import { getUserRole, isAuthenticated, ROLES } from "../auth/rbac";
  *
  * Duty is a state the engineer declares on the server, not a side effect of one
  * page being open. This provider sits ABOVE the router, so an engineer who taps
- * Start Duty on My Cases and then opens Attendance keeps sending their position
+ * Resume tracking on My Cases and then opens Attendance keeps sending their position
  * — previously the tracker lived inside the Cases screen and died the moment
  * they navigated away, while the badge still said they were on duty.
  *
@@ -40,27 +40,27 @@ const LOCATION_BLOCKED_MESSAGE =
  * PERMISSION_DENIED, the site is not what is refusing.
  */
 const LOCATION_ON_HTTP_MESSAGE =
-  "This page is open on an http:// address. Browsers never share location on one, whatever the phone's settings say — so duty cannot be tracked here. Open the site on its https:// address and tap Start Duty again.";
+  "This page is open on an http:// address. Browsers never share location on one, whatever the phone's settings say — so duty cannot be tracked here. Open the site on its https:// address and tap Resume tracking again.";
 
 // The site says yes and the answer is still no, so nothing on this page or in
 // its site settings can fix it — the browser app is what has no location.
 const BROWSER_APP_BLOCKED_MESSAGE =
-  "This site is allowed, but the browser app itself has no location permission from your phone — so the padlock settings will not help. Open your phone's Settings → Apps → Chrome → Permissions → Location → Allow (\"while using the app\" is enough), then come back and tap Start Duty again.";
+  "This site is allowed, but the browser app itself has no location permission from your phone — so the padlock settings will not help. Open your phone's Settings → Apps → Chrome → Permissions → Location → Allow (\"while using the app\" is enough), then come back and tap Resume tracking again.";
 
 // This site was never allowed OR blocked, and the answer is still no — so the
 // browser refused without ever asking. Nothing about this site is the problem
 // and there is no padlock setting to change; something above it is switched off.
 const NO_PROMPT_MESSAGE =
-  "The browser refused without even asking, so this site is not what is blocking it — something above it is switched off. Check these three, then tap Start Duty again:";
+  "The browser refused without even asking, so this site is not what is blocking it — something above it is switched off. Check these three, then tap Resume tracking again:";
 
 const EITHER_BLOCKED_MESSAGE =
-  "The browser refused to share your location. Check the padlock next to the web address, and your phone's location permission for the browser. Then tap Start Duty again.";
+  "The browser refused to share your location. Check the padlock next to the web address, and your phone's location permission for the browser. Then tap Resume tracking again.";
 
 /**
  * The exact taps, because "allow location" is not one setting on Android — it is
  * three in three different places, and only one of them is the padlock every
  * guide mentions. An engineer told to fix the padlock when the padlock is not
- * the problem just taps Start Duty forever.
+ * the problem just taps Resume tracking forever.
  */
 /**
  * Which browser this really is, because two of them can never show a location
@@ -98,12 +98,12 @@ const APP_LOCATION_DENIED_MESSAGE =
   "The app does not have location permission from your phone yet, so duty cannot be tracked. This is one setting, and once it is allowed you will never be asked again.";
 
 const APP_SETTINGS_STEP =
-  "Phone Settings → Apps → Renderways Technology → Permissions → Location → Allow (\"while using the app\" is enough). Then come back and tap Start Duty.";
+  "Phone Settings → Apps → Renderways Technology → Permissions → Location → Allow (\"while using the app\" is enough). Then come back and tap Resume tracking.";
 const REINSTALL_STEP =
-  "If Location is not listed there at all, you are on the old app — install the updated one and it will ask you the first time you tap Start Duty.";
+  "If Location is not listed there at all, you are on the old app — install the updated one and it will ask you the first time you tap Resume tracking.";
 
 const IN_APP_BROWSER_MESSAGE =
-  "You are not in Chrome — this page is open inside another app's browser (WhatsApp, Instagram and the like), and those cannot show a location box at all. No setting will fix it here. Open the same link in Chrome and Start Duty will ask you normally.";
+  "You are not in Chrome — this page is open inside another app's browser (WhatsApp, Instagram and the like), and those cannot show a location box at all. No setting will fix it here. Open the same link in Chrome and it will ask you normally.";
 
 const OPEN_IN_CHROME_FROM_IN_APP_STEP =
   "Tap ⋮ (or ⋯) at the top of this screen and choose \"Open in Chrome\" / \"Open in browser\".";
@@ -177,7 +177,7 @@ function locationDiagnostic({ sitePermission, errorCode, at }) {
 
 /**
  * Watch whether this device will give us a location, so the engineer is told
- * BEFORE their shift rather than at the moment they tap Start Duty.
+ * BEFORE their shift rather than at the moment they tap Resume tracking.
  *
  * Permissions API only, deliberately: querying it prompts nobody. The prompt
  * itself belongs to the Start Duty tap, where the engineer has just asked for
@@ -225,13 +225,13 @@ function requireLocationPermission(sitePermission) {
           reject(error);
         } else if (err.code === err.POSITION_UNAVAILABLE) {
           const error = locationError(
-            "Your phone's location is switched off. Turn it on, then tap Start Duty again.",
+            "Your phone's location is switched off. Turn it on, then tap Resume tracking again.",
           );
           error.errorCode = err.code;
           reject(error);
         } else {
           const error = locationError(
-            "Could not get your location. Step outside or check your signal, then tap Start Duty again.",
+            "Could not get your location. Step outside or check your signal, then tap Resume tracking again.",
           );
           error.errorCode = err.code;
           reject(error);

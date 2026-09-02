@@ -200,7 +200,7 @@ export function useLiveTracking() {
             // foreground-only to a real foreground service. Without it, Android
             // suspends us exactly like it suspends the browser.
             backgroundTitle: "On duty",
-            backgroundMessage: "Recording your route until you tap Stop Duty.",
+            backgroundMessage: "Recording your route. Tap Logout in the app when your day ends.",
             // The engineer has already been asked by the duty screen, so this is
             // normally a no-op; it is left on so a revoked permission is asked
             // for again instead of failing silently.

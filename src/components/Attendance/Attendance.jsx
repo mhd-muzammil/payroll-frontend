@@ -74,9 +74,9 @@ const Attendance = () => {
   } = useAttendance();
 
   // Duty lives at app level, so pressing Login here is the same act as
-  // pressing Start Duty on Cases -- same session, same GPS stream, same state
+  // pressing Resume tracking on Cases -- same session, same GPS stream, same
   // the office's board reads.
-  const { onDuty, lastFix, startDuty, endDuty } = useDuty();
+  const { onDuty, lastFix, error: dutyError, startDuty, endDuty } = useDuty();
 
   const [geoLocating, setGeoLocating] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -618,6 +618,18 @@ const Attendance = () => {
                     <CheckCircle2 className="h-5 w-5" />
                     Schedule Completed for Today
                   </div>
+                )}
+
+                {/* Login records attendance and starts duty, and the second half
+                    can fail on its own -- a refused location permission is the
+                    usual way. The badge above then flips to "Off duty" a second
+                    after they pressed Login, which is honest but unexplained;
+                    without this the only place to find out why is the Cases
+                    screen. */}
+                {dutyError && (
+                  <p className="w-full text-sm text-warning">
+                    Attendance saved, but location tracking did not start: {dutyError}
+                  </p>
                 )}
               </div>
             </div>
