@@ -19,7 +19,8 @@ import {
   Laptop,
   PhoneCall,
   HandCoins,
-  MoreHorizontal
+  MoreHorizontal,
+  Smartphone
 } from "lucide-react";
 import { ROLES, clearAuth, getUserRole, normalizeRole, canAccessSection } from "@/auth/rbac";
 
@@ -29,6 +30,10 @@ const nav = [
   { to: "/hiring", label: "Hiring Portal", short: "Hiring", icon: UserCheck },
   { to: "/onboarding", label: "Onboarding", icon: UserPlus },
   { to: "/employees", label: "Employees", icon: Users },
+  // Who has actually started using the phone app. Staff-only: it says when
+  // each person last used their phone, which is not one engineer's business
+  // about another.
+  { to: "/app-usage", label: "App Usage", short: "App", icon: Smartphone },
   { to: "/tasks", label: "Tasks", icon: ClipboardList },
   { to: "/cases", label: "Cases", icon: PhoneCall, roles: [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.HR, ROLES.EMPLOYEE] },
   { to: "/attendance", label: "Attendance", icon: CalendarCheck },

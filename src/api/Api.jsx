@@ -12,7 +12,16 @@ export const api = axios.create({
   },
 });
 
+// Read once, not per request: Capacitor's answer cannot change while the app is
+// running. This header is the only thing that tells the server a request came
+// from the phone app rather than a browser, which is what App Usage counts.
+const IS_APP =
+  typeof window !== "undefined" && Boolean(window.Capacitor?.isNativePlatform?.());
+
 api.interceptors.request.use((config) => {
+  if (IS_APP) {
+    config.headers["X-Payroll-Client"] = "app";
+  }
   const token = getAccessToken();
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;

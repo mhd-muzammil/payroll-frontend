@@ -5,9 +5,17 @@ const ENDPOINTS = {
     BY_ID: (id) => `/api/employees/${id}/`,
     BULK: "/api/employees/bulk/",
     STATS: "/api/employees/stats/",
+    APP_USAGE: "/api/employees/app_usage/",
 };
 
 export const employeeService = {
+
+    /**
+     * Who has started using the phone app and who has not. Employee-centric:
+     * somebody with no login account cannot use it at all, and they are the
+     * row that matters most.
+     */
+    appUsage: async () => (await api.get(ENDPOINTS.APP_USAGE)).data,
 
     getAll: async (params = {}) => {
         const { data } = await api.get(ENDPOINTS.BASE, { params });

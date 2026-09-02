@@ -18,6 +18,7 @@ import AssetsPage from './pages/AssetsPage';
 import CasesPage from './pages/CasesPage';
 import RequestsPage from './pages/RequestsPage';
 import ProtectedRoute from './components/auth/ProtectedRoute';
+import AppUsagePage from './pages/AppUsagePage';
 import { ROLES, getDefaultRouteByRole, getUserRole, isAuthenticated } from './auth/rbac';
 import { ErrorBoundary } from './components/ui/ErrorBoundary';
 import { DutyProvider } from './context/DutyContext';
@@ -50,6 +51,7 @@ function App() {
           <Route path="/hiring" element={<HiringPage />} />
           <Route path="/onboarding" element={<OnboardingPage />} />
           <Route path="/employees" element={<EmployeePage />} />
+          <Route path="/app-usage" element={<AppUsagePage />} />
           <Route path="/payroll" element={<PayrollPage />} />
           <Route path="/assets" element={<AssetsPage />} />
         </Route>
