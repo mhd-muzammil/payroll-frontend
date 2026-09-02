@@ -203,7 +203,6 @@ export default function EngineerCases() {
   const {
     onDuty,
     startedAt,
-    busy: dutyBusy,
     streaming,
     lastFix,
     error: trackErr,
@@ -211,7 +210,6 @@ export default function EngineerCases() {
     locationDiagnostic,
     locationSteps,
     startDuty,
-    endDuty,
     setContext,
     todayKm,
   } = useDuty();
@@ -339,36 +337,13 @@ export default function EngineerCases() {
             />
             {!onDuty ? "Off duty" : streaming && lastFix ? "On duty" : "On duty · waiting for GPS"}
           </span>
-          {onDuty ? (
-            <button
-              onClick={endDuty}
-              disabled={dutyBusy}
-              // Not "Stop Duty" any more. The day now starts and ends with
-              // Login / Logout on Attendance, which record attendance as well
-              // as duty; this pair only ever moves the GPS stream, so it is
-              // named for what it actually does. Calling it Login here would be
-              // a second button with the same word and half the effect.
-              title="Stop sending your location. Your day ends with Logout on Attendance."
-              className="min-h-11 px-4 py-2.5 text-sm rounded-lg bg-red-600 text-white disabled:opacity-60"
-            >
-              {dutyBusy ? "…" : "Pause tracking"}
-            </button>
-          ) : (
-            // Never disabled by the cached permission state. The browser does not
-            // reliably announce a permission changed in its own settings, so a
-            // stale "denied" would lock the engineer out of duty entirely — and
-            // the tap itself asks the device, which is the only real answer.
-            <button
-              onClick={startDuty}
-              disabled={dutyBusy}
-              title="Start sending your location again. Your day starts with Login on Attendance."
-              className="min-h-11 px-4 py-2.5 text-sm rounded-lg bg-green-600 text-white disabled:opacity-60"
-            >
-              {/* Named, because getting a first fix outdoors can take a while and
-                  a bare spinner reads as the app having hung. */}
-              {dutyBusy ? "Getting location…" : "Resume tracking"}
-            </button>
-          )}
+          {/* No duty button here any more. The day starts with Login and ends
+              with Logout on Attendance, and those record attendance as well;
+              a second control beside them that moved only the GPS was one
+              button too many to choose between. The pill above stays -- it is
+              the state, and worth knowing on the screen where the work is.
+              The way back when tracking stops on its own lives on Attendance,
+              beside the badge that reports it. */}
         </div>
       </div>
 

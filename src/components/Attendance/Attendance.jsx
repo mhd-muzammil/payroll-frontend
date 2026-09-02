@@ -73,9 +73,9 @@ const Attendance = () => {
     clearMessages,
   } = useAttendance();
 
-  // Duty lives at app level, so pressing Login here is the same act as
-  // pressing Resume tracking on Cases -- same session, same GPS stream, same
-  // the office's board reads.
+  // Duty lives at app level. Login here is now the ONLY way an engineer goes
+  // on duty -- Cases has no duty button any more -- so this is the same session,
+  // the same GPS stream and the same state the office's board reads.
   const { onDuty, lastFix, error: dutyError, startDuty, endDuty } = useDuty();
 
   const [geoLocating, setGeoLocating] = useState(false);
