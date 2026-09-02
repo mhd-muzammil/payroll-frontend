@@ -532,7 +532,7 @@ const Attendance = () => {
                     disabled={loading || geoLocating}
                     className="!h-14 px-8 shadow-glow-brand w-full sm:w-auto sm:min-w-[180px]"
                   >
-                    {geoLocating ? "Authorizing..." : "In Time"}
+                    {geoLocating ? "Authorizing..." : "Login"}
                   </Button>
                 )}
 
@@ -545,7 +545,7 @@ const Attendance = () => {
                     disabled={loading || geoLocating}
                     className="!h-14 px-8 shadow-glow-brand w-full sm:w-auto sm:min-w-[180px]"
                   >
-                    {geoLocating ? "Authorizing..." : "Out Time"}
+                    {geoLocating ? "Authorizing..." : "Logout"}
                   </Button>
                 )}
 
