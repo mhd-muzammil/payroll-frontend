@@ -5,13 +5,14 @@ import { Button } from "@/components/ui/button";
 import { 
   Clock, CheckCircle2, AlertCircle, Timer, 
   ChevronLeft, ChevronRight, Plus, Trash2, X, Check,
-  Upload, FileText, Loader2
+  Upload, FileText, Loader2, ImageDown
 } from "lucide-react";
 import PageHeader from "../ui/PageHeader";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "../ui/dialog";
 import GreetingHeader from "../ui/GreetingHeader";
 import StatsCard from "../ui/StatsCard";
 import { useAttendance } from "../../customHook/useAttendance";
+import { drawAttendanceDay, saveBlob } from "../../Utility/attendanceDayImage";
 import { useDuty } from "../../context/DutyContext";
 import AttendanceForm from "./AttendanceForm";
 import AttendanceGroupedTable from "./AttendanceGroupedTable";
@@ -214,6 +215,77 @@ const Attendance = () => {
       }),
     [lastFix],
   );
+
+  /**
+   * Today's attendance as a PNG.
+   *
+   * Today only, and a picture rather than a CSV, because of what it is for:
+   * sending to somebody who is not going to open the app. A spreadsheet in a
+   * WhatsApp group is a file nobody taps.
+   *
+   * Built from all of today's records, not from filteredRecords -- that list is
+   * scoped to the selected CYCLE, which is a month, so a day's export must ask
+   * the question itself. The region filter is honoured, because the export
+   * should be what the person looking at the screen believes they are exporting.
+   */
+  const handleExportTodayImage = async () => {
+    const today = formatLocalDate(new Date());
+
+    const rows = safeRecords
+      .filter((record) => getDatePart(record.intime || record.outtime) === today)
+      .filter((record) => {
+        if (!selectedRegion) return true;
+        return (record.branch || "Chennai").toLowerCase() === selectedRegion.toLowerCase();
+      })
+      .sort((a, b) =>
+        String(a.employee_name || "").localeCompare(String(b.employee_name || "")),
+      );
+
+    if (rows.length === 0) {
+      alert("No attendance has been marked today yet.");
+      return;
+    }
+
+    const totals = rows.reduce(
+      (acc, record) => {
+        if (record.status === "Absent") acc.absent += 1;
+        else if (record.status === "Leave") acc.leave += 1;
+        else acc.present += 1;
+        return acc;
+      },
+      { present: 0, absent: 0, leave: 0 },
+    );
+
+    try {
+      const blob = await drawAttendanceDay({
+        rows: rows.map((record) => ({
+          name: record.employee_name || "—",
+          department: record.department || "—",
+          branch: record.branch || "Chennai",
+          in: formatTime(record.intime) || "—",
+          out: formatTime(record.outtime) || "—",
+          hours: `${calculateHours(record.intime, record.outtime)}h`,
+          ot:
+            Number(calculateOvertime(record.intime, record.outtime)) > 0
+              ? `+${calculateOvertime(record.intime, record.outtime)}h`
+              : "—",
+          status: getStatusDisplay(record.status),
+        })),
+        dayLabel: new Date().toLocaleDateString("en-IN", {
+          weekday: "long",
+          day: "2-digit",
+          month: "long",
+          year: "numeric",
+        }),
+        scopeLabel: selectedRegion ? `${selectedRegion} branch` : "All branches",
+        totals,
+      });
+      saveBlob(blob, `Attendance_${today}${selectedRegion ? `_${selectedRegion}` : ""}.png`);
+    } catch (err) {
+      console.error("Attendance image export failed:", err);
+      alert("Could not build the image. Please try again.");
+    }
+  };
 
   const handleGeoPunchIn = useCallback(async () => {
     setGeoLocating(true);
@@ -877,6 +949,14 @@ const Attendance = () => {
           {!isEmployee && (
             <Button variant="outline" onClick={handleExportCSV}>
               Export Report
+            </Button>
+          )}
+          {/* Today, as a picture. Separate from Export Report on purpose: that
+              one is the whole cycle as a spreadsheet, this is one day in a form
+              somebody will actually open in a chat. */}
+          {!isEmployee && (
+            <Button variant="outline" icon={ImageDown} onClick={handleExportTodayImage}>
+              Today (Image)
             </Button>
           )}
         </div>
