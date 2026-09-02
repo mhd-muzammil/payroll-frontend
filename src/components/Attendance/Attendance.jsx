@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import GreetingHeader from "../ui/GreetingHeader";
 import StatsCard from "../ui/StatsCard";
 import { useAttendance } from "../../customHook/useAttendance";
+import { useDuty } from "../../context/DutyContext";
 import AttendanceForm from "./AttendanceForm";
 import AttendanceGroupedTable from "./AttendanceGroupedTable";
 import { ROLES, getTokenClaims, getUserRole, normalizeRole } from "@/auth/rbac";
@@ -24,6 +25,13 @@ import {
   getStatusVariant,
   calculateStats,
 } from "../../Utility/attendanceUtils";
+
+// A live fix older than this is not worth reusing for a punch that decides
+// whether somebody was at the office. Two minutes is far longer than the 30s
+// ping interval, so on duty there is essentially always one to hand. At module
+// scope so it is not a fresh binding on every render, which would put it in a
+// hook's dependency list for no reason.
+const FIX_MAX_AGE_MS = 2 * 60 * 1000;
 
 const formatLocalDate = (date) => {
   const year = date.getFullYear();
@@ -64,6 +72,11 @@ const Attendance = () => {
     checkOutGeo,
     clearMessages,
   } = useAttendance();
+
+  // Duty lives at app level, so pressing Login here is the same act as
+  // pressing Start Duty on Cases -- same session, same GPS stream, same state
+  // the office's board reads.
+  const { onDuty, lastFix, startDuty, endDuty } = useDuty();
 
   const [geoLocating, setGeoLocating] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -161,61 +174,98 @@ const Attendance = () => {
     document.body.removeChild(link);
   };
   
-  const handleGeoPunchIn = useCallback(() => {
-    if (!navigator.geolocation) {
-      alert("Geolocation is not supported by your browser.");
-      return;
-    }
-    
-    setGeoLocating(true);
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const { latitude, longitude } = position.coords;
-        
-        try {
-          await checkInGeo({ latitude, longitude });
-        } catch (err) {
-          console.error("Geo check in error:", err);
-        } finally {
-          setGeoLocating(false);
+  /**
+   * Where a punch gets its position.
+   *
+   * Prefers the fix the tracker is already streaming. Once Login puts the
+   * engineer on duty, useLiveTracking holds a watchPosition, and a
+   * getCurrentPosition issued alongside it never called back at all in testing
+   * -- Logout sat on "Authorizing..." forever with no error. The live fix is
+   * the same position, seconds old, and the one the office is looking at.
+   *
+   * Falling back to the device, the options matter: without `timeout` the spec
+   * says wait indefinitely, which indoors is what happens.
+   */
+  const punchPosition = useCallback(
+    () =>
+      new Promise((resolve, reject) => {
+        const fresh =
+          lastFix &&
+          Number.isFinite(lastFix.latitude) &&
+          Date.now() - new Date(lastFix.timestamp).getTime() < FIX_MAX_AGE_MS;
+        if (fresh) {
+          resolve({ latitude: lastFix.latitude, longitude: lastFix.longitude });
+          return;
         }
-      },
-      (error) => {
-        setGeoLocating(false);
-        alert("Unable to retrieve your location. Please enable location permissions.");
-        console.error(error);
-      },
-      { enableHighAccuracy: true }
-    );
-  }, [checkInGeo]);
+        if (!navigator.geolocation) {
+          reject(new Error("Geolocation is not supported by your browser."));
+          return;
+        }
+        navigator.geolocation.getCurrentPosition(
+          (position) =>
+            resolve({
+              latitude: position.coords.latitude,
+              longitude: position.coords.longitude,
+            }),
+          reject,
+          { enableHighAccuracy: true, timeout: 20000, maximumAge: 30000 },
+        );
+      }),
+    [lastFix],
+  );
 
-  const handleGeoPunchOut = useCallback(() => {
-    if (!navigator.geolocation) {
-      alert("Geolocation is not supported by your browser.");
-      return;
-    }
-    
+  const handleGeoPunchIn = useCallback(async () => {
     setGeoLocating(true);
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const { latitude, longitude } = position.coords;
-        
-        try {
-          await checkOutGeo({ latitude, longitude });
-        } catch (err) {
-          console.error("Geo check out error:", err);
-        } finally {
-          setGeoLocating(false);
-        }
-      },
-      (error) => {
-        setGeoLocating(false);
+    try {
+      const { latitude, longitude } = await punchPosition();
+      await checkInGeo({ latitude, longitude });
+      // Only now. checkInGeo rethrows a refusal, so a punch the server turned
+      // down never reaches this line and never starts the stream.
+      if (!onDuty) await startDuty();
+    } catch (err) {
+      console.error("Geo check in error:", err);
+      if (err?.code || err?.message?.includes("Geolocation")) {
         alert("Unable to retrieve your location. Please enable location permissions.");
-        console.error(error);
-      },
-      { enableHighAccuracy: true }
-    );
-  }, [checkOutGeo]);
+      }
+    } finally {
+      setGeoLocating(false);
+    }
+  }, [checkInGeo, onDuty, punchPosition, startDuty]);
+
+  const handleGeoPunchOut = useCallback(async () => {
+    setGeoLocating(true);
+    // Whether the day is actually over. Only two answers mean it is: the punch
+    // was accepted, or the server says it was already closed. Left undeclared
+    // rather than seeded false because both the try and the catch assign it,
+    // and an initialiser nothing reads is one more thing to keep true.
+    let dayIsOver;
+    try {
+      const { latitude, longitude } = await punchPosition();
+      await checkOutGeo({ latitude, longitude });
+      dayIsOver = true;
+    } catch (err) {
+      console.error("Geo check out error:", err);
+      // 400 from check_out is "Already clocked out" or "No clock-in found" --
+      // either way there is no open day left to be on duty for.
+      dayIsOver = err?.response?.status === 400;
+      if (err?.code || err?.message?.includes("Geolocation")) {
+        alert("Unable to retrieve your location. Please enable location permissions.");
+      }
+    } finally {
+      // Duty ends only when the day did. A 403 here means "you are not within
+      // 50m of the office yet" -- the engineer is at a customer site and still
+      // working, and killing the stream on that tap would lose the ride back,
+      // which is the leg the tracking exists to record. Same for a network
+      // failure: when we cannot tell, keep tracking rather than stop it
+      // silently. The refusal itself already reaches them as a toast.
+      try {
+        if (onDuty && dayIsOver) await endDuty();
+      } catch (err) {
+        console.error("End duty error:", err);
+      }
+      setGeoLocating(false);
+    }
+  }, [checkOutGeo, endDuty, onDuty, punchPosition]);
   const [editingRecord, setEditingRecord] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [prefilledEmployee, setPrefilledEmployee] = useState(null);
@@ -509,9 +559,23 @@ const Attendance = () => {
             
             <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-5 md:gap-6">
               <div>
+                {/* The badge used to say "Live Location Mode" whether anything
+                    was being tracked or not, which is the one thing it could
+                    usefully report. Now that Login puts the engineer on duty,
+                    this says whether it took. */}
                 <div className="flex items-center gap-2 mb-2">
-                  <div className="h-2 w-2 rounded-full bg-success animate-pulse" />
-                  <span className="text-[10px] uppercase font-bold tracking-widest text-success">Live Location Mode</span>
+                  <div
+                    className={`h-2 w-2 rounded-full ${
+                      onDuty ? "bg-success animate-pulse" : "bg-muted-foreground/50"
+                    }`}
+                  />
+                  <span
+                    className={`text-[10px] uppercase font-bold tracking-widest ${
+                      onDuty ? "text-success" : "text-muted-foreground"
+                    }`}
+                  >
+                    {onDuty ? "On duty · location live" : "Off duty"}
+                  </span>
                 </div>
                 <h3 className="text-lg md:text-xl font-bold tracking-tight mb-1.5">Smart Attendance Gate</h3>
                 {/* Four lines of "physical validation parameters confirm
