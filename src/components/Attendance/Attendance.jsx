@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { 
   Clock, CheckCircle2, AlertCircle, Timer, 
   ChevronLeft, ChevronRight, Plus, Trash2, X, Check,
-  Upload, FileText, Loader2, ImageDown
+  Upload, FileText, Loader2, ImageDown, Settings, ShieldAlert
 } from "lucide-react";
 import PageHeader from "../ui/PageHeader";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "../ui/dialog";
@@ -92,6 +92,7 @@ const Attendance = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedRegion, setSelectedRegion] = useState("");
   const [selectedRole, setSelectedRole] = useState("");
+  const [showSettings, setShowSettings] = useState(false);
   // Phone only: the From/To inputs and the region select start folded away.
   // From sm: up they are always visible and this is ignored.
   const [showFilters, setShowFilters] = useState(false);
@@ -651,8 +652,11 @@ const Attendance = () => {
             // Three pill buttons in a row ran to 400px on a 390px screen, so Add
             // Record hung off the edge. Two up, primary across the bottom.
             <div className="grid grid-cols-2 gap-2 w-full sm:flex sm:w-auto">
-              <Button variant="destructive" size="pill" icon={Trash2} onClick={() => setShowDeleteAllConfirm(true)}>
-                Delete All
+              {/* Delete All used to sit right here, a red pill beside Add
+                  Record, one mis-tap from wiping the register. It lives in
+                  Settings now: the same action, behind a door. */}
+              <Button variant="outline" size="pill" icon={Settings} onClick={() => setShowSettings(true)}>
+                Settings
               </Button>
               <Button variant="outline" size="pill" icon={Upload} onClick={() => setShowImportModal(true)}>
                 Import Excel
@@ -1107,6 +1111,60 @@ const Attendance = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Attendance Settings
+          Where the housekeeping actions live, so the page's own toolbar can be
+          the things somebody does every day. One entry today -- clearing the
+          register -- and it is the reason the section exists: it was a red pill
+          sitting next to Add Record. */}
+      {showSettings && (
+        <Dialog open={showSettings} onOpenChange={(open) => { if (!open) setShowSettings(false); }}>
+          <DialogContent className="sm:max-w-md bg-card border border-border shadow-2xl rounded-3xl p-6">
+            <DialogHeader className="mb-4">
+              <DialogTitle className="text-xl font-bold tracking-tight">Attendance Settings</DialogTitle>
+              <DialogDescription className="text-sm text-muted-foreground mt-1">
+                Housekeeping for the attendance register. These actions affect every
+                employee, not just the days you are looking at.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="rounded-2xl border border-red-500/30 bg-red-500/5 p-4">
+              <div className="flex items-start gap-3">
+                <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-red-500/15 text-red-500">
+                  <ShieldAlert className="h-5 w-5" />
+                </div>
+                <div className="min-w-0">
+                  <h4 className="font-semibold text-foreground">Delete all records</h4>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Removes every attendance record for every employee, in every
+                    month — not only the cycle on screen. There is no undo, and
+                    no export is taken first.
+                  </p>
+                </div>
+              </div>
+              <Button
+                variant="destructive"
+                icon={Trash2}
+                className="mt-4 w-full"
+                onClick={() => {
+                  // Straight to the existing confirmation, and this panel closes
+                  // so there is one dialog on screen rather than two stacked.
+                  setShowSettings(false);
+                  setShowDeleteAllConfirm(true);
+                }}
+              >
+                Delete All Records
+              </Button>
+            </div>
+
+            <DialogFooter className="mt-5">
+              <Button variant="outline" onClick={() => setShowSettings(false)}>
+                Close
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
 
       {/* Delete All Confirmation Modal */}
