@@ -24,6 +24,7 @@ import {
   getStatusDisplay,
   getStatusVariant,
   calculateStats,
+  toLocalDateTimeInput,
 } from "../../Utility/attendanceUtils";
 
 // A live fix older than this is not worth reusing for a punch that decides
@@ -359,8 +360,11 @@ const Attendance = () => {
       role: "Employee",
       department: lastRecord?.department || "N/A",
       salary: lastRecord?.salary || "0",
-      intime: lastRecord?.intime ? new Date(lastRecord.intime).toISOString().slice(0, 16) : "",
-      outtime: lastRecord?.outtime ? new Date(lastRecord.outtime).toISOString().slice(0, 16) : "",
+      // Same UTC-for-local mistake as the edit dialog had, and worse here:
+      // these go in as forceValues, which the form spreads OVER whatever was
+      // typed, so the shifted time won even when somebody corrected it.
+      intime: toLocalDateTimeInput(lastRecord?.intime),
+      outtime: toLocalDateTimeInput(lastRecord?.outtime),
     };
   }, [isEmployee, records, username, employeeId]);
 

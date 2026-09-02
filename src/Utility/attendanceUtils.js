@@ -13,6 +13,27 @@ export const STATUS_DISPLAY = {
   overTime: "Overtime",
 };
 
+/**
+ * A stored timestamp as a `datetime-local` input wants it: YYYY-MM-DDTHH:mm in
+ * the READER'S OWN time.
+ *
+ * Not toISOString().slice(0, 16), which is what this used to be. That is UTC,
+ * and a datetime-local input means local — so an 11:38 AM punch opened the edit
+ * dialog reading 06:08 AM, exactly IST behind. Worse than a wrong label:
+ * pressing Update without touching a field saved that shifted time back, moving
+ * the punch five and a half hours earlier every time somebody opened the form.
+ */
+export const toLocalDateTimeInput = (value) => {
+  if (!value) return "";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (n) => String(n).padStart(2, "0");
+  return (
+    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` +
+    `T${pad(d.getHours())}:${pad(d.getMinutes())}`
+  );
+};
+
 export const formatTime = (isoString) => {
   if (!isoString) return "—";
   return new Date(isoString).toLocaleTimeString("en-US", {

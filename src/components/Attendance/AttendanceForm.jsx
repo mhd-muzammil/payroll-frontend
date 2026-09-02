@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { X } from "lucide-react";
+import { toLocalDateTimeInput } from "../../Utility/attendanceUtils";
 
 const initialFormState = {
   employee_name: "",
@@ -32,8 +33,8 @@ const AttendanceForm = ({
         role: initialData.role || "",
         department: initialData.department || "",
         salary: initialData.salary || "",
-        intime: initialData.intime ? new Date(initialData.intime).toISOString().slice(0, 16) : "",
-        outtime: initialData.outtime ? new Date(initialData.outtime).toISOString().slice(0, 16) : "",
+        intime: toLocalDateTimeInput(initialData.intime),
+        outtime: toLocalDateTimeInput(initialData.outtime),
         status: initialData.status || "Present",
       });
       return;
