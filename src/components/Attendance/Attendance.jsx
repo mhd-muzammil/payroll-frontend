@@ -311,7 +311,18 @@ const Attendance = () => {
       await checkInGeo({ latitude, longitude });
       // Only now. checkInGeo rethrows a refusal, so a punch the server turned
       // down never reaches this line and never starts the stream.
-      if (!onDuty) await startDuty();
+      //
+      // Hand duty the fix the punch was accepted with. Asking the phone for a
+      // fresh one here is what left engineers punched in but off duty: the
+      // second request often never came back, and duty failed quietly while
+      // attendance had already succeeded.
+      //
+      // Unconditional, and the server is idempotent. Skipping this when the app
+      // already believed they were on duty was the other half of the same fault:
+      // a session left open from last night still reads as on duty, so Login did
+      // nothing, no session was written for today, and the office's board -- which
+      // asks for sessions STARTED today -- showed them off duty all day.
+      await startDuty({ latitude, longitude });
     } catch (err) {
       console.error("Geo check in error:", err);
       if (err?.code || err?.message?.includes("Geolocation")) {
@@ -320,7 +331,7 @@ const Attendance = () => {
     } finally {
       setGeoLocating(false);
     }
-  }, [checkInGeo, onDuty, punchPosition, startDuty]);
+  }, [checkInGeo, punchPosition, startDuty]);
 
   const handleGeoPunchOut = useCallback(async () => {
     setGeoLocating(true);

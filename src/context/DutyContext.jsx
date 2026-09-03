@@ -201,6 +201,11 @@ function watchLocationPermission(onChange) {
   return () => status?.removeEventListener("change", handle);
 }
 
+/** A usable position: both numbers present and real. */
+function hasCoords(fix) {
+  return Number.isFinite(fix?.latitude) && Number.isFinite(fix?.longitude);
+}
+
 /**
  * Ask for a position before duty starts, and refuse duty if it does not come.
  *
@@ -309,7 +314,26 @@ export function DutyProvider({ children }) {
     });
   }, []);
 
-  const startDuty = useCallback(async () => {
+  /**
+   * Go on duty.
+   *
+   * `knownFix` is a position the caller has ALREADY obtained -- the one the
+   * attendance punch was accepted with. Pass it whenever there is one.
+   *
+   * Why it matters: Login punches in with a fix, then started duty by asking
+   * the device for a SECOND one, stricter than the first (maximumAge 0, so a
+   * brand-new satellite fix rather than the one from a second ago). On a phone
+   * that request routinely does not come back -- a foreground-service watcher
+   * is already holding the GPS, or the engineer is indoors -- and because this
+   * function reports failure by setting a message rather than throwing, the
+   * punch was recorded, duty was skipped, and nothing said so. The engineer
+   * read "Present" on their own screen while the office read "Not on duty" all
+   * day, with no distance, and no duty button left anywhere to retry with.
+   *
+   * A fix good enough to accept the punch is good enough to start the duty it
+   * belongs to. The strict ask stays for the path that arrives without one.
+   */
+  const startDuty = useCallback(async (knownFix) => {
     setBusy(true);
     setDutyError(null);
     setDiagnostic(null);
@@ -324,7 +348,7 @@ export function DutyProvider({ children }) {
       // put an engineer on the board as "on duty, waiting for GPS" for the rest
       // of the shift — the office could see they were out but never where, and
       // their distance stayed at zero. Duty without a position is not tracking.
-      await requireLocationPermission(locationPermission);
+      if (!hasCoords(knownFix)) await requireLocationPermission(locationPermission);
       applyState(await trackingService.startDuty());
       tracking.start();
     } catch (e) {
