@@ -193,7 +193,24 @@ export function useLiveTracking() {
 
   const start = useCallback(
     (caseId = null, status = "") => {
-      if (!IS_NATIVE && !("geolocation" in navigator)) {
+      // ONLY THE ENGINEER'S OWN APP MAY REPORT AN ENGINEER'S POSITION.
+      //
+      // Anyone signed in as an engineer used to be tracked as that engineer.
+      // The office opened one engineer's account in a desktop browser, two
+      // hundred and fifty kilometres away, to see what the engineer sees --
+      // and the page dutifully posted the OFFICE LAPTOP'S position as his.
+      // His day drew a straight line from Hosur to the coast and read 519 km
+      // for a man who never left Hosur. Kilometres feed allowances, so that
+      // is money, not just a wrong map.
+      //
+      // A browser cannot be the engineer's phone, so it does not get to speak
+      // for one. Said out loud rather than ignored: an engineer who somehow
+      // opens the site in Chrome must know why their route is not recording.
+      if (!IS_NATIVE) {
+        setError("Location is recorded only in the RTPL app. Please open the app.");
+        return;
+      }
+      if (!("geolocation" in navigator)) {
         setError("Geolocation is not supported by this device.");
         return;
       }

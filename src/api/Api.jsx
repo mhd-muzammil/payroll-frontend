@@ -1,4 +1,5 @@
 import axios from "axios";
+import { Capacitor } from "@capacitor/core";
 import { clearAuth, getAccessToken, getRefreshToken, setAccessToken } from "@/auth/rbac";
 
 console.log("VITE_API_BASE_URL =", import.meta.env.VITE_API_BASE_URL);
@@ -14,9 +15,19 @@ export const api = axios.create({
 
 // Read once, not per request: Capacitor's answer cannot change while the app is
 // running. This header is the only thing that tells the server a request came
-// from the phone app rather than a browser, which is what App Usage counts.
-const IS_APP =
-  typeof window !== "undefined" && Boolean(window.Capacitor?.isNativePlatform?.());
+// from the phone app rather than a browser -- it is what App Usage counts, and
+// what lets the server refuse a position reported by anything but the
+// engineer's own phone.
+//
+// From the IMPORTED Capacitor, not window.Capacitor. The two are not the same
+// promise: the global is injected by the native bridge and the module is part
+// of the bundle. useLiveTracking decides whether to track from the imported
+// one, and the app demonstrably takes that path -- the foreground service runs.
+// Deriving both from the same value is what makes "the app always sends the
+// header" true rather than hopeful; if the two could disagree, an engineer
+// could be tracking while every fix was refused, and the app would call that
+// "no signal".
+const IS_APP = Boolean(Capacitor?.isNativePlatform?.());
 
 api.interceptors.request.use((config) => {
   if (IS_APP) {
