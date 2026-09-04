@@ -49,7 +49,17 @@ const AttendanceForm = ({
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    onSubmit({ ...formData, ...forceValues });
+    // An emptied time means "there was no such punch", and the API says that
+    // with null. Sent as "" it comes back 400 -- "Datetime has wrong format" --
+    // so a wrong Clock Out could not be cleared at all. That is exactly what
+    // somebody needs cleared when an engineer taps Logout by mistake a minute
+    // after logging in: the day reads as finished and their app offers them
+    // nothing for the rest of it.
+    const payload = { ...formData, ...forceValues };
+    for (const field of ["intime", "outtime"]) {
+      if (payload[field] === "") payload[field] = null;
+    }
+    onSubmit(payload);
   };
 
   return (
