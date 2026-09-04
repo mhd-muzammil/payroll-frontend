@@ -16,6 +16,18 @@ const initialFormState = {
 
 const STATUS_OPTIONS = ["Present", "Absent", "Leave", "Late", "overTime"];
 
+// Nobody punches in on a day they did not come in, so these ask for the date
+// instead of a clock time -- and they have to ask for something, because a
+// record with no date is filtered out of every list on the page and can never
+// be seen again.
+const NO_PUNCH = new Set(["Absent", "Leave"]);
+
+/** "2026-09-04T00:00" from "2026-09-04", the way the Excel import stores it. */
+const dayStart = (date) => (date ? `${date}T00:00` : "");
+
+/** The date half of a datetime-local value, for moving between the two. */
+const dayOf = (value) => (value ? String(value).slice(0, 10) : "");
+
 const AttendanceForm = ({ 
   initialData = null, 
   onSubmit, 
@@ -47,6 +59,8 @@ const AttendanceForm = ({
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
+  const noPunch = NO_PUNCH.has(formData.status);
+
   const handleSubmit = (e) => {
     e.preventDefault();
     // An emptied time means "there was no such punch", and the API says that
@@ -56,6 +70,12 @@ const AttendanceForm = ({
     // after logging in: the day reads as finished and their app offers them
     // nothing for the rest of it.
     const payload = { ...formData, ...forceValues };
+    // An absent day carries the date and nothing else: midnight on that date,
+    // which is where the page reads the date from and what the import writes.
+    if (NO_PUNCH.has(payload.status)) {
+      payload.intime = dayStart(dayOf(payload.intime));
+      payload.outtime = null;
+    }
     for (const field of ["intime", "outtime"]) {
       if (payload[field] === "") payload[field] = null;
     }
@@ -138,34 +158,55 @@ const AttendanceForm = ({
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          {noPunch ? (
             <div>
-              <label className="text-sm font-medium mb-1.5 block">
-                Clock In
-              </label>
+              <label className="text-sm font-medium mb-1.5 block">Date</label>
               <input
-                type="datetime-local"
+                type="date"
                 name="intime"
-                value={formData.intime}
-                onChange={handleChange}
+                value={dayOf(formData.intime)}
+                onChange={(e) =>
+                  setFormData((prev) => ({ ...prev, intime: dayStart(e.target.value) }))
+                }
                 disabled={lockedFields.intime}
+                required
                 className="w-full h-10 rounded-xl border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-glow"
               />
+              <p className="mt-1.5 text-xs text-muted-foreground">
+                Which day they were {String(formData.status).toLowerCase()}. There is no
+                clock in or out on it.
+              </p>
             </div>
-            <div>
-              <label className="text-sm font-medium mb-1.5 block">
-                Clock Out
-              </label>
-              <input
-                type="datetime-local"
-                name="outtime"
-                value={formData.outtime}
-                onChange={handleChange}
-                disabled={lockedFields.outtime}
-                className="w-full h-10 rounded-xl border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-glow"
-              />
+          ) : (
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm font-medium mb-1.5 block">
+                  Clock In
+                </label>
+                <input
+                  type="datetime-local"
+                  name="intime"
+                  value={formData.intime}
+                  onChange={handleChange}
+                  disabled={lockedFields.intime}
+                  className="w-full h-10 rounded-xl border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-glow"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium mb-1.5 block">
+                  Clock Out
+                </label>
+                <input
+                  type="datetime-local"
+                  name="outtime"
+                  value={formData.outtime}
+                  onChange={handleChange}
+                  disabled={lockedFields.outtime}
+                  className="w-full h-10 rounded-xl border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-glow"
+                />
+              </div>
             </div>
-          </div>
+          )}
 
           <div>
             <label className="text-sm font-medium mb-1.5 block">Status</label>

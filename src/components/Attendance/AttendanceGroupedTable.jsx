@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ChevronDown, Pencil, Trash2, Plus } from "lucide-react";
 import {
-  formatTime,
+  punchTime,
   formatDayLabel,
   getDatePart,
   calculateHours,
@@ -277,10 +277,10 @@ const AttendanceGroupedTable = ({
                               {formatDayLabel(r.intime || r.outtime)}
                             </td>
                             <td className="px-4 py-3 whitespace-nowrap">
-                              {formatTime(r.intime)}
+                              {punchTime(r, "intime")}
                             </td>
                             <td className="px-4 py-3 whitespace-nowrap">
-                              {formatTime(r.outtime)}
+                              {punchTime(r, "outtime")}
                             </td>
                             <td className="px-4 py-3 font-medium whitespace-nowrap">
                               {calculateHours(r.intime, r.outtime)}h
@@ -400,13 +400,13 @@ const AttendanceGroupedTable = ({
                           <span>
                             In{" "}
                             <span className="font-medium text-foreground">
-                              {formatTime(r.intime)}
+                              {punchTime(r, "intime")}
                             </span>
                           </span>
                           <span>
                             Out{" "}
                             <span className="font-medium text-foreground">
-                              {formatTime(r.outtime)}
+                              {punchTime(r, "outtime")}
                             </span>
                           </span>
                           <span className="font-medium text-foreground">

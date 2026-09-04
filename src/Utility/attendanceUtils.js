@@ -34,6 +34,19 @@ export const toLocalDateTimeInput = (value) => {
   );
 };
 
+/**
+ * What a day's clock times should read as.
+ *
+ * A day nobody came in has no punch, so it is stored as midnight on that date
+ * -- the date is what every list groups by and it has to come from somewhere.
+ * Printing that back as "12:00 AM" would read as somebody who clocked in at
+ * midnight, so an absent or leave day shows a dash for both times instead.
+ */
+const NO_PUNCH_STATUSES = new Set(["Absent", "Leave"]);
+
+export const punchTime = (record, field) =>
+  NO_PUNCH_STATUSES.has(record?.status) ? "—" : formatTime(record?.[field]);
+
 export const formatTime = (isoString) => {
   if (!isoString) return "—";
   return new Date(isoString).toLocaleTimeString("en-US", {
