@@ -249,6 +249,11 @@ function requireLocationPermission(sitePermission) {
   });
 }
 
+// How often the engineer's own duty figures are re-read while they are on duty.
+// A minute: the phone sends a position every thirty seconds, so this is never
+// more than one reading behind, and it is one request a minute per engineer.
+const DUTY_REFRESH_MS = 60 * 1000;
+
 export function DutyProvider({ children }) {
   const tracking = useLiveTracking();
   const [onDuty, setOnDuty] = useState(false);
@@ -300,6 +305,44 @@ export function DutyProvider({ children }) {
       cancelled = true;
     };
   }, [applyState]);
+
+  /**
+   * Keep the duty figures current while the engineer is out.
+   *
+   * They were read ONCE, on mount. An engineer who opened the app at nine in
+   * the morning therefore read "0.0 km travelled today" for the rest of the
+   * day while the office watched the same engineer cross twenty-one -- the
+   * office's page had simply been opened a minute ago and theirs had not.
+   *
+   * Also on becoming visible again, which is the moment somebody is actually
+   * looking: Android throttles a backgrounded WebView's timers, so the phone
+   * coming out of a pocket is a better signal than any interval.
+   */
+  useEffect(() => {
+    if (!onDuty) return;
+    if (!isAuthenticated() || getUserRole() !== ROLES.EMPLOYEE) return;
+    let cancelled = false;
+    const refresh = () => {
+      trackingService
+        .duty()
+        .then((state) => {
+          if (!cancelled) applyState(state);
+        })
+        // A failed refresh must leave the last known figures alone rather than
+        // blanking a screen the engineer is reading.
+        .catch(() => {});
+    };
+    const timer = setInterval(refresh, DUTY_REFRESH_MS);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [onDuty, applyState]);
 
   // Told up front, and cleared the moment they fix it — no reload needed.
   useEffect(() => {
