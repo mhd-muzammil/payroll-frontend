@@ -116,7 +116,7 @@ export const useAttendance = () => {
   const checkInGeo = useCallback(async (geoData) => {
     const data = await handleRequest(
       () => attendanceService.checkIn(geoData),
-      "Successfully punched in! Distance verified."
+      "Logged in. Location verified."
     );
     if (data) {
       setRecords((prev) => [data, ...prev]);
@@ -127,7 +127,7 @@ export const useAttendance = () => {
   const checkOutGeo = useCallback(async (geoData) => {
     const data = await handleRequest(
       () => attendanceService.checkOut(geoData),
-      "Successfully punched out! Distance verified."
+      "Logged out. Location verified."
     );
     if (data) {
       setRecords((prev) => prev.map((r) => (r.id === data.id ? data : r)));

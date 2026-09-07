@@ -40,7 +40,7 @@ function PunchRecord({ c }) {
     );
   }
   if (!c.reached_at) {
-    return <span className="text-xs font-medium text-gray-400">Not punched in</span>;
+    return <span className="text-xs font-medium text-gray-400">Not checked in</span>;
   }
   if (c.completed_at) {
     return (
@@ -601,7 +601,7 @@ export default function EngineerCases() {
                     className="flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-indigo-600 text-sm font-semibold text-white disabled:opacity-50"
                   >
                     <LogIn className="h-4 w-4" />
-                    {busyId === c.id ? "Punching in\u2026" : "Punch In"}
+                    {busyId === c.id ? "Checking in\u2026" : "Check In"}
                   </button>
                 )}
                 {c.reached_at && c.status !== "completed" && (
@@ -611,7 +611,7 @@ export default function EngineerCases() {
                     className="flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-green-600 text-sm font-semibold text-white disabled:opacity-50"
                   >
                     <LogOut className="h-4 w-4" />
-                    {busyId === c.id ? "Punching out\u2026" : "Punch Out"}
+                    {busyId === c.id ? "Checking out\u2026" : "Check Out"}
                   </button>
                 )}
               </div>

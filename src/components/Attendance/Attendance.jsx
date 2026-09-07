@@ -709,7 +709,8 @@ const Attendance = () => {
                     on-premise entry" pushed the button most of a screen down.
                     Same meaning, one line. */}
                 <p className="text-sm text-muted-foreground max-w-md">
-                  Punch in when you reach and out when you leave. Your location is recorded with each punch.
+                  Login when your day starts and Logout when it ends. Your location is recorded
+                  with each.
                 </p>
               </div>
 
