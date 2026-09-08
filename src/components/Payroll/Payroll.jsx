@@ -6,7 +6,7 @@ import PageHeader from "../ui/PageHeader";
 import StatsCard from "../ui/StatsCard";
 import Toolbar from "../ui/Toolbar";
 import DataTable from "../ui/DataTable";
-import { Wallet, TrendingUp, Clock, CheckCircle2, Play, MoreHorizontal, Loader2, MapPin, Users, Save, Calendar, FileText, Eye, X } from "lucide-react";
+import { Wallet, TrendingUp, Clock, CheckCircle2, Play, MoreHorizontal, Loader2, MapPin, Users, Save, Calendar, FileText, Eye, X, Send } from "lucide-react";
 import { api } from "@/api/Api";
 import { extractArray } from "../../Utility/apiUtils";
 
@@ -327,6 +327,36 @@ const PayrollPage = () => {
       alert(e.response?.data?.error || "Failed to generate payslip.");
     } finally {
       setGenerating(false);
+    }
+  };
+
+  const [sendingSlip, setSendingSlip] = useState(null);
+
+  /**
+   * Release a payslip to its employee.
+   *
+   * Generating one no longer shows it to anybody: this is the moment it
+   * reaches them. Asked about first, because it is the only button here that
+   * puts a salary figure in front of an employee and there is no unsending.
+   */
+  const handleSendPayslip = async (payslipId, employeeName) => {
+    if (
+      !window.confirm(
+        `Send ${employeeName}'s payslip to them?\n\n` +
+          "They will be able to open it in the app from now on. This cannot be undone.",
+      )
+    ) {
+      return;
+    }
+    setSendingSlip(payslipId);
+    try {
+      await api.post(`/api/payslips/${payslipId}/send/`);
+      fetchData(selectedRegion, selectedMonth, selectedYear);
+    } catch (e) {
+      console.error("Failed to send the payslip", e);
+      alert("Could not send the payslip. Please try again.");
+    } finally {
+      setSendingSlip(null);
     }
   };
 
@@ -756,6 +786,38 @@ const PayrollPage = () => {
                             <Eye className="h-3.5 w-3.5" />
                             View Slip
                           </button>
+                          {/* Whether the employee can see it. Generating no
+                              longer shows it to them, so this is the button
+                              that hands it over -- and once it says Sent, it
+                              says when.
+
+                              Shown only when the payslip actually carries a
+                              sent_at: this page deploys on its own, ahead of
+                              the backend, and a Send button that 404s is worse
+                              than no button. An older backend sends no such
+                              key, and there the old behaviour still stands. */}
+                          {!("sent_at" in e.payslip) ? null : e.payslip.sent_at ? (
+                            <span
+                              title={`Sent to the employee on ${new Date(e.payslip.sent_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}`}
+                              className="flex items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 h-8 text-xs font-semibold text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-400"
+                            >
+                              <Send className="h-3.5 w-3.5" />
+                              Sent
+                            </span>
+                          ) : (
+                            <button
+                              onClick={() => handleSendPayslip(e.payslip.id, e.employee_name)}
+                              disabled={sendingSlip === e.payslip.id}
+                              className="flex items-center gap-1 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground px-2.5 h-8 text-xs font-bold transition-colors shadow-2xs disabled:opacity-50"
+                            >
+                              {sendingSlip === e.payslip.id ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <Send className="h-3.5 w-3.5" />
+                              )}
+                              Send Payslip
+                            </button>
+                          )}
                           {e.payslipStatus !== "Paid" && (
                             <button
                               onClick={() => handleMarkPaid(e.payslip.id)}
