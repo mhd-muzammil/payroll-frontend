@@ -8,7 +8,6 @@ import {
   formatDayLabel,
   getDatePart,
   calculateHours,
-  calculateOvertime,
   isPresentStatus,
   getStatusDisplay,
 } from "../../Utility/attendanceUtils";
@@ -54,7 +53,7 @@ const employeeKey = (record) =>
 
 /**
  * Groups daily attendance records by employee. Each employee is a collapsible
- * card: the header shows a cycle summary (present/absent days, total & OT hours)
+ * card: the header shows a cycle summary (present/absent days and total hours)
  * and expanding reveals the day-by-day breakdown, each row dated with weekday.
  */
 const AttendanceGroupedTable = ({
@@ -95,10 +94,6 @@ const AttendanceGroupedTable = ({
       g.leaveDays = g.records.filter((r) => r.status === "Leave").length;
       g.totalHours = g.records.reduce(
         (s, r) => s + parseFloat(calculateHours(r.intime, r.outtime)),
-        0
-      );
-      g.otHours = g.records.reduce(
-        (s, r) => s + parseFloat(calculateOvertime(r.intime, r.outtime)),
         0
       );
     });
@@ -193,11 +188,6 @@ const AttendanceGroupedTable = ({
                   <span className="rounded-full bg-muted px-2.5 py-1 font-medium text-muted-foreground">
                     {g.totalHours.toFixed(1)}h total
                   </span>
-                  {g.otHours > 0 && (
-                    <span className="rounded-full bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 px-2.5 py-1 font-medium">
-                      +{g.otHours.toFixed(1)}h OT
-                    </span>
-                  )}
                 </div>
               </button>
 
@@ -241,9 +231,6 @@ const AttendanceGroupedTable = ({
                         Total Hours
                       </th>
                       <th className="text-left font-medium text-muted-foreground px-4 py-2.5 text-xs uppercase tracking-wider">
-                        Overtime
-                      </th>
-                      <th className="text-left font-medium text-muted-foreground px-4 py-2.5 text-xs uppercase tracking-wider">
                         Status
                       </th>
                       {!isEmployee && (
@@ -265,7 +252,6 @@ const AttendanceGroupedTable = ({
                       </tr>
                     ) : (
                       g.records.map((r) => {
-                        const overtime = calculateOvertime(r.intime, r.outtime);
                         return (
                           <tr
                             key={r.id}
@@ -284,15 +270,6 @@ const AttendanceGroupedTable = ({
                             </td>
                             <td className="px-4 py-3 font-medium whitespace-nowrap">
                               {calculateHours(r.intime, r.outtime)}h
-                            </td>
-                            <td className="px-4 py-3 whitespace-nowrap">
-                              {Number(overtime) > 0 ? (
-                                <span className="text-cyan-600 dark:text-cyan-400 font-medium">
-                                  +{overtime}h
-                                </span>
-                              ) : (
-                                <span className="text-muted-foreground">—</span>
-                              )}
                             </td>
                             <td className="px-4 py-3">
                               <button
@@ -354,7 +331,6 @@ const AttendanceGroupedTable = ({
                   </div>
                 ) : (
                   g.records.map((r) => {
-                    const overtime = calculateOvertime(r.intime, r.outtime);
                     return (
                       <div
                         key={r.id}
@@ -412,11 +388,6 @@ const AttendanceGroupedTable = ({
                           <span className="font-medium text-foreground">
                             {calculateHours(r.intime, r.outtime)}h
                           </span>
-                          {Number(overtime) > 0 && (
-                            <span className="font-medium text-cyan-600 dark:text-cyan-400">
-                              +{overtime}h OT
-                            </span>
-                          )}
                         </div>
                       </div>
                     );

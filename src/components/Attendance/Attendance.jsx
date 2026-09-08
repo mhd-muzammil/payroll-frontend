@@ -21,7 +21,6 @@ import {
   formatTime,
   formatDayLabel,
   calculateHours,
-  calculateOvertime,
   getStatusDisplay,
   getStatusVariant,
   calculateStats,
@@ -150,7 +149,7 @@ const Attendance = () => {
       return;
     }
 
-    const headers = ["Employee Name", "Department", "Role", "Clock In", "Clock Out", "Total Hours", "Overtime", "Status"];
+    const headers = ["Employee Name", "Department", "Role", "Clock In", "Clock Out", "Total Hours", "Status"];
     const rows = filteredRecords.map(record => [
       record.employee_name || "",
       record.department || "",
@@ -158,7 +157,6 @@ const Attendance = () => {
       record.intime ? new Date(record.intime).toLocaleTimeString("en-US", { hour: '2-digit', minute: '2-digit' }) : "--:--",
       record.outtime ? new Date(record.outtime).toLocaleTimeString("en-US", { hour: '2-digit', minute: '2-digit' }) : "--:--",
       calculateHours(record.intime, record.outtime),
-      calculateOvertime(record.intime, record.outtime),
       record.status || ""
     ]);
 
@@ -560,7 +558,6 @@ const Attendance = () => {
       { label: "Present", value: stats.presentToday.toString(), subtitle: live, icon: CheckCircle2, accent: "success" },
       { label: "On Leave", value: stats.onLeave.toString(), subtitle: live, icon: Timer, accent: "warning" },
       { label: "Absent", value: stats.absent.toString(), subtitle: live, icon: AlertCircle, accent: "danger" },
-      { label: "Overtime Hours", value: `${stats.overtimeHours}h`, subtitle: "This cycle", icon: Clock, accent: "info" },
       { label: "Total Hours", value: `${stats.totalWorkedHours}h`, subtitle: "Worked this cycle", icon: Timer, accent: "primary" },
     ];
   }, [stats, snapshotDayLabel]);
@@ -657,7 +654,7 @@ const Attendance = () => {
 
       <PageHeader
         title="Attendance Summary"
-        description="Track daily attendance, overtime and absences."
+        description="Track daily attendance and absences."
         actions={
           !isEmployee ? (
             // Three pill buttons in a row ran to 400px on a 390px screen, so Add
