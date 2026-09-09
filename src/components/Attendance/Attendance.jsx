@@ -27,6 +27,7 @@ import {
   toLocalDateTimeInput,
   punchTime,
   isPresentStatus,
+  linkOrphanRows,
 } from "../../Utility/attendanceUtils";
 
 // A live fix older than this is not worth reusing for a punch that decides
@@ -522,7 +523,13 @@ const Attendance = () => {
     }
   }, [success, clearMessages]);
 
-  const safeRecords = Array.isArray(records) ? records : [];
+  // Done here, once, rather than in each consumer: the filter, the headcount
+  // cards, the region cards, the grouped table and every export all read these
+  // rows, and they have to agree about who a row belongs to. See linkOrphanRows.
+  // A plain call, not a useMemo: linkOrphanRows hands back the SAME array when
+  // there was nothing to link, and every memo below keys on `records` anyway,
+  // so wrapping it only cost the React Compiler its own memoization.
+  const safeRecords = linkOrphanRows(records);
 
   const filteredRecords = useMemo(() => {
     return safeRecords.filter((record) => {

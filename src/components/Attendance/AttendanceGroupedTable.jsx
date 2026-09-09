@@ -203,6 +203,13 @@ const AttendanceGroupedTable = ({
                       role: g.role,
                       department: g.department,
                       salary: g.records[0]?.salary || "0.00",
+                      // Who the row is about, not just what they are called.
+                      // Without it the server had only the name to go on and
+                      // saved the row belonging to nobody, which is what made
+                      // one person show up as two cards.
+                      ...(g.records[0]?.employee_id != null
+                        ? { employee: g.records[0].employee_id }
+                        : {}),
                     })
                   }
                   className="shrink-0 h-10 w-10 md:h-8 md:w-auto md:px-3 rounded-xl text-xs font-semibold shadow-glow-brand"

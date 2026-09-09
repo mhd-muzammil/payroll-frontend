@@ -92,6 +92,61 @@ export const getStatusVariant = (status) => STATUS_VARIANTS[status] || "muted";
 
 export const REGIONS = ["Chennai", "Vellore", "Salem", "Kanchipuram", "Hosur"];
 
+/**
+ * Hand a hand-marked row back to the employee it is about.
+ *
+ * A row the office marks itself -- Mark Attendance, Add Record -- used to be
+ * saved with no employee link at all, so it arrives with employee_id null, no
+ * email, and a branch of "Chennai" whoever the person is. Every list here keys
+ * a person by that id, so one employee came back as two: a card for the days
+ * somebody punched and another for the day the office marked, with the second
+ * one's absence counted against Chennai.
+ *
+ * So a row with no id is given the id, branch and email of the employee of
+ * that name -- and only when exactly one employee has that name. Namesakes are
+ * left alone: two cards for one name is a smaller lie than one person's
+ * absence appearing on a colleague's record.
+ *
+ * The link belongs on the server and is written there now; this keeps the rows
+ * saved before that readable, and stays as the answer for a row the server
+ * could not attribute either.
+ */
+export const linkOrphanRows = (records) => {
+  const list = Array.isArray(records) ? records : [];
+  // name -> the id-bearing rows for that name, one entry per distinct id.
+  const owners = new Map();
+  for (const record of list) {
+    if (record.employee_id == null) continue;
+    const name = String(record.employee_name || "").trim().toLowerCase();
+    if (!name) continue;
+    let known = owners.get(name);
+    if (!known) owners.set(name, (known = new Map()));
+    if (!known.has(record.employee_id)) known.set(record.employee_id, record);
+  }
+  if (owners.size === 0) return list;
+
+  let linked = false;
+  const out = list.map((record) => {
+    if (record.employee_id != null) return record;
+    const name = String(record.employee_name || "").trim().toLowerCase();
+    const known = owners.get(name);
+    if (!known || known.size !== 1) return record;
+    const owner = [...known.values()][0];
+    linked = true;
+    return {
+      ...record,
+      employee_id: owner.employee_id,
+      // Their real branch, not the "Chennai" the API fills in for a row that
+      // belongs to nobody -- this is what puts the day in the right region.
+      branch: owner.branch || record.branch,
+      email: record.email || owner.email || null,
+    };
+  });
+  // Same array when there was nothing to link, so the memos downstream do not
+  // see a new list on every render.
+  return linked ? out : list;
+};
+
 // Normalized status buckets (handles both "Overtime" and "overTime" spellings)
 export const isPresentStatus = (status) =>
   status === "Present" || status === "Overtime" || status === "overTime";
