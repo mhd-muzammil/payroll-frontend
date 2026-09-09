@@ -21,8 +21,8 @@ android {
         // than as another APK on 24 phones. Bumped so a phone can be told apart at
         // a glance — Settings → Apps → Renderways Technology shows this.
         // 1.4: tracking that outlives the app being swiped away.
-        versionCode 5
-        versionName "1.4"
+        versionCode 6
+        versionName "1.4.1"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
