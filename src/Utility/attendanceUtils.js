@@ -178,12 +178,16 @@ export const calculateStats = (records, snapshotDate = null) => {
   // Region-wise breakdown from the same one-per-employee snapshot
   const regionBreakdown = {};
   REGIONS.forEach((region) => {
-    regionBreakdown[region] = { present: 0, absent: 0, leave: 0, total: 0 };
+    // people: the snapshot rows this bucket counted, in the order they were
+    // counted. The region cards open onto them, so the list and the number on
+    // the card can never disagree -- they are the same pass.
+    regionBreakdown[region] = { present: 0, absent: 0, leave: 0, total: 0, people: [] };
   });
   snapshot.forEach((r) => {
     const region = resolveRegion(r.branch);
     const bucket = regionBreakdown[region];
     bucket.total += 1;
+    bucket.people.push(r);
     if (isPresentStatus(r.status)) bucket.present += 1;
     else if (r.status === "Leave") bucket.leave += 1;
     else if (r.status === "Absent") bucket.absent += 1;

@@ -36,7 +36,9 @@ const ROW_TINT_TOUCH = {
   Late: "bg-amber-500/10",
 };
 
-const StatusPill = ({ status }) => (
+// Exported so the region dialog on the Attendance page marks a status exactly
+// the way the day rows here do -- one palette, not two that drift apart.
+export const StatusPill = ({ status }) => (
   <span
     className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
       STATUS_PILL[status] || "bg-muted-foreground/15 text-muted-foreground"

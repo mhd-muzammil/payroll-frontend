@@ -15,7 +15,7 @@ import { useAttendance } from "../../customHook/useAttendance";
 import { drawAttendanceDay, saveBlob } from "../../Utility/attendanceDayImage";
 import { useDuty } from "../../context/DutyContext";
 import AttendanceForm from "./AttendanceForm";
-import AttendanceGroupedTable from "./AttendanceGroupedTable";
+import AttendanceGroupedTable, { StatusPill } from "./AttendanceGroupedTable";
 import { ROLES, getTokenClaims, getUserRole, normalizeRole } from "@/auth/rbac";
 import {
   formatTime,
@@ -25,6 +25,8 @@ import {
   getStatusVariant,
   calculateStats,
   toLocalDateTimeInput,
+  punchTime,
+  isPresentStatus,
 } from "../../Utility/attendanceUtils";
 
 // A live fix older than this is not worth reusing for a punch that decides
@@ -55,6 +57,113 @@ const STAT_ACCENT = {
   info: "bg-info/10 text-info",
   danger: "bg-destructive/10 text-destructive",
 };
+
+/**
+ * One live headcount card: a region, or the whole company.
+ *
+ * A button rather than a div with a click on it. The card is the way into the
+ * list of who those numbers are, so it has to be reachable by keyboard and
+ * announce itself as something you can press.
+ */
+const RegionCard = ({ name, data, highlight = false, onClick }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    title={`See who is counted in ${name}`}
+    className={`group flex flex-col justify-between rounded-2xl border p-3 text-left transition hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 md:p-4 ${
+      highlight
+        ? "border-primary-glow/40 bg-primary-glow/[0.08] hover:bg-primary-glow/[0.14]"
+        : "border-border/50 bg-muted/30 hover:bg-muted/60"
+    }`}
+  >
+    <div className="w-full">
+      <div className="mb-2">
+        <div className="flex items-center gap-1">
+          <span
+            className={`truncate text-sm font-bold capitalize ${
+              highlight ? "text-primary-glow" : "text-foreground"
+            }`}
+          >
+            {name}
+          </span>
+          <ChevronRight className="ml-auto h-3.5 w-3.5 shrink-0 text-muted-foreground opacity-50 transition group-hover:translate-x-0.5 group-hover:opacity-100" />
+        </div>
+        <Badge variant="outline" className="mt-1 border-primary/20 bg-primary/5 px-1.5 py-0.5 text-[10px] text-primary">
+          {data.total} Total
+        </Badge>
+      </div>
+      <div className="space-y-1.5 text-xs">
+        <div className="flex items-center justify-between text-muted-foreground">
+          <span>Present</span>
+          <span className="font-semibold text-emerald-500">{data.present}</span>
+        </div>
+        <div className="flex items-center justify-between text-muted-foreground">
+          <span>Absent</span>
+          <span className="font-semibold text-red-500">{data.absent}</span>
+        </div>
+        <div className="flex items-center justify-between text-muted-foreground">
+          <span>On Leave</span>
+          <span className="font-semibold text-amber-500">{data.leave}</span>
+        </div>
+      </div>
+    </div>
+    {/* Visual Progress Bar representing present percentage */}
+    <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-border/40">
+      <div
+        className="h-1.5 rounded-full bg-emerald-500"
+        style={{ width: `${data.total > 0 ? (data.present / data.total) * 100 : 0}%` }}
+      />
+    </div>
+  </button>
+);
+
+/**
+ * One person on the snapshot day, as a region card lists them.
+ *
+ * The punch line is dropped entirely for an absent or leave day: punchTime
+ * gives a dash for both, and a row reading "-- to --" looks like a fault
+ * rather than a day nobody was expected in.
+ */
+const PersonRow = ({ record, showRegion }) => {
+  const inAt = punchTime(record, "intime");
+  const outAt = punchTime(record, "outtime");
+  const punched = inAt !== "\u2014" || outAt !== "\u2014";
+  const meta = [record.role, record.department].filter(Boolean).join(" \u00b7 ");
+  return (
+    <div className="flex items-center justify-between gap-2 rounded-2xl border border-border/60 bg-muted/20 px-3 py-2.5">
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="truncate text-sm font-semibold text-foreground">
+            {record.employee_name || "\u2014"}
+          </span>
+          {showRegion && (
+            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold capitalize text-primary">
+              {record.branch || "Chennai"}
+            </span>
+          )}
+        </div>
+        {meta && <div className="truncate text-[11px] text-muted-foreground">{meta}</div>}
+        {punched && (
+          <div className="mt-1 text-[11px] tabular-nums text-muted-foreground">
+            {inAt} &rarr; {outAt}
+            <span className="ml-1.5 font-medium text-foreground">
+              {calculateHours(record.intime, record.outtime)}h
+            </span>
+          </div>
+        )}
+      </div>
+      <StatusPill status={record.status} />
+    </div>
+  );
+};
+
+// The four ways to read a region card, in the order the card lists them.
+const DETAIL_TABS = [
+  { key: "all", label: "All" },
+  { key: "present", label: "Present" },
+  { key: "absent", label: "Absent" },
+  { key: "leave", label: "On Leave" },
+];
 
 const Attendance = () => {
   const {
@@ -91,6 +200,10 @@ const Attendance = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedRegion, setSelectedRegion] = useState("");
   const [selectedRole, setSelectedRole] = useState("");
+  // Which headcount card is open, and how it is being read. null is closed;
+  // { region: null } is the All Regions card.
+  const [regionDetail, setRegionDetail] = useState(null);
+  const [detailStatus, setDetailStatus] = useState("all");
   const [showSettings, setShowSettings] = useState(false);
   // Phone only: the From/To inputs and the region select start folded away.
   // From sm: up they are always visible and this is ignored.
@@ -549,6 +662,60 @@ const Attendance = () => {
     [stats.snapshotDate]
   );
 
+  // The whole company as one card. Summed from the same five buckets the region
+  // cards render, not from stats.presentToday -- built this way the sixth card
+  // can never disagree with the five beside it, whatever the filters are doing.
+  const allRegions = useMemo(() => {
+    const buckets = Object.values(stats.regionBreakdown || {});
+    return buckets.reduce(
+      (sum, b) => ({
+        present: sum.present + b.present,
+        absent: sum.absent + b.absent,
+        leave: sum.leave + b.leave,
+        total: sum.total + b.total,
+        people: sum.people.concat(b.people || []),
+      }),
+      { present: 0, absent: 0, leave: 0, total: 0, people: [] }
+    );
+  }, [stats.regionBreakdown]);
+
+  // A region card is a way in, so opening one always starts on All: coming back
+  // to Salem after reading Chennai's absentees should not hide Salem's staff.
+  const openRegionDetail = useCallback((region) => {
+    setDetailStatus("all");
+    setRegionDetail({ region });
+  }, []);
+
+  // Everybody behind the open card, by name. region: null means all of them.
+  const detailPeople = useMemo(() => {
+    if (!regionDetail) return [];
+    const people = regionDetail.region
+      ? stats.regionBreakdown?.[regionDetail.region]?.people || []
+      : allRegions.people;
+    return [...people].sort((a, b) =>
+      String(a.employee_name || "").localeCompare(String(b.employee_name || ""))
+    );
+  }, [regionDetail, stats.regionBreakdown, allRegions]);
+
+  // The same three buckets calculateStats counts with, so a tab's number always
+  // matches the line on the card that opened it.
+  const detailCounts = useMemo(
+    () => ({
+      all: detailPeople.length,
+      present: detailPeople.filter((r) => isPresentStatus(r.status)).length,
+      absent: detailPeople.filter((r) => r.status === "Absent").length,
+      leave: detailPeople.filter((r) => r.status === "Leave").length,
+    }),
+    [detailPeople]
+  );
+
+  const detailRows = useMemo(() => {
+    if (detailStatus === "present") return detailPeople.filter((r) => isPresentStatus(r.status));
+    if (detailStatus === "absent") return detailPeople.filter((r) => r.status === "Absent");
+    if (detailStatus === "leave") return detailPeople.filter((r) => r.status === "Leave");
+    return detailPeople;
+  }, [detailPeople, detailStatus]);
+
   // Defined once, rendered twice - full cards from sm: up, compact tiles on a
   // phone. Stacked at full size these five cost 690px of scrolling before the
   // page reaches anything you can act on.
@@ -840,42 +1007,27 @@ const Attendance = () => {
                 : "Live headcount · one count per employee"}
             </span>
           </div>
-          {/* xl, not lg — five tracks do not fit beside the sidebar at 1024px. */}
-          {/* Two up on a phone. One per row put five regions across five
+          {/* xl, not lg — six tracks do not fit beside the sidebar at 1024px. */}
+          {/* Two up on a phone. One per row put the regions across five
               screens, and each card is only three short lines. */}
-          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-2.5 md:gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2.5 md:gap-4">
+            {/* Everybody, in front of the branches. The number was already on
+                the page, up in the stat cards -- but a scroll away and worded
+                differently, so nobody could read the company and a branch in
+                one glance. */}
+            <RegionCard
+              name="All Regions"
+              data={allRegions}
+              highlight
+              onClick={() => openRegionDetail(null)}
+            />
             {Object.entries(stats.regionBreakdown).map(([region, data]) => (
-              <div key={region} className="bg-muted/30 border border-border/50 rounded-2xl p-3 md:p-4 flex flex-col justify-between">
-                <div>
-                  <div className="flex flex-wrap items-center justify-between gap-1 mb-2">
-                    <span className="font-bold text-sm text-foreground capitalize truncate">{region}</span>
-                    <Badge variant="outline" className="text-[10px] px-1.5 py-0.5 border-primary/20 text-primary bg-primary/5">
-                      {data.total} Total
-                    </Badge>
-                  </div>
-                  <div className="space-y-1.5 text-xs">
-                    <div className="flex justify-between items-center text-muted-foreground">
-                      <span>Present</span>
-                      <span className="font-semibold text-emerald-500">{data.present}</span>
-                    </div>
-                    <div className="flex justify-between items-center text-muted-foreground">
-                      <span>Absent</span>
-                      <span className="font-semibold text-red-500">{data.absent}</span>
-                    </div>
-                    <div className="flex justify-between items-center text-muted-foreground">
-                      <span>On Leave</span>
-                      <span className="font-semibold text-amber-500">{data.leave}</span>
-                    </div>
-                  </div>
-                </div>
-                {/* Visual Progress Bar representing present percentage */}
-                <div className="mt-3 w-full bg-border/40 rounded-full h-1.5 overflow-hidden">
-                  <div 
-                    className="bg-emerald-500 h-1.5 rounded-full" 
-                    style={{ width: `${data.total > 0 ? (data.present / data.total) * 100 : 0}%` }}
-                  />
-                </div>
-              </div>
+              <RegionCard
+                key={region}
+                name={region}
+                data={data}
+                onClick={() => openRegionDetail(region)}
+              />
             ))}
           </div>
         </div>
@@ -1120,6 +1272,63 @@ const Attendance = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Who those numbers are.
+          The cards answered "how many in Chennai" and stopped there: finding
+          out which five were absent meant setting the region filter and reading
+          down the cycle list. The card opens onto its own people instead --
+          the same one-per-employee snapshot the counts are taken from, for the
+          same day, so the list and the card can never tell different stories. */}
+      {regionDetail && (
+        <Dialog open onOpenChange={(open) => { if (!open) setRegionDetail(null); }}>
+          <DialogContent className="sm:max-w-2xl bg-card border border-border shadow-2xl rounded-3xl p-6 overflow-hidden flex flex-col max-h-[85vh]">
+            <DialogHeader className="mb-2 pr-6">
+              <DialogTitle className="text-xl font-bold tracking-tight capitalize">
+                {regionDetail.region || "All Regions"}
+              </DialogTitle>
+              <DialogDescription className="text-sm text-muted-foreground">
+                Live headcount &middot; one count per employee
+                {snapshotDayLabel ? ` \u00b7 as of ${snapshotDayLabel}` : ""}
+              </DialogDescription>
+            </DialogHeader>
+
+            {/* The card's three lines, as ways to read the list below. */}
+            <div className="flex flex-wrap gap-2 pb-3">
+              {DETAIL_TABS.map((tab) => (
+                <button
+                  key={tab.key}
+                  type="button"
+                  onClick={() => setDetailStatus(tab.key)}
+                  className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
+                    detailStatus === tab.key
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-border bg-muted/40 text-muted-foreground hover:bg-muted"
+                  }`}
+                >
+                  {tab.label}
+                  <span className="ml-1.5 tabular-nums opacity-70">{detailCounts[tab.key]}</span>
+                </button>
+              ))}
+            </div>
+
+            <div className="flex-1 space-y-2 overflow-y-auto scrollbar-thin border-t border-border/80 pr-1 pt-3">
+              {detailRows.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-border py-10 text-center text-sm text-muted-foreground">
+                  Nobody to show here for {snapshotDayLabel || "this day"}.
+                </div>
+              ) : (
+                detailRows.map((r) => (
+                  <PersonRow
+                    key={r.id ?? `${r.employee_id}-${r.employee_name}`}
+                    record={r}
+                    showRegion={!regionDetail.region}
+                  />
+                ))
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
       )}
 
       {/* Attendance Settings
