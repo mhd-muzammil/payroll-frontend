@@ -31,6 +31,18 @@ function clockTime(iso) {
  * against this call so far, because that is the thing they might have forgotten
  * to do. A case with no punch says so plainly rather than showing nothing.
  */
+/**
+ * This trip's two taps.
+ *
+ * A call can be sent out again -- the part did not arrive, nobody was in -- and
+ * reached_at / completed_at on the case are whichever trip was LAST punched,
+ * whenever that was. So the card asks for the trip it is showing: today's.
+ * Without that, a second dispatch arrived reading "On site since 10:20" from a
+ * visit made a week ago.
+ */
+const tripIn = (c) => c.visit_checked_in_at ?? null;
+const tripOut = (c) => c.visit_checked_out_at ?? null;
+
 function PunchRecord({ c }) {
   if (c.status === "cancelled") {
     return (
@@ -39,21 +51,23 @@ function PunchRecord({ c }) {
       </span>
     );
   }
-  if (!c.reached_at) {
+  const inAt = tripIn(c);
+  const outAt = tripOut(c);
+  if (!inAt) {
     return <span className="text-xs font-medium text-gray-400">Not checked in</span>;
   }
-  if (c.completed_at) {
+  if (outAt) {
     return (
       <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700">
         <CheckCircle2 className="h-3.5 w-3.5" />
-        {clockTime(c.reached_at)} – {clockTime(c.completed_at)}
+        {clockTime(inAt)} – {clockTime(outAt)}
       </span>
     );
   }
   return (
     <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-700">
       <span className="h-1.5 w-1.5 rounded-full bg-indigo-500 animate-pulse" />
-      On site since {clockTime(c.reached_at)}
+      On site since {clockTime(inAt)}
     </span>
   );
 }
@@ -594,7 +608,11 @@ export default function EngineerCases() {
                     Full width now rather than a button floated at the bottom
                     left: this is the one thing the card exists to do, and it is
                     pressed by a gloved thumb outdoors. */}
-                {!c.reached_at && c.status !== "completed" && (
+                {/* Decided from THIS trip, not from the case's lifetime.
+                    A call dispatched again still carries the previous trip's
+                    check-in, and reading that left an engineer standing at a
+                    customer with only a Check Out button the server refuses. */}
+                {!tripIn(c) && c.status !== "completed" && c.status !== "cancelled" && (
                   <button
                     disabled={busyId === c.id}
                     onClick={() => onPunchIn(c)}
@@ -604,7 +622,7 @@ export default function EngineerCases() {
                     {busyId === c.id ? "Checking in\u2026" : "Check In"}
                   </button>
                 )}
-                {c.reached_at && c.status !== "completed" && (
+                {tripIn(c) && !tripOut(c) && c.status !== "completed" && c.status !== "cancelled" && (
                   <button
                     disabled={busyId === c.id}
                     onClick={() => runAction(() => caseService.punchOut(c.id, lastFix), c, "")}
