@@ -200,6 +200,41 @@ public class DutyTracker extends Plugin {
         call.resolve(result);
     }
 
+    /**
+     * Which build of the APK this phone is running.
+     *
+     * The app never told the server this, so nobody could answer "who has the
+     * new version and who is still on the old one" -- and every APK goes out as
+     * a file passed around by hand, so there is no store to ask either. The web
+     * app puts what this returns on every request it makes, which is how the
+     * office panel can name the phones still to be updated.
+     *
+     * A phone whose APK predates this method reports nothing at all, and that
+     * absence is itself the answer: it has not been updated.
+     */
+    @PluginMethod
+    public void appInfo(PluginCall call) {
+        JSObject result = new JSObject();
+        try {
+            android.content.pm.PackageInfo info = getContext()
+                    .getPackageManager()
+                    .getPackageInfo(getContext().getPackageName(), 0);
+            result.put("version", info.versionName);
+            result.put(
+                    "build",
+                    Build.VERSION.SDK_INT >= Build.VERSION_CODES.P
+                            ? info.getLongVersionCode()
+                            : info.versionCode);
+        } catch (Exception unknown) {
+            // Cannot happen for our own package, but a version we could not
+            // read must not stop the app from working.
+            result.put("version", null);
+            result.put("build", null);
+        }
+        result.put("android", Build.VERSION.RELEASE);
+        call.resolve(result);
+    }
+
     /** Whether the tracker is running, and how much it is holding. */
     @PluginMethod
     public void state(PluginCall call) {

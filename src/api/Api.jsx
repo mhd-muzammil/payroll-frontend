@@ -1,5 +1,5 @@
 import axios from "axios";
-import { Capacitor } from "@capacitor/core";
+import { Capacitor, registerPlugin } from "@capacitor/core";
 import { clearAuth, getAccessToken, getRefreshToken, setAccessToken } from "@/auth/rbac";
 
 console.log("VITE_API_BASE_URL =", import.meta.env.VITE_API_BASE_URL);
@@ -29,9 +29,36 @@ export const api = axios.create({
 // "no signal".
 const IS_APP = Boolean(Capacitor?.isNativePlatform?.());
 
+/**
+ * Which build of the APK this phone is running, once we have asked it.
+ *
+ * Asked once, at startup, and then attached to every request -- so the office
+ * panel can name the phones still on an old version instead of asking around.
+ * An APK that predates the tracker plugin cannot answer, and that silence is
+ * the answer: it has not been updated.
+ *
+ * Deliberately not awaited anywhere. A request or two at startup goes without
+ * the header rather than being held up for it, because knowing the version is
+ * never worth delaying an engineer's screen.
+ */
+let appBuild = null;
+if (IS_APP && Capacitor?.isPluginAvailable?.("DutyTracker")) {
+  registerPlugin("DutyTracker")
+    .appInfo()
+    .then((info) => {
+      if (info?.version) {
+        appBuild = info.build ? `${info.version} (${info.build})` : String(info.version);
+      }
+    })
+    .catch(() => {});
+}
+
 api.interceptors.request.use((config) => {
   if (IS_APP) {
     config.headers["X-Payroll-Client"] = "app";
+    if (appBuild) {
+      config.headers["X-Payroll-App-Version"] = appBuild;
+    }
   }
   const token = getAccessToken();
   if (token) {

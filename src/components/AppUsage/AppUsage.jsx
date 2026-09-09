@@ -55,6 +55,36 @@ const WHAT_TO_DO = {
   app: null,
 };
 
+/**
+ * Which build a phone is on, for somebody who uses the app.
+ *
+ * An empty version is not "unknown": every APK before 1.4 is silent, so a
+ * phone using the app and saying nothing is a phone that has not been updated.
+ * Said as "Older version" rather than a dash, because a dash reads like a
+ * missing figure and this is an answer.
+ */
+function VersionChip({ row, current }) {
+  if (row.state !== "app") return <span className="text-muted-foreground">—</span>;
+  const version = (row.app_version || "").trim();
+  const onCurrent = current && version.startsWith(current);
+  return (
+    <span
+      title={
+        version
+          ? `The app reported this build${row.app_version_at ? ` on ${new Date(row.app_version_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}` : ""}`
+          : "Every version before 1.4 does not report itself, so this phone has not been updated"
+      }
+      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+        onCurrent
+          ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+          : "bg-amber-500/10 text-amber-700 dark:text-amber-500"
+      }`}
+    >
+      {version || "Older version"}
+    </span>
+  );
+}
+
 function when(value) {
   if (!value) return "—";
   const d = new Date(value);
@@ -133,6 +163,14 @@ export default function AppUsage() {
         // Everyone is one click away, and the counts above never change.
         if (only === "waiting" && row.state === "app") return false;
         if (only === "app" && row.state !== "app") return false;
+        // Using the app, and not on the build being rolled out. A phone that
+        // never reported a version is on an old one -- every build before 1.4
+        // is silent -- so an empty version counts as behind, not as unknown.
+        if (only === "outdated") {
+          const current = data?.current_app_version || "";
+          if (row.state !== "app") return false;
+          if (current && String(row.app_version || "").startsWith(current)) return false;
+        }
         if (!text) return true;
         return (
           String(row.employee_name || "").toLowerCase().includes(text) ||
@@ -195,11 +233,63 @@ export default function AppUsage() {
         />
       </div>
 
+      {/* Of the people actually using the app, who is on the build being rolled
+          out. Only shown once at least one phone has reported one -- before
+          that the answer is "nobody has the new app yet", which the row chips
+          already say and a 0-of-24 headline would only alarm. */}
+      {data?.current_app_version && data?.on_current_version > 0 && (
+        <div className="mb-6">
+          <div className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            App version {data.current_app_version}
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/5 px-4 py-3">
+              <div className="text-2xl font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
+                {data.on_current_version}
+              </div>
+              <div className="text-xs text-muted-foreground">
+                Updated · on {data.current_app_version}
+              </div>
+            </div>
+            {/* Clickable, because the number is not the work -- the names are.
+                One press and the table below is exactly the phones to chase. */}
+            <button
+              type="button"
+              onClick={() => setOnly("outdated")}
+              className={`rounded-2xl border px-4 py-3 text-left transition ${
+                data.behind_version > 0
+                  ? "border-amber-500/40 bg-amber-500/5 hover:bg-amber-500/10"
+                  : "border-border bg-card"
+              }`}
+            >
+              <div
+                className={`text-2xl font-bold tabular-nums ${
+                  data.behind_version > 0
+                    ? "text-amber-600 dark:text-amber-500"
+                    : "text-muted-foreground"
+                }`}
+              >
+                {data.behind_version}
+              </div>
+              <div className="text-xs text-muted-foreground">
+                {data.behind_version > 0
+                  ? "Still on the old app · tap to see who"
+                  : "Everybody is up to date"}
+              </div>
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="grid grid-cols-3 gap-2 sm:flex sm:w-auto">
           {[
             ["waiting", "Still to set up"],
             ["app", "Using the app"],
+            // The other chase list, and the reason the version is here at all:
+            // the APK goes out by hand, so somebody has to know whose phone
+            // still has the old one.
+            ["outdated", "To update"],
             ["all", "Everyone"],
           ].map(([key, label]) => (
             <button
@@ -235,7 +325,9 @@ export default function AppUsage() {
         <div className="rounded-2xl border border-border bg-card px-4 py-8 text-center text-sm text-muted-foreground">
           {only === "waiting"
             ? "Everybody is on the app."
-            : "Nobody matches that search."}
+            : only === "outdated"
+              ? "Every phone using the app is on the current version."
+              : "Nobody matches that search."}
         </div>
       ) : (
         <div className="glass-card rounded-3xl overflow-hidden border border-border/70">
@@ -244,7 +336,7 @@ export default function AppUsage() {
             <table className="w-full text-sm">
               <thead className="bg-muted/40">
                 <tr>
-                  {["Employee", "Branch", "Login", "Status", "Last used the app", "What to do"].map(
+                  {["Employee", "Branch", "Login", "Status", "App version", "Last used the app", "What to do"].map(
                     (h) => (
                       <th
                         key={h}
@@ -266,6 +358,9 @@ export default function AppUsage() {
                     </td>
                     <td className="px-5 py-3">
                       <StateChip state={row.state} />
+                    </td>
+                    <td className="px-5 py-3">
+                      <VersionChip row={row} current={data?.current_app_version} />
                     </td>
                     <td className="px-5 py-3 tabular-nums text-muted-foreground">
                       {when(row.last_app_login_at)}
@@ -291,7 +386,12 @@ export default function AppUsage() {
                       {row.username ? ` · ${row.username}` : ""}
                     </div>
                   </div>
-                  <StateChip state={row.state} />
+                  <div className="flex shrink-0 flex-col items-end gap-1">
+                    <StateChip state={row.state} />
+                    {row.state === "app" && (
+                      <VersionChip row={row} current={data?.current_app_version} />
+                    )}
+                  </div>
                 </div>
                 {WHAT_TO_DO[row.state] ? (
                   <p className="mt-1.5 text-xs text-muted-foreground">
