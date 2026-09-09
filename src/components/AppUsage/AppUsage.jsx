@@ -234,10 +234,13 @@ export default function AppUsage() {
       </div>
 
       {/* Of the people actually using the app, who is on the build being rolled
-          out. Only shown once at least one phone has reported one -- before
-          that the answer is "nobody has the new app yet", which the row chips
-          already say and a 0-of-24 headline would only alarm. */}
-      {data?.current_app_version && data?.on_current_version > 0 && (
+          out.
+          Shown from zero, not from one. It was hidden until somebody had
+          updated, on the theory that "0 of 18" reads as alarming -- but a
+          rollout starts at zero and that IS the number the office is watching,
+          so hiding it only hid the progress. It appears as soon as the server
+          knows which version is being rolled out. */}
+      {data?.current_app_version && (
         <div className="mb-6">
           <div className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
             App version {data.current_app_version}
