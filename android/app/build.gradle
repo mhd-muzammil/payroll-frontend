@@ -20,8 +20,9 @@ android {
         // geolocation plugins, so a future feature ships from the web alone rather
         // than as another APK on 24 phones. Bumped so a phone can be told apart at
         // a glance — Settings → Apps → Renderways Technology shows this.
-        versionCode 4
-        versionName "1.3"
+        // 1.4: tracking that outlives the app being swiped away.
+        versionCode 5
+        versionName "1.4"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -62,6 +63,14 @@ dependencies {
     implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
     implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
     implementation project(':capacitor-android')
+    // For DutyTrackerService: the fused location provider, and the two
+    // androidx helpers that make a typed foreground service and a
+    // process-local broadcast version-safe. Same versions the
+    // background-geolocation plugin already resolves, so nothing new is
+    // downloaded and nothing else moves.
+    implementation "com.google.android.gms:play-services-location:21.0.1"
+    implementation "androidx.core:core:$androidxCoreVersion"
+    implementation "androidx.localbroadcastmanager:localbroadcastmanager:1.0.0"
     testImplementation "junit:junit:$junitVersion"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"

@@ -18,7 +18,17 @@ const MAX_BATCH = 500;
 // Registered by hand because the plugin ships only its native halves and type
 // definitions — there is no JS entry point to import.
 const BackgroundGeolocation = registerPlugin("BackgroundGeolocation");
+// Our own tracker, in the APK from version 1.4. It keeps reporting after the
+// app is swiped off the recents list, which the community plugin cannot: its
+// service is bound only, so the swipe destroys it and the engineer's drive home
+// goes unmeasured. See android/app/src/main/java/in/systimus/payroll/.
+const DutyTracker = registerPlugin("DutyTracker");
 const IS_NATIVE = Capacitor?.isNativePlatform?.() ?? false;
+// Whether THIS phone has it. An older APK does not, and takes the old path
+// unchanged. Set this to false to put every phone back on the old path at once
+// without building anything -- the app loads the live site.
+const USE_DUTY_TRACKER =
+  IS_NATIVE && (Capacitor?.isPluginAvailable?.("DutyTracker") ?? false);
 
 /**
  * Live location sender for a field engineer. Start it when the engineer goes on
@@ -51,6 +61,9 @@ export function useLiveTracking() {
   // stood still: both produce no new rows, and they have to be counted
   // oppositely.
   const stoppedTrackingRef = useRef(false);
+  // Whether our own tracker is the one running, so stopping shuts down the one
+  // that was actually started.
+  const dutyTrackerRef = useRef(false);
   // How many fixes are waiting on the phone. Surfaced so the duty screen can say
   // "12 saved, will send when you have signal" instead of looking broken.
   const [queued, setQueued] = useState(() => loadQueue().length);
@@ -172,6 +185,57 @@ export function useLiveTracking() {
     [sendPing],
   );
 
+  /**
+   * Take the fixes the phone held while the app was gone, and queue them.
+   *
+   * Each carries the time it was TAKEN, so the kilometres land on the day they
+   * were driven rather than on the moment the app happened to be opened. They
+   * go straight into the send queue -- which is stored on the phone too -- so
+   * the handover from native is the moment responsibility passes, and nothing
+   * is held in two places waiting to be sent twice.
+   */
+  const drainNativeBuffer = useCallback(async () => {
+    if (!USE_DUTY_TRACKER) return;
+    let held;
+    try {
+      held = await DutyTracker.drain();
+    } catch {
+      return; // An older APK, or the service never ran. Nothing to take.
+    }
+    const fixes = Array.isArray(held?.locations) ? held.locations : [];
+    if (!fixes.length) {
+      // Android killed and restarted the service with nothing held: whatever
+      // happened across that hole was never seen, so the next fix says so.
+      if (held?.restarted) stoppedTrackingRef.current = true;
+      return;
+    }
+    const { level, charging } = await batteryState();
+    let total = 0;
+    fixes.forEach((fix, index) => {
+      total = enqueue({
+        latitude: fix.latitude,
+        longitude: fix.longitude,
+        accuracy: fix.accuracy ?? null,
+        speed: fix.speed ?? null,
+        // Only the first, and only after a restart. The rest are one journey
+        // the phone watched the whole way through, so joining them is not a
+        // guess -- it is what happened.
+        after_gap: index === 0 && Boolean(held?.restarted),
+        status: "",
+        case_id: null,
+        timestamp: new Date(fix.time).toISOString(),
+        client_key: newClientKey(),
+        battery_level: level,
+        is_charging: charging,
+      });
+    });
+    setQueued(total);
+    // The journey continued while the app was away, so the next live fix is
+    // not the far side of a hole and must not skip its segment.
+    stoppedTrackingRef.current = false;
+    void drainQueue();
+  }, [drainQueue]);
+
   const clearSources = useCallback(() => {
     if (watchIdRef.current != null) {
       navigator.geolocation.clearWatch(watchIdRef.current);
@@ -181,6 +245,12 @@ export function useLiveTracking() {
       const id = nativeWatcherRef.current;
       nativeWatcherRef.current = null;
       void BackgroundGeolocation.removeWatcher({ id }).catch(() => {});
+    }
+    if (dutyTrackerRef.current) {
+      dutyTrackerRef.current = false;
+      // Takes the notification down with it. Off duty is off duty: the whole
+      // point of a service that survives the app is that only this stops it.
+      void DutyTracker.stop().catch(() => {});
     }
     // A start still in flight must not leave an orphaned foreground service
     // sitting in the notification tray after the engineer has gone off duty.
@@ -228,7 +298,38 @@ export function useLiveTracking() {
       // position can arrive in the same tick.
       stoppedTrackingRef.current = true;
 
-      if (IS_NATIVE) {
+      if (USE_DUTY_TRACKER) {
+        // The app's own tracker: a started foreground service, so it is still
+        // reporting after the app is swiped away, and it holds what it takes
+        // while the app is gone. Anything it held is collected right now.
+        dutyTrackerRef.current = true;
+        DutyTracker.start(
+          {
+            title: "On duty",
+            text: "Recording your route. Tap Logout in the app when your day ends.",
+            distanceFilter: NATIVE_DISTANCE_FILTER_M,
+            interval: PING_INTERVAL_MS,
+          },
+          (position, watcherError) => {
+            if (watcherError) {
+              stoppedTrackingRef.current = true;
+              setError(watcherError.message || "Unable to get location");
+              return;
+            }
+            if (!position) return;
+            acceptFix({
+              latitude: position.latitude,
+              longitude: position.longitude,
+              accuracy: position.accuracy,
+              speed: position.speed,
+            });
+          },
+        ).catch((e) => {
+          dutyTrackerRef.current = false;
+          setError(e?.message || "Could not start background tracking");
+        });
+        void drainNativeBuffer();
+      } else if (IS_NATIVE) {
         nativeStartingRef.current = true;
         BackgroundGeolocation.addWatcher(
           {
@@ -293,7 +394,7 @@ export function useLiveTracking() {
       intervalRef.current = setInterval(sendPing, PING_INTERVAL_MS);
       setTracking(true);
     },
-    [acceptFix, clearSources, sendPing, setContext],
+    [acceptFix, clearSources, drainNativeBuffer, sendPing, setContext],
   );
 
   const stop = useCallback(() => {

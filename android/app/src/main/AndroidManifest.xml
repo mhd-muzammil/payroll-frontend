@@ -22,6 +22,26 @@
             </intent-filter>
         </activity>
 
+        <!--
+          Duty tracking that outlives the app.
+
+          stopWithTask="false" is the point: swipe the app off the recents list
+          and this service keeps reporting where the engineer is, with its own
+          ongoing notification, until they log out or sixteen hours pass. The
+          community plugin's service is bound only, so it died with the app and
+          an engineer's drive home went unmeasured.
+
+          foregroundServiceType="location" is required from Android 10 to hold
+          a location service in the foreground, and Android 14 refuses to start
+          one without it.
+        -->
+        <service
+            android:name=".DutyTrackerService"
+            android:enabled="true"
+            android:exported="false"
+            android:stopWithTask="false"
+            android:foregroundServiceType="location" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
