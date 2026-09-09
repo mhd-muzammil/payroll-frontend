@@ -64,23 +64,18 @@ const WHAT_TO_DO = {
  * missing figure and this is an answer.
  */
 function VersionChip({ row, current }) {
-  if (row.state !== "app") return <span className="text-muted-foreground">—</span>;
   const version = (row.app_version || "").trim();
-  const onCurrent = current && version.startsWith(current);
+  const updated = row.state === "app" && current && version.startsWith(current);
+  // Only the phones that HAVE the new build are marked. Everybody else gets a
+  // dash: the office asked for the update to be a list of who has it, not a
+  // wall of amber against everybody who has not got round to it yet.
+  if (!updated) return <span className="text-muted-foreground">—</span>;
   return (
     <span
-      title={
-        version
-          ? `The app reported this build${row.app_version_at ? ` on ${new Date(row.app_version_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}` : ""}`
-          : "Every version before 1.4 does not report itself, so this phone has not been updated"
-      }
-      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-        onCurrent
-          ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
-          : "bg-amber-500/10 text-amber-700 dark:text-amber-500"
-      }`}
+      title={`The app reported this build${row.app_version_at ? ` on ${new Date(row.app_version_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}` : ""}`}
+      className="inline-flex items-center rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:text-emerald-400"
     >
-      {version || "Older version"}
+      {version}
     </span>
   );
 }
@@ -166,10 +161,10 @@ export default function AppUsage() {
         // Using the app, and not on the build being rolled out. A phone that
         // never reported a version is on an old one -- every build before 1.4
         // is silent -- so an empty version counts as behind, not as unknown.
-        if (only === "outdated") {
+        if (only === "updated") {
           const current = data?.current_app_version || "";
           if (row.state !== "app") return false;
-          if (current && String(row.app_version || "").startsWith(current)) return false;
+          if (!current || !String(row.app_version || "").startsWith(current)) return false;
         }
         if (!text) return true;
         return (
@@ -245,42 +240,22 @@ export default function AppUsage() {
           <div className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
             App version {data.current_app_version}
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/5 px-4 py-3">
-              <div className="text-2xl font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
-                {data.on_current_version}
-              </div>
-              <div className="text-xs text-muted-foreground">
-                Updated · on {data.current_app_version}
-              </div>
+          {/* One box, and it counts the people who HAVE updated. Clickable,
+              because the number is not the work -- the names are. */}
+          <button
+            type="button"
+            onClick={() => setOnly("updated")}
+            className="w-full rounded-2xl border border-emerald-500/30 bg-emerald-500/5 px-4 py-3 text-left transition hover:bg-emerald-500/10 sm:w-1/2"
+          >
+            <div className="text-2xl font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
+              {data.on_current_version}
             </div>
-            {/* Clickable, because the number is not the work -- the names are.
-                One press and the table below is exactly the phones to chase. */}
-            <button
-              type="button"
-              onClick={() => setOnly("outdated")}
-              className={`rounded-2xl border px-4 py-3 text-left transition ${
-                data.behind_version > 0
-                  ? "border-amber-500/40 bg-amber-500/5 hover:bg-amber-500/10"
-                  : "border-border bg-card"
-              }`}
-            >
-              <div
-                className={`text-2xl font-bold tabular-nums ${
-                  data.behind_version > 0
-                    ? "text-amber-600 dark:text-amber-500"
-                    : "text-muted-foreground"
-                }`}
-              >
-                {data.behind_version}
-              </div>
-              <div className="text-xs text-muted-foreground">
-                {data.behind_version > 0
-                  ? "Still on the old app · tap to see who"
-                  : "Everybody is up to date"}
-              </div>
-            </button>
-          </div>
+            <div className="text-xs text-muted-foreground">
+              Updated to {data.current_app_version}
+              {data.using_app ? ` · of ${data.using_app} using the app` : ""}
+              {data.on_current_version > 0 ? " · tap to see who" : ""}
+            </div>
+          </button>
         </div>
       )}
 
@@ -289,10 +264,9 @@ export default function AppUsage() {
           {[
             ["waiting", "Still to set up"],
             ["app", "Using the app"],
-            // The other chase list, and the reason the version is here at all:
-            // the APK goes out by hand, so somebody has to know whose phone
-            // still has the old one.
-            ["outdated", "To update"],
+            // The reason the version is here at all: the APK goes out by hand,
+            // so somebody has to be able to see who has picked it up.
+            ["updated", "Updated"],
             ["all", "Everyone"],
           ].map(([key, label]) => (
             <button
@@ -328,8 +302,8 @@ export default function AppUsage() {
         <div className="rounded-2xl border border-border bg-card px-4 py-8 text-center text-sm text-muted-foreground">
           {only === "waiting"
             ? "Everybody is on the app."
-            : only === "outdated"
-              ? "Every phone using the app is on the current version."
+            : only === "updated"
+              ? "Nobody has installed the new version yet."
               : "Nobody matches that search."}
         </div>
       ) : (
