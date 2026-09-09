@@ -39,9 +39,20 @@ function clockTime(iso) {
  * whenever that was. So the card asks for the trip it is showing: today's.
  * Without that, a second dispatch arrived reading "On site since 10:20" from a
  * visit made a week ago.
+ *
+ * ABSENT is not the same as EMPTY, and the difference matters for as long as it
+ * takes to redeploy the server. The app is the live site, so this file reaches
+ * every phone the moment it builds -- possibly against a server that has never
+ * heard of a trip. Keyed on whether the field is THERE: no field means the old
+ * answer (the case's own stamps, exactly as this card read them before), an
+ * empty field means this trip has not been checked into yet. Read as plain
+ * falsiness instead, an engineer already on site would be shown Check In again
+ * and the tap would be refused.
  */
-const tripIn = (c) => c.visit_checked_in_at ?? null;
-const tripOut = (c) => c.visit_checked_out_at ?? null;
+const tripIn = (c) =>
+  ("visit_checked_in_at" in c ? c.visit_checked_in_at : c.reached_at) ?? null;
+const tripOut = (c) =>
+  ("visit_checked_out_at" in c ? c.visit_checked_out_at : c.completed_at) ?? null;
 
 function PunchRecord({ c }) {
   if (c.status === "cancelled") {
