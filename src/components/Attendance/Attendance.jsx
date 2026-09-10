@@ -1,5 +1,6 @@
 // pages/Attendance.jsx
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useEffect, useState, useMemo, useCallback, useRef } from "react";
+import { Capacitor } from "@capacitor/core";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { 
@@ -36,6 +37,14 @@ import {
 // scope so it is not a fresh binding on every render, which would put it in a
 // hook's dependency list for no reason.
 const FIX_MAX_AGE_MS = 2 * 60 * 1000;
+
+/** "7:28 pm", for the one line on the duty card that has to be read at a glance. */
+const clockOf = (value) => {
+  const at = new Date(value);
+  return Number.isNaN(at.getTime())
+    ? "-"
+    : at.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" });
+};
 
 const formatLocalDate = (date) => {
   const year = date.getFullYear();
@@ -187,7 +196,15 @@ const Attendance = () => {
   // Duty lives at app level. Login here is now the ONLY way an engineer goes
   // on duty -- Cases has no duty button any more -- so this is the same session,
   // the same GPS stream and the same state the office's board reads.
-  const { onDuty, lastFix, error: dutyError, startDuty, endDuty } = useDuty();
+  const {
+    onDuty,
+    lastFix,
+    error: dutyError,
+    startDuty,
+    endDuty,
+    trackingSource,
+    queued: queuedFixes,
+  } = useDuty();
 
   const [geoLocating, setGeoLocating] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -623,6 +640,31 @@ const Attendance = () => {
   const hasInTimeToday = Boolean(employeeSelectedDateRecord?.intime);
   const hasOutTimeToday = Boolean(employeeSelectedDateRecord?.outtime);
 
+  // LOGGED IN FOR THE DAY, AND NOTHING RECORDING.
+  //
+  // Login is two things: the punch that goes in the register, and the duty that
+  // starts the tracking. They can come apart -- the second half fails, or the
+  // session is closed later while the day is still open -- and then the button
+  // says Logout, the card says Off duty, and not one metre is recorded while
+  // the engineer believes they are being tracked. That is the worst of the
+  // faults found this evening, because nothing about it looks wrong.
+  //
+  // So it is put right rather than left for somebody to notice. Once per app
+  // session: a refusal (no GPS, permission withdrawn) must not become a loop of
+  // attempts. Only in the app -- a browser cannot record a route, and starting
+  // duty there would put somebody on the board with no signal, which is worse
+  // than leaving it alone.
+  const repairedDutyRef = useRef(false);
+  useEffect(() => {
+    if (!isEmployee || !Capacitor?.isNativePlatform?.()) return;
+    if (repairedDutyRef.current) return;
+    if (!hasInTimeToday || hasOutTimeToday || onDuty) return;
+    repairedDutyRef.current = true;
+    startDuty().catch(() => {
+      // Reported through the duty card's own error line; nothing to add here.
+    });
+  }, [isEmployee, hasInTimeToday, hasOutTimeToday, onDuty, startDuty]);
+
   const toNowIso = () => new Date().toISOString();
 
   const handleEmployeeClockIn = async () => {
@@ -875,6 +917,28 @@ const Attendance = () => {
                     {onDuty ? "On duty · location live" : "Off duty"}
                   </span>
                 </div>
+
+                {/* WHAT THE TRACKING IS ACTUALLY DOING.
+                    A phone that has quietly stopped recording looks exactly
+                    like one that is working. Three faults in one evening -- no
+                    notification after a swipe, "off duty" against a board that
+                    said on duty, "no signal" with everything switched on --
+                    and every one of them was only found by the map being empty
+                    afterwards. So the phone says it, where the engineer and
+                    whoever they ring can both read it. */}
+                {onDuty && (
+                  <p className="mb-2 text-[11px] text-muted-foreground">
+                    {trackingSource === "app"
+                      ? "Recording in the background"
+                      : trackingSource === "plugin"
+                      ? "Recording (older method)"
+                      : trackingSource === "browser"
+                      ? "Browser - the route is not recorded"
+                      : "Starting the recorder…"}
+                    {lastFix?.timestamp ? ` · last position ${clockOf(lastFix.timestamp)}` : ""}
+                    {queuedFixes ? ` · ${queuedFixes} waiting to send` : ""}
+                  </p>
+                )}
                 <h3 className="text-lg md:text-xl font-bold tracking-tight mb-1.5">Smart Attendance Gate</h3>
                 {/* Four lines of "physical validation parameters confirm
                     on-premise entry" pushed the button most of a screen down.

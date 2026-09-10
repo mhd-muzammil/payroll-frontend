@@ -319,7 +319,6 @@ export function DutyProvider({ children }) {
    * coming out of a pocket is a better signal than any interval.
    */
   useEffect(() => {
-    if (!onDuty) return;
     if (!isAuthenticated() || getUserRole() !== ROLES.EMPLOYEE) return;
     let cancelled = false;
     const refresh = () => {
@@ -332,7 +331,20 @@ export function DutyProvider({ children }) {
         // blanking a screen the engineer is reading.
         .catch(() => {});
     };
-    const timer = setInterval(refresh, DUTY_REFRESH_MS);
+    // OFF DUTY IS A STATE THAT HAS TO BE ABLE TO CHANGE ITS MIND.
+    //
+    // This used to return early unless the phone already believed it was on
+    // duty, so the belief could only ever go from on to off. An engineer whose
+    // phone decided it was off duty stayed off duty on that screen for as long
+    // as the app was open, while the office watched the same engineer sitting
+    // on duty on the board -- and no amount of looking at the phone fixed it,
+    // because nothing asked again.
+    //
+    // Slower when off duty: there is nothing to keep current, only a wrong
+    // belief to correct. Visibility is the real signal either way -- Android
+    // throttles a backgrounded WebView's timers, so the phone coming out of a
+    // pocket beats any interval.
+    const timer = setInterval(refresh, onDuty ? DUTY_REFRESH_MS : DUTY_REFRESH_MS * 5);
     const onVisible = () => {
       if (document.visibilityState === "visible") refresh();
     };
@@ -440,6 +452,12 @@ export function DutyProvider({ children }) {
     // server believes. They differ when a fix has not arrived yet.
     streaming: tracking.tracking,
     lastFix: tracking.lastFix,
+    // WHICH tracker is running, and how much is waiting on the phone. Passed
+    // on so the duty card can say it: a phone that has quietly stopped
+    // recording looks exactly like one that is working, and three separate
+    // faults in one evening were only found by the map being empty afterwards.
+    trackingSource: tracking.source,
+    queued: tracking.queued,
     error: dutyError || tracking.error,
     // Lets the screen disable Start Duty while it is pointless, rather than
     // letting the engineer tap it and be refused.
