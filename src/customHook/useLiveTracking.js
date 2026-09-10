@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Capacitor, registerPlugin } from "@capacitor/core";
+import { LocalNotifications } from "@capacitor/local-notifications";
 import { trackingService } from "../services/trackingService";
 import { enqueue, forget, loadQueue, newClientKey } from "../Utility/pingQueue";
 import { batteryState } from "../Utility/phoneBattery";
@@ -53,6 +54,37 @@ const BackgroundGeolocation = registerPlugin("BackgroundGeolocation");
 // goes unmeasured. See android/app/src/main/java/in/systimus/payroll/.
 const DutyTracker = registerPlugin("DutyTracker");
 const IS_NATIVE = Capacitor?.isNativePlatform?.() ?? false;
+
+/**
+ * Ask, once, to be allowed to show the tracking notification.
+ *
+ * From Android 13 a notification needs its own permission, and this app never
+ * asked for one. The foreground service still ran -- the phone said "Recording
+ * in the background" quite correctly -- but its notification was hidden, so an
+ * engineer had no way to see that they were being tracked, and no way to see
+ * that they had STOPPED being tracked either. The first phone this shipped to
+ * reported exactly that: everything working, no notification anywhere.
+ *
+ * It is also what keeps the service alive: a foreground notification the
+ * engineer can see is the deal Android strikes for letting us keep running,
+ * and a phone's own battery rules treat a silent one far less kindly.
+ *
+ * Android shows the box once. After that this resolves with whatever was
+ * decided and shows nothing, so it is safe to call on every Login. A refusal
+ * changes nothing about the tracking -- it is not worth a single line of
+ * error, and the duty card already says what is being recorded.
+ */
+const askToShowTheNotification = async () => {
+  if (!IS_NATIVE) return;
+  try {
+    const state = await LocalNotifications.checkPermissions();
+    if (state?.display === "granted" || state?.display === "denied") return;
+    await LocalNotifications.requestPermissions();
+  } catch {
+    // An APK without the notifications plugin, or a phone that refuses to be
+    // asked. Neither stops a single position being recorded.
+  }
+};
 // Whether THIS phone has it. An older APK does not, and takes the old path
 // unchanged. Set this to false to put every phone back on the old path at once
 // without building anything -- the app loads the live site.
@@ -400,6 +432,10 @@ export function useLiveTracking() {
       }
       setContext(caseId, status);
       setError(null);
+      // Before anything starts: the notification Android insists on is only
+      // visible if it has been allowed, and it is what the engineer reads to
+      // know they are being tracked.
+      void askToShowTheNotification();
 
       // Guard against a double-start (e.g. Start Duty then Start Travel) leaving
       // an orphaned watch/interval that would double-send pings and leak.
