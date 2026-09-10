@@ -96,6 +96,12 @@ export function useLiveTracking() {
   // How many fixes are waiting on the phone. Surfaced so the duty screen can say
   // "12 saved, will send when you have signal" instead of looking broken.
   const [queued, setQueued] = useState(() => loadQueue().length);
+  // WHICH tracker is actually running -- "app" for our own foreground service,
+  // "plugin" for the community watcher, "browser" for a desktop, null for
+  // nothing. Surfaced because a tracker that quietly does nothing looks
+  // exactly like one that works, and telling them apart took a person walking
+  // a kilometre and coming back to an empty map.
+  const [source, setSource] = useState(null);
 
   const watchIdRef = useRef(null); // browser watchPosition id
   const nativeWatcherRef = useRef(null); // foreground service watcher id
@@ -319,6 +325,56 @@ export function useLiveTracking() {
     }
   }, []);
 
+  /**
+   * The community background-geolocation watcher: the way this worked before
+   * our own tracker existed, and still the fallback for any phone or any
+   * moment where ours will not start.
+   */
+  const startCommunityWatcher = useCallback(() => {
+    nativeStartingRef.current = true;
+    BackgroundGeolocation.addWatcher(
+      {
+        // Naming the notification is what switches the plugin from
+        // foreground-only to a real foreground service. Without it, Android
+        // suspends us exactly like it suspends the browser.
+        backgroundTitle: "On duty",
+        backgroundMessage: "Recording your route. Tap Logout in the app when your day ends.",
+        requestPermissions: true,
+        stale: false,
+        distanceFilter: NATIVE_DISTANCE_FILTER_M,
+      },
+      (position, watcherError) => {
+        if (watcherError) {
+          stoppedTrackingRef.current = true;
+          setError(watcherError.message || "Unable to get location");
+          return;
+        }
+        if (!position) return;
+        acceptFix({
+          latitude: position.latitude,
+          longitude: position.longitude,
+          accuracy: position.accuracy,
+          speed: position.speed,
+        });
+      },
+    )
+      .then((id) => {
+        // Stopped while we were starting: shut the service straight back down.
+        if (!nativeStartingRef.current) {
+          void BackgroundGeolocation.removeWatcher({ id }).catch(() => {});
+          return;
+        }
+        nativeStartingRef.current = false;
+        nativeWatcherRef.current = id;
+        setSource("plugin");
+      })
+      .catch((e) => {
+        nativeStartingRef.current = false;
+        setSource(null);
+        setError(e?.message || "Could not start background tracking");
+      });
+  }, [acceptFix]);
+
   const start = useCallback(
     (caseId = null, status = "") => {
       // ONLY THE ENGINEER'S OWN APP MAY REPORT AN ENGINEER'S POSITION.
@@ -382,55 +438,23 @@ export function useLiveTracking() {
               speed: position.speed,
             });
           },
-        ).catch((e) => {
-          dutyTrackerRef.current = false;
-          setError(e?.message || "Could not start background tracking");
-        });
+        )
+          .then(() => setSource("app"))
+          .catch((e) => {
+            // OURS WOULD NOT START -- so use the one that always did.
+            //
+            // Android can refuse a foreground service, a permission can be
+            // withdrawn, a phone's own battery rules can say no. Whatever the
+            // reason, the engineer must not be left with nothing: without this
+            // the first phone it was installed on had no notification and
+            // recorded not one metre.
+            dutyTrackerRef.current = false;
+            console.warn("DutyTracker would not start; falling back", e);
+            startCommunityWatcher();
+          });
         void drainNativeBuffer();
       } else if (IS_NATIVE) {
-        nativeStartingRef.current = true;
-        BackgroundGeolocation.addWatcher(
-          {
-            // Naming the notification is what switches the plugin from
-            // foreground-only to a real foreground service. Without it, Android
-            // suspends us exactly like it suspends the browser.
-            backgroundTitle: "On duty",
-            backgroundMessage: "Recording your route. Tap Logout in the app when your day ends.",
-            // The engineer has already been asked by the duty screen, so this is
-            // normally a no-op; it is left on so a revoked permission is asked
-            // for again instead of failing silently.
-            requestPermissions: true,
-            stale: false,
-            distanceFilter: NATIVE_DISTANCE_FILTER_M,
-          },
-          (position, watcherError) => {
-            if (watcherError) {
-              stoppedTrackingRef.current = true;
-              setError(watcherError.message || "Unable to get location");
-              return;
-            }
-            if (!position) return;
-            acceptFix({
-              latitude: position.latitude,
-              longitude: position.longitude,
-              accuracy: position.accuracy,
-              speed: position.speed,
-            });
-          },
-        )
-          .then((id) => {
-            // Stopped while we were starting: shut the service straight back down.
-            if (!nativeStartingRef.current) {
-              void BackgroundGeolocation.removeWatcher({ id }).catch(() => {});
-              return;
-            }
-            nativeStartingRef.current = false;
-            nativeWatcherRef.current = id;
-          })
-          .catch((e) => {
-            nativeStartingRef.current = false;
-            setError(e?.message || "Could not start background tracking");
-          });
+        startCommunityWatcher();
       } else {
         watchIdRef.current = navigator.geolocation.watchPosition(
           (pos) =>
@@ -451,8 +475,9 @@ export function useLiveTracking() {
       // The first fix pings immediately (above); after that, a fixed cadence.
       intervalRef.current = setInterval(sendPing, PING_INTERVAL_MS);
       setTracking(true);
+      if (!IS_NATIVE) setSource("browser");
     },
-    [acceptFix, clearSources, drainNativeBuffer, sendPing, setContext],
+    [acceptFix, clearSources, drainNativeBuffer, sendPing, setContext, startCommunityWatcher],
   );
 
   const stop = useCallback(() => {
@@ -463,5 +488,5 @@ export function useLiveTracking() {
   // Clean up if the component unmounts while still tracking.
   useEffect(() => stop, [stop]);
 
-  return { tracking, lastFix, error, queued, start, stop, setContext };
+  return { tracking, lastFix, error, queued, source, start, stop, setContext };
 }
