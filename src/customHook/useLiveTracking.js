@@ -134,6 +134,10 @@ export function useLiveTracking() {
   // exactly like one that works, and telling them apart took a person walking
   // a kilometre and coming back to an empty map.
   const [source, setSource] = useState(null);
+  // How many fixes the native service is holding that the app has not been
+  // handed yet. Normally zero; anything else is worth seeing on the duty card,
+  // because it means positions are being taken and not delivered.
+  const [held, setHeld] = useState(0);
 
   const watchIdRef = useRef(null); // browser watchPosition id
   const nativeWatcherRef = useRef(null); // foreground service watcher id
@@ -183,7 +187,69 @@ export function useLiveTracking() {
     }
   }, []);
 
+  /**
+   * Take the fixes the phone held while the app was gone, and queue them.
+   *
+   * Each carries the time it was TAKEN, so the kilometres land on the day they
+   * were driven rather than on the moment the app happened to be opened. They
+   * go straight into the send queue -- which is stored on the phone too -- so
+   * the handover from native is the moment responsibility passes, and nothing
+   * is held in two places waiting to be sent twice.
+   */
+  const drainNativeBuffer = useCallback(async () => {
+    if (!USE_DUTY_TRACKER) return;
+    let held;
+    try {
+      held = await DutyTracker.drain();
+    } catch {
+      return; // An older APK, or the service never ran. Nothing to take.
+    }
+    const fixes = Array.isArray(held?.locations) ? held.locations : [];
+    setHeld(fixes.length);
+    if (!fixes.length) {
+      // Android killed and restarted the service with nothing held: whatever
+      // happened across that hole was never seen, so the next fix says so.
+      if (held?.restarted) stoppedTrackingRef.current = true;
+      return;
+    }
+    const { level, charging } = await batteryState();
+    let total = 0;
+    fixes.forEach((fix, index) => {
+      total = enqueue({
+        latitude: fix.latitude,
+        longitude: fix.longitude,
+        accuracy: fix.accuracy ?? null,
+        speed: fix.speed ?? null,
+        // Only the first, and only after a restart. The rest are one journey
+        // the phone watched the whole way through, so joining them is not a
+        // guess -- it is what happened.
+        after_gap: index === 0 && Boolean(held?.restarted),
+        status: "",
+        case_id: null,
+        timestamp: new Date(fix.time).toISOString(),
+        client_key: newClientKey(),
+        battery_level: level,
+        is_charging: charging,
+      });
+    });
+    setQueued(total);
+    // The journey continued while the app was away, so the next live fix is
+    // not the far side of a hole and must not skip its segment.
+    stoppedTrackingRef.current = false;
+    void drainQueue();
+  }, [drainQueue]);
+
   const sendPing = useCallback(async () => {
+    // WHATEVER THE SERVICE IS HOLDING, EVERY CYCLE.
+    //
+    // It was collected only when duty started, on the assumption that the
+    // service holds fixes solely while the app is dead. It does not: anything
+    // taken before the app has bound to it goes to the same place, and on the
+    // first phone this ran on the app sat at "waiting for GPS" while the
+    // service quietly filled up. Called every cycle it costs one plugin call
+    // that almost always returns nothing.
+    void drainNativeBuffer();
+
     const fix = latestRef.current;
     if (!fix) return;
     if (fix.accuracy != null && fix.accuracy > MAX_ACCURACY_M) return; // too noisy
@@ -206,7 +272,7 @@ export function useLiveTracking() {
       setQueued(total);
       setError(e?.response?.data?.detail || "No signal - saved on the phone");
     }
-  }, [drainQueue]);
+  }, [drainQueue, drainNativeBuffer]);
 
   /**
    * Every source funnels through here, so the cadence and the "report the first
@@ -281,56 +347,6 @@ export function useLiveTracking() {
     [sendPing],
   );
 
-  /**
-   * Take the fixes the phone held while the app was gone, and queue them.
-   *
-   * Each carries the time it was TAKEN, so the kilometres land on the day they
-   * were driven rather than on the moment the app happened to be opened. They
-   * go straight into the send queue -- which is stored on the phone too -- so
-   * the handover from native is the moment responsibility passes, and nothing
-   * is held in two places waiting to be sent twice.
-   */
-  const drainNativeBuffer = useCallback(async () => {
-    if (!USE_DUTY_TRACKER) return;
-    let held;
-    try {
-      held = await DutyTracker.drain();
-    } catch {
-      return; // An older APK, or the service never ran. Nothing to take.
-    }
-    const fixes = Array.isArray(held?.locations) ? held.locations : [];
-    if (!fixes.length) {
-      // Android killed and restarted the service with nothing held: whatever
-      // happened across that hole was never seen, so the next fix says so.
-      if (held?.restarted) stoppedTrackingRef.current = true;
-      return;
-    }
-    const { level, charging } = await batteryState();
-    let total = 0;
-    fixes.forEach((fix, index) => {
-      total = enqueue({
-        latitude: fix.latitude,
-        longitude: fix.longitude,
-        accuracy: fix.accuracy ?? null,
-        speed: fix.speed ?? null,
-        // Only the first, and only after a restart. The rest are one journey
-        // the phone watched the whole way through, so joining them is not a
-        // guess -- it is what happened.
-        after_gap: index === 0 && Boolean(held?.restarted),
-        status: "",
-        case_id: null,
-        timestamp: new Date(fix.time).toISOString(),
-        client_key: newClientKey(),
-        battery_level: level,
-        is_charging: charging,
-      });
-    });
-    setQueued(total);
-    // The journey continued while the app was away, so the next live fix is
-    // not the far side of a hole and must not skip its segment.
-    stoppedTrackingRef.current = false;
-    void drainQueue();
-  }, [drainQueue]);
 
   const clearSources = useCallback(() => {
     if (watchIdRef.current != null) {
@@ -524,5 +540,5 @@ export function useLiveTracking() {
   // Clean up if the component unmounts while still tracking.
   useEffect(() => stop, [stop]);
 
-  return { tracking, lastFix, error, queued, source, start, stop, setContext };
+  return { tracking, lastFix, error, queued, held, source, start, stop, setContext };
 }

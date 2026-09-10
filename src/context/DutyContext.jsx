@@ -458,6 +458,8 @@ export function DutyProvider({ children }) {
     // faults in one evening were only found by the map being empty afterwards.
     trackingSource: tracking.source,
     queued: tracking.queued,
+    // Taken by the service and not yet handed to the app. Should be zero.
+    heldOnPhone: tracking.held,
     error: dutyError || tracking.error,
     // Lets the screen disable Start Duty while it is pointless, rather than
     // letting the engineer tap it and be refused.

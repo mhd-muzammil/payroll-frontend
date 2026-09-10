@@ -204,6 +204,7 @@ const Attendance = () => {
     endDuty,
     trackingSource,
     queued: queuedFixes,
+    heldOnPhone,
   } = useDuty();
 
   const [geoLocating, setGeoLocating] = useState(false);
@@ -937,6 +938,7 @@ const Attendance = () => {
                       : "Starting the recorder…"}
                     {lastFix?.timestamp ? ` · last position ${clockOf(lastFix.timestamp)}` : ""}
                     {queuedFixes ? ` · ${queuedFixes} waiting to send` : ""}
+                    {heldOnPhone ? ` · ${heldOnPhone} collected in the background` : ""}
                   </p>
                 )}
                 <h3 className="text-lg md:text-xl font-bold tracking-tight mb-1.5">Smart Attendance Gate</h3>
