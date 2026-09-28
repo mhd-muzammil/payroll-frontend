@@ -18,8 +18,6 @@ import { useDuty } from "../../context/DutyContext";
 import AttendanceForm from "./AttendanceForm";
 import AttendanceGroupedTable, { StatusPill } from "./AttendanceGroupedTable";
 import { ROLES, getTokenClaims, getUserRole, normalizeRole } from "@/auth/rbac";
-import { employeeService } from "../../services/employeeService";
-import { extractArray } from "../../Utility/apiUtils";
 import {
   formatTime,
   formatDayLabel,
@@ -306,18 +304,6 @@ const Attendance = () => {
     try {
       const { default: ExcelJS } = await import("exceljs");
 
-      // HP ID (emp_code) isn't part of the attendance payload, so pull the
-      // employee directory once and join by employee_id.
-      const empCodeById = new Map();
-      try {
-        const empData = await employeeService.getAll();
-        extractArray(empData).forEach((emp) => {
-          empCodeById.set(Number(emp.id), emp.emp_code);
-        });
-      } catch (err) {
-        console.error("Failed to load employee HP IDs for export:", err);
-      }
-
       const dateSet = new Set();
       filteredRecords.forEach((record) => {
         const datePart = getDatePart(record.intime || record.outtime);
@@ -332,7 +318,6 @@ const Attendance = () => {
           employeesMap.set(key, {
             name: record.employee_name || "",
             branch: record.branch || "Chennai",
-            employeeId: record.employee_id != null ? Number(record.employee_id) : null,
             statusByDate: {},
           });
         }
@@ -354,29 +339,24 @@ const Attendance = () => {
         return `${day}-${month}-${year}`;
       });
 
-      sheet.addRow(["S.no", "Name", "HP ID", "Location", ...dateHeaderLabels]);
+      sheet.addRow(["S.no", "Name", "Location", ...dateHeaderLabels]);
       sheet.getRow(1).eachCell((cell, colNumber) => {
-        cell.font = { bold: true, color: { argb: colNumber <= 4 ? "FF1D4ED8" : "FFB45309" } };
+        cell.font = { bold: true, color: { argb: colNumber <= 3 ? "FF1D4ED8" : "FFB45309" } };
         cell.alignment = { horizontal: "center", vertical: "middle" };
       });
 
       employeesList.forEach((emp, idx) => {
-        const empCode = emp.employeeId != null ? empCodeById.get(emp.employeeId) : null;
-        const hpId = empCode || "NIL";
-
         const row = sheet.addRow([
           idx + 1,
           emp.name,
-          hpId,
           emp.branch,
           ...sortedDates.map((datePart) => getStatusDisplay(emp.statusByDate[datePart]) || "-"),
         ]);
 
         row.getCell(1).alignment = { horizontal: "center" };
-        row.getCell(3).font = { color: { argb: hpId === "NIL" ? "FFDC2626" : "FF000000" } };
 
         sortedDates.forEach((datePart, i) => {
-          const cell = row.getCell(5 + i);
+          const cell = row.getCell(4 + i);
           const status = emp.statusByDate[datePart];
           cell.alignment = { horizontal: "center" };
           if (status) {
@@ -387,10 +367,9 @@ const Attendance = () => {
 
       sheet.getColumn(1).width = 6;
       sheet.getColumn(2).width = 22;
-      sheet.getColumn(3).width = 16;
-      sheet.getColumn(4).width = 14;
+      sheet.getColumn(3).width = 14;
       sortedDates.forEach((_, i) => {
-        sheet.getColumn(5 + i).width = 13;
+        sheet.getColumn(4 + i).width = 13;
       });
 
       const buffer = await workbook.xlsx.writeBuffer();
