@@ -18,6 +18,8 @@ import { useDuty } from "../../context/DutyContext";
 import AttendanceForm from "./AttendanceForm";
 import AttendanceGroupedTable, { StatusPill } from "./AttendanceGroupedTable";
 import { ROLES, getTokenClaims, getUserRole, normalizeRole } from "@/auth/rbac";
+import { employeeService } from "../../services/employeeService";
+import { extractArray } from "../../Utility/apiUtils";
 import {
   formatTime,
   formatDayLabel,
@@ -29,7 +31,18 @@ import {
   punchTime,
   isPresentStatus,
   linkOrphanRows,
+  employeeKey,
 } from "../../Utility/attendanceUtils";
+
+// Status -> export text color (ARGB). Falls back to black for anything unmapped.
+const STATUS_EXPORT_COLORS = {
+  Present: "FF15803D",
+  Overtime: "FF2563EB",
+  overTime: "FF2563EB",
+  Absent: "FFDC2626",
+  Leave: "FFD97706",
+  Late: "FFD97706",
+};
 
 // A live fix older than this is not worth reusing for a punch that decides
 // whether somebody was at the office. Two minutes is far longer than the 30s
@@ -224,6 +237,8 @@ const Attendance = () => {
   const [regionDetail, setRegionDetail] = useState(null);
   const [detailStatus, setDetailStatus] = useState("all");
   const [showSettings, setShowSettings] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [quickRange, setQuickRange] = useState("");
   // Phone only: the From/To inputs and the region select start folded away.
   // From sm: up they are always visible and this is ignored.
   const [showFilters, setShowFilters] = useState(false);
@@ -275,39 +290,127 @@ const Attendance = () => {
     }
   };
 
-  const handleExportCSV = () => {
+  /**
+   * The cycle/range as an actual spreadsheet: one row per employee, one
+   * column per date that has a record (not every calendar day — sparse work
+   * days, matching how the branches' own attendance sheets read), colored by
+   * status. Replaces the old flat one-row-per-punch CSV.
+   */
+  const handleExportExcel = async () => {
     if (filteredRecords.length === 0) {
       alert("No attendance records to export for this date.");
       return;
     }
 
-    const headers = ["Employee Name", "Department", "Role", "Clock In", "Clock Out", "Total Hours", "Status"];
-    const rows = filteredRecords.map(record => [
-      record.employee_name || "",
-      record.department || "",
-      record.role || "",
-      record.intime ? new Date(record.intime).toLocaleTimeString("en-US", { hour: '2-digit', minute: '2-digit' }) : "--:--",
-      record.outtime ? new Date(record.outtime).toLocaleTimeString("en-US", { hour: '2-digit', minute: '2-digit' }) : "--:--",
-      calculateHours(record.intime, record.outtime),
-      record.status || ""
-    ]);
+    setExporting(true);
+    try {
+      const { default: ExcelJS } = await import("exceljs");
 
-    const csvContent = [
-      headers.join(","),
-      ...rows.map(e => e.map(val => `"${String(val).replace(/"/g, '""')}"`).join(","))
-    ].join("\n");
+      // HP ID (emp_code) isn't part of the attendance payload, so pull the
+      // employee directory once and join by employee_id.
+      const empCodeById = new Map();
+      try {
+        const empData = await employeeService.getAll();
+        extractArray(empData).forEach((emp) => {
+          empCodeById.set(Number(emp.id), emp.emp_code);
+        });
+      } catch (err) {
+        console.error("Failed to load employee HP IDs for export:", err);
+      }
 
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", `Attendance_Report_${fromDate}_to_${toDate}.csv`);
-    link.style.visibility = "hidden";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+      const dateSet = new Set();
+      filteredRecords.forEach((record) => {
+        const datePart = getDatePart(record.intime || record.outtime);
+        if (datePart) dateSet.add(datePart);
+      });
+      const sortedDates = [...dateSet].sort();
+
+      const employeesMap = new Map();
+      filteredRecords.forEach((record) => {
+        const key = employeeKey(record);
+        if (!employeesMap.has(key)) {
+          employeesMap.set(key, {
+            name: record.employee_name || "",
+            branch: record.branch || "Chennai",
+            employeeId: record.employee_id != null ? Number(record.employee_id) : null,
+            statusByDate: {},
+          });
+        }
+        const datePart = getDatePart(record.intime || record.outtime);
+        if (datePart) {
+          employeesMap.get(key).statusByDate[datePart] = record.status;
+        }
+      });
+
+      const employeesList = [...employeesMap.values()].sort((a, b) =>
+        a.name.localeCompare(b.name)
+      );
+
+      const workbook = new ExcelJS.Workbook();
+      const sheet = workbook.addWorksheet("Attendance Report");
+
+      const dateHeaderLabels = sortedDates.map((datePart) => {
+        const [year, month, day] = datePart.split("-");
+        return `${day}-${month}-${year}`;
+      });
+
+      sheet.addRow(["S.no", "Name", "HP ID", "Location", ...dateHeaderLabels]);
+      sheet.getRow(1).eachCell((cell, colNumber) => {
+        cell.font = { bold: true, color: { argb: colNumber <= 4 ? "FF1D4ED8" : "FFB45309" } };
+        cell.alignment = { horizontal: "center", vertical: "middle" };
+      });
+
+      employeesList.forEach((emp, idx) => {
+        const empCode = emp.employeeId != null ? empCodeById.get(emp.employeeId) : null;
+        const hpId = empCode || "NIL";
+
+        const row = sheet.addRow([
+          idx + 1,
+          emp.name,
+          hpId,
+          emp.branch,
+          ...sortedDates.map((datePart) => getStatusDisplay(emp.statusByDate[datePart]) || "-"),
+        ]);
+
+        row.getCell(1).alignment = { horizontal: "center" };
+        row.getCell(3).font = { color: { argb: hpId === "NIL" ? "FFDC2626" : "FF000000" } };
+
+        sortedDates.forEach((datePart, i) => {
+          const cell = row.getCell(5 + i);
+          const status = emp.statusByDate[datePart];
+          cell.alignment = { horizontal: "center" };
+          if (status) {
+            cell.font = { color: { argb: STATUS_EXPORT_COLORS[status] || "FF000000" } };
+          }
+        });
+      });
+
+      sheet.getColumn(1).width = 6;
+      sheet.getColumn(2).width = 22;
+      sheet.getColumn(3).width = 16;
+      sheet.getColumn(4).width = 14;
+      sortedDates.forEach((_, i) => {
+        sheet.getColumn(5 + i).width = 13;
+      });
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.setAttribute("href", url);
+      link.setAttribute("download", `Attendance_Report_${fromDate}_to_${toDate}.xlsx`);
+      link.style.visibility = "hidden";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } finally {
+      setExporting(false);
+    }
   };
-  
+
   /**
    * Where a punch gets its position.
    *
@@ -520,6 +623,17 @@ const Attendance = () => {
 
   const [fromDate, setFromDate] = useState(() => getDefaultCycleDates().from);
   const [toDate, setToDate] = useState(() => getDefaultCycleDates().to);
+
+  // Quick "last N days" range ending today, for fast exports.
+  const applyQuickRange = useCallback((days) => {
+    const numDays = Number(days);
+    if (!numDays) return;
+    const to = new Date();
+    const from = new Date();
+    from.setDate(to.getDate() - (numDays - 1));
+    setFromDate(formatLocalDate(from));
+    setToDate(formatLocalDate(to));
+  }, []);
 
   const [employeeIntime, setEmployeeIntime] = useState("");
   const [employeeOuttime, setEmployeeOuttime] = useState("");
@@ -1157,7 +1271,10 @@ const Attendance = () => {
               <input
                 type="date"
                 value={fromDate}
-                onChange={(e) => setFromDate(e.target.value)}
+                onChange={(e) => {
+                  setQuickRange("");
+                  setFromDate(e.target.value);
+                }}
                 className="h-10 sm:h-9 flex-1 sm:flex-none rounded-xl border border-border bg-card px-3 text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
               />
             </div>
@@ -1167,10 +1284,31 @@ const Attendance = () => {
               <input
                 type="date"
                 value={toDate}
-                onChange={(e) => setToDate(e.target.value)}
+                onChange={(e) => {
+                  setQuickRange("");
+                  setToDate(e.target.value);
+                }}
                 className="h-10 sm:h-9 flex-1 sm:flex-none rounded-xl border border-border bg-card px-3 text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
               />
             </div>
+
+            {/* Quick "last N days" presets, mainly for a fast export without
+                hand-picking From/To. */}
+            <select
+              value={quickRange}
+              onChange={(e) => {
+                setQuickRange(e.target.value);
+                applyQuickRange(e.target.value);
+              }}
+              className="h-10 sm:h-9 w-full sm:w-auto rounded-xl border border-border bg-card px-3 text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 cursor-pointer"
+            >
+              <option value="">Quick Range</option>
+              <option value="1">Last 1 Day</option>
+              <option value="3">Last 3 Days</option>
+              <option value="5">Last 5 Days</option>
+              <option value="7">Last 7 Days</option>
+              <option value="14">Last 14 Days</option>
+            </select>
 
             {/* Region Filter */}
             {!isEmployee && (
@@ -1220,6 +1358,7 @@ const Attendance = () => {
           <Button
             variant="outline"
             onClick={() => {
+              setQuickRange("");
               const cycle = getDefaultCycleDates();
               setFromDate(cycle.from);
               setToDate(cycle.to);
@@ -1239,8 +1378,8 @@ const Attendance = () => {
             {loading ? "Refreshing..." : "Refresh"}
           </Button>
           {!isEmployee && (
-            <Button variant="outline" onClick={handleExportCSV}>
-              Export Report
+            <Button variant="outline" onClick={handleExportExcel} disabled={exporting}>
+              {exporting ? "Exporting..." : "Export Report"}
             </Button>
           )}
           {/* Today, as a picture. Separate from Export Report on purpose: that

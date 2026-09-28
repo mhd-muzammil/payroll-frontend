@@ -174,7 +174,7 @@ export const formatDayLabel = (dateTimeValue) => {
 const resolveRegion = (branch) =>
   REGIONS.find((reg) => reg.toLowerCase() === String(branch || "").toLowerCase()) || "Chennai";
 
-const employeeKey = (record) =>
+export const employeeKey = (record) =>
   record.employee_id != null
     ? `id:${record.employee_id}`
     : `name:${String(record.employee_name || "").toLowerCase()}`;
