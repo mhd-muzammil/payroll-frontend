@@ -19,6 +19,13 @@ import { getUserRole, isAuthenticated, ROLES } from "../auth/rbac";
 
 const DutyContext = createContext(null);
 
+// Employee and HR punch their own attendance and go on duty from it; nobody
+// else has an employee record to ask `trackingService.duty()` about, which
+// is what the three effects below use this to avoid firing for.
+function canTrackDuty(role) {
+  return role === ROLES.EMPLOYEE || role === ROLES.HR;
+}
+
 /** Marks the refusal so the caller can show the engineer's message, not an API one. */
 function locationError(message) {
   const error = new Error(message);
@@ -286,11 +293,12 @@ export function DutyProvider({ children }) {
     return Boolean(state?.on_duty);
   }, []);
 
-  // Resume an open duty session after a reload / reopened tab. Only engineers
-  // go on duty — asking for staff would make every admin page load fire a
-  // request that 409s (they have no employee record) and litter the console.
+  // Resume an open duty session after a reload / reopened tab. Restricted to
+  // roles that actually punch attendance — asking for anyone else would make
+  // every admin page load fire a request that 409s (they have no employee
+  // record) and litter the console.
   useEffect(() => {
-    if (!isAuthenticated() || getUserRole() !== ROLES.EMPLOYEE) return;
+    if (!isAuthenticated() || !canTrackDuty(getUserRole())) return;
     let cancelled = false;
     trackingService
       .duty()
@@ -319,7 +327,7 @@ export function DutyProvider({ children }) {
    * coming out of a pocket is a better signal than any interval.
    */
   useEffect(() => {
-    if (!isAuthenticated() || getUserRole() !== ROLES.EMPLOYEE) return;
+    if (!isAuthenticated() || !canTrackDuty(getUserRole())) return;
     let cancelled = false;
     const refresh = () => {
       trackingService
@@ -358,7 +366,7 @@ export function DutyProvider({ children }) {
 
   // Told up front, and cleared the moment they fix it — no reload needed.
   useEffect(() => {
-    if (!isAuthenticated() || getUserRole() !== ROLES.EMPLOYEE) return;
+    if (!isAuthenticated() || !canTrackDuty(getUserRole())) return;
     return watchLocationPermission((state) => {
       setLocationPermission(state);
       setDutyError((current) => {

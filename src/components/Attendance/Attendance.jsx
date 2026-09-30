@@ -618,6 +618,11 @@ const Attendance = () => {
   const [employeeOuttime, setEmployeeOuttime] = useState("");
   const role = normalizeRole(getUserRole());
   const isEmployee = role === ROLES.EMPLOYEE;
+  // HR has super access to everyone else's records, but is still on payroll
+  // themselves and needs to punch their own day in/out like everyone else --
+  // just not scoped down to only their own row the way a plain employee is
+  // (that scoping, and every admin action below, still keys off isEmployee).
+  const canSelfCheckIn = isEmployee || role === ROLES.HR;
   const claims = getTokenClaims() || {};
   const username = claims.username || claims.user_name || claims.sub || "";
   const employeeId = claims.employee_id ? Number(claims.employee_id) : null;
@@ -699,7 +704,7 @@ const Attendance = () => {
   }, [records]);
 
   const employeeFixedValues = useMemo(() => {
-    if (!isEmployee) return {};
+    if (!canSelfCheckIn) return {};
     const lastRecord = safeRecords.find((r) => {
       if (employeeId) return Number(r.employee_id) === employeeId;
       return String(r.employee_name || "").toLowerCase() === String(username).toLowerCase();
@@ -715,10 +720,10 @@ const Attendance = () => {
       intime: toLocalDateTimeInput(lastRecord?.intime),
       outtime: toLocalDateTimeInput(lastRecord?.outtime),
     };
-  }, [isEmployee, records, username, employeeId]);
+  }, [canSelfCheckIn, records, username, employeeId]);
 
   const employeeSelectedDateRecord = useMemo(() => {
-    if (!isEmployee) return null;
+    if (!canSelfCheckIn) return null;
     const todayStr = formatLocalDate(new Date());
     return safeRecords.find((record) => {
       const matchesUser =
@@ -730,7 +735,7 @@ const Attendance = () => {
       const d = new Date(dateSource);
       return formatLocalDate(d) === todayStr;
     }) || null;
-  }, [isEmployee, records, username, employeeId]);
+  }, [canSelfCheckIn, records, username, employeeId]);
   const hasInTimeToday = Boolean(employeeSelectedDateRecord?.intime);
   const hasOutTimeToday = Boolean(employeeSelectedDateRecord?.outtime);
 
@@ -750,14 +755,14 @@ const Attendance = () => {
   // than leaving it alone.
   const repairedDutyRef = useRef(false);
   useEffect(() => {
-    if (!isEmployee || !Capacitor?.isNativePlatform?.()) return;
+    if (!canSelfCheckIn || !Capacitor?.isNativePlatform?.()) return;
     if (repairedDutyRef.current) return;
     if (!hasInTimeToday || hasOutTimeToday || onDuty) return;
     repairedDutyRef.current = true;
     startDuty().catch(() => {
       // Reported through the duty card's own error line; nothing to add here.
     });
-  }, [isEmployee, hasInTimeToday, hasOutTimeToday, onDuty, startDuty]);
+  }, [canSelfCheckIn, hasInTimeToday, hasOutTimeToday, onDuty, startDuty]);
 
   const toNowIso = () => new Date().toISOString();
 
@@ -987,7 +992,7 @@ const Attendance = () => {
         }
       />
 
-      {isEmployee && (
+      {canSelfCheckIn && (
         <div className="mb-6 rounded-3xl gradient-brand p-1 shadow-glow">
           <div className="bg-card dark:bg-[#1A1C23] rounded-[22px] p-5 md:p-8 relative overflow-hidden">
             

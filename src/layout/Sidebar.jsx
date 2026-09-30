@@ -56,11 +56,19 @@ const defaultRoles = [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.HR];
 // whatever else that role can see, so the bar is never short.
 const MOBILE_TABS = {
   employee: ["/dashboard", "/cases", "/attendance", "/requests"],
+  // HR is also an employee who has to punch their own attendance, so their
+  // bar carries it too, in place of Payslips (still reachable behind More).
+  hr: ["/dashboard", "/attendance", "/employees", "/requests"],
   staff: ["/dashboard", "/employees", "/payslips", "/requests"],
 };
 
 function pickMobileTabs(visibleNav, role) {
-  const preferred = role === ROLES.EMPLOYEE ? MOBILE_TABS.employee : MOBILE_TABS.staff;
+  const preferred =
+    role === ROLES.EMPLOYEE
+      ? MOBILE_TABS.employee
+      : role === ROLES.HR
+      ? MOBILE_TABS.hr
+      : MOBILE_TABS.staff;
   const byPath = new Map(visibleNav.map((item) => [item.to, item]));
   const tabs = preferred.map((to) => byPath.get(to)).filter(Boolean);
   for (const item of visibleNav) {
