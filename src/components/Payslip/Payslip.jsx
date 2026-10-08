@@ -13,6 +13,7 @@ import {
   DialogContent,
 } from "@/components/ui/dialog";
 import { extractArray } from "../../Utility/apiUtils";
+import EmployeePayReport from "./EmployeePayReport";
 
 const regionStyles = {
   Chennai: {
@@ -271,7 +272,11 @@ const PayslipsPage = () => {
   }, [selectedSlip]);
 
   const applyUpdatedSlip = (updated) => {
-    setSelectedSlip(updated);
+    // Refresh the open payslip only if it IS this one. Setting it outright is
+    // what opens the dialog -- right for an edit made inside the dialog, where
+    // it is already open, and wrong for one made on the Pay Report, which
+    // threw the payslip over the sheet after every cell.
+    setSelectedSlip((current) => (current && current.id === updated.id ? updated : current));
     setSlips((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
     setMonthSlips((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
   };
@@ -734,15 +739,20 @@ const PayslipsPage = () => {
         >
           Generate Payslips
         </button>
+        {/* The office's second tab is the Employee Pay Report, which replaced
+            Payslip History: every generated slip on one editable sheet. An
+            employee never sees this switcher -- their page stays their own
+            released payslips, which is the only place they can open and
+            download one. */}
         <button
-          onClick={() => setActiveTab("history")}
+          onClick={() => setActiveTab("report")}
           className={`flex-1 py-2 text-center rounded-xl text-sm font-medium transition-all duration-200 ${
-            activeTab === "history"
+            activeTab !== "generate"
               ? "bg-card text-foreground shadow-sm border border-border/50"
               : "text-muted-foreground hover:text-foreground"
           }`}
         >
-          Payslip History
+          Employee Pay Report
         </button>
       </div>
       )}
@@ -966,9 +976,12 @@ const PayslipsPage = () => {
             />
           )}
         </>
-      ) : (
+      ) : isEmployee ? (
         <>
-          {/* Controls Bar for Payslip History */}
+          {/* AN EMPLOYEE'S OWN PAYSLIPS. Their whole page: the slips the office
+              has released to them, each one opening the dialog where they
+              read it and download the PDF -- the only download that works in
+              the app. Untouched by the Pay Report, which is the office's. */}
           <div className="flex flex-wrap items-center justify-between gap-4 bg-card border border-border/60 rounded-3xl p-5 shadow-xs">
             <div className="flex items-center gap-2">
               <Users className="h-5 w-5 text-muted-foreground" />
@@ -1092,6 +1105,14 @@ const PayslipsPage = () => {
             />
           )}
         </>
+      ) : (
+        <EmployeePayReport
+          slips={slips}
+          loading={loading}
+          selectedRegion={selectedRegion}
+          onOpenSlip={setSelectedSlip}
+          onSlipUpdated={applyUpdatedSlip}
+        />
       )}
 
       {/* Full-Width Landscape Dialog Panel */}
