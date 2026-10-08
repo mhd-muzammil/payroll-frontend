@@ -62,6 +62,20 @@ const STATUS_BADGE = {
 /** Records created before this field existed have no value; treat them as Active. */
 const employmentStatusOf = (record) => record?.employment_status || "Active";
 
+// THREE KINDS OF RECORD, kept apart.
+//
+// An employee, somebody paid by the job, and a firm we buy work from. They
+// were all going through the employee's form and into the one list; the office
+// asked for them separate, so the tab below scopes the whole page.
+const CATEGORIES = [
+  { key: "Employee", label: "Employees", one: "Employee", badge: "info" },
+  { key: "Freelancer", label: "Freelancers", one: "Freelancer", badge: "warning" },
+  { key: "Vendor", label: "Vendors", one: "Vendor", badge: "success" },
+];
+
+/** Everything saved before categories existed is an employee, which is what it is. */
+const categoryOf = (record) => record?.category || "Employee";
+
 const defaultStyle = {
   bg: "from-gray-50/50 to-slate-50/30 dark:from-gray-950/20 dark:to-slate-950/10",
   border: "border-gray-100 dark:border-gray-950/50",
@@ -79,6 +93,10 @@ const OnboardingManagement = () => {
   const [viewingRecord, setViewingRecord] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [selectedRegion, setSelectedRegion] = useState("");
+  // Which kind of record the page is showing, and -- when the form is open --
+  // which kind is being created.
+  const [selectedCategory, setSelectedCategory] = useState("Employee");
+  const [formCategory, setFormCategory] = useState("Employee");
   // Opens on the people who actually work here. Leavers stay one click away on
   // the Relieved card rather than padding the list you look at every day.
   const [selectedStatus, setSelectedStatus] = useState("Active");
@@ -164,7 +182,7 @@ const OnboardingManagement = () => {
     fetchOnboardings();
   }, []);
 
-  const buildFormData = (formData) => {
+  const buildFormData = (formData, category) => {
     const data = new FormData();
 
     // Basic details
@@ -173,7 +191,10 @@ const OnboardingManagement = () => {
     data.append("department", formData.department);
     data.append("designation", formData.designation);
     data.append("work_location", formData.workLocation);
-    data.append("date_of_joining", formData.dateOfJoining);
+    // Only when there is one. A freelancer has none and a vendor has a
+    // contract instead, and "" is not a date: the server answers "Date has
+    // wrong format" and the whole form comes back refused.
+    if (formData.dateOfJoining) data.append("date_of_joining", formData.dateOfJoining);
     data.append("mobile_number", formData.mobileNumber);
     data.append("email_id", formData.emailId);
 
@@ -215,13 +236,33 @@ const OnboardingManagement = () => {
     data.append("hp_experience", formData.hpExperience || "");
     data.append("skills", formData.skills || "");
 
+    // 8 & 9. The firm, and what the work costs. Blank rather than omitted, so
+    // clearing a field on an edit actually clears it -- a field left out of a
+    // multipart PATCH means "leave it alone".
+    data.append("category", category);
+    data.append("company_name", formData.companyName || "");
+    data.append("gst_number", formData.gstNumber || "");
+    data.append("contact_person_role", formData.contactPersonRole || "");
+    data.append("service_type", formData.serviceType || "");
+    data.append("rate_type", formData.rateType || "");
+    // A money field and two dates: the server wants these absent, not empty,
+    // when there is no value. "" is not a number and not a date.
+    if (formData.rateAmount !== "" && formData.rateAmount !== null && formData.rateAmount !== undefined) {
+      data.append("rate_amount", formData.rateAmount);
+    }
+    if (formData.contractStart) data.append("contract_start", formData.contractStart);
+    if (formData.contractEnd) data.append("contract_end", formData.contractEnd);
+    if (formData.agreement) data.append("agreement", formData.agreement);
+
     return data;
   };
 
   const handleSubmit = async (formData) => {
     setSubmitting(true);
     try {
-      const data = buildFormData(formData);
+      // Editing keeps the record's own kind; creating uses the button pressed.
+      const category = editingRecord ? categoryOf(editingRecord) : formCategory;
+      const data = buildFormData(formData, category);
 
       if (editingRecord) {
         // Editing keeps the existing status untouched (partial update).
@@ -235,7 +276,11 @@ const OnboardingManagement = () => {
         await onboardingService.create(data);
         await fetchOnboardings();
         setShowForm(false);
-        alert("Successfully onboarded " + formData.employeeName + "! Profile connected to Employee and Payslips.");
+        alert(
+          category === "Employee"
+            ? "Successfully onboarded " + formData.employeeName + "! Profile connected to Employee and Payslips."
+            : `${category} ${formData.employeeName} has been onboarded.`,
+        );
       }
     } catch (error) {
       console.error("Failed submitting onboarding:", error);
@@ -252,16 +297,33 @@ const OnboardingManagement = () => {
   // old cards mixed two different questions — how far the paperwork got
   // (Completed / In Progress) and where the person stands now (Current / Ex) —
   // so the same head appeared under three separate totals.
+  // The tab scopes the WHOLE page -- the summary cards, the region boxes and
+  // the table all read from here, so a number on this page and the rows under
+  // it cannot disagree.
+  const categoryScoped = useMemo(
+    () => safeRecords.filter((r) => categoryOf(r) === selectedCategory),
+    [safeRecords, selectedCategory],
+  );
+
+  const categoryCounts = useMemo(() => {
+    const counts = { Employee: 0, Freelancer: 0, Vendor: 0 };
+    safeRecords.forEach((r) => {
+      const kind = categoryOf(r);
+      if (counts[kind] !== undefined) counts[kind] += 1;
+    });
+    return counts;
+  }, [safeRecords]);
+
   const stats = useMemo(() => {
     const count = (value) =>
-      safeRecords.filter((r) => employmentStatusOf(r) === value).length;
+      categoryScoped.filter((r) => employmentStatusOf(r) === value).length;
     return {
-      total: safeRecords.length,
+      total: categoryScoped.length,
       active: count("Active"),
       inactive: count("Inactive"),
       relieved: count("Relieved"),
     };
-  }, [safeRecords]);
+  }, [categoryScoped]);
 
   // Someone Relieved has left, so they are not part of the working view at
   // all: not in the region counts, not in the table. The Relieved card is the
@@ -269,10 +331,10 @@ const OnboardingManagement = () => {
   // including "Show all" — is the people still with the company.
   const statusScoped = useMemo(() => {
     if (selectedStatus) {
-      return safeRecords.filter((r) => employmentStatusOf(r) === selectedStatus);
+      return categoryScoped.filter((r) => employmentStatusOf(r) === selectedStatus);
     }
-    return safeRecords.filter((r) => employmentStatusOf(r) !== "Relieved");
-  }, [safeRecords, selectedStatus]);
+    return categoryScoped.filter((r) => employmentStatusOf(r) !== "Relieved");
+  }, [categoryScoped, selectedStatus]);
 
   const regionStats = useMemo(() => {
     const regions = ["Chennai", "Vellore", "Salem", "Kanchipuram", "Hosur"];
@@ -315,7 +377,8 @@ const OnboardingManagement = () => {
         (r.employee_id || "").toLowerCase().includes(q) ||
         (r.mobile_number || "").toLowerCase().includes(q) ||
         (r.designation || "").toLowerCase().includes(q) ||
-        (r.department || "").toLowerCase().includes(q)
+        (r.department || "").toLowerCase().includes(q) ||
+        (r.company_name || "").toLowerCase().includes(q)
       );
     }
     return list;
@@ -328,6 +391,7 @@ const OnboardingManagement = () => {
         onSubmit={handleSubmit}
         isSubmitting={submitting}
         initialData={editingRecord}
+        category={formCategory}
       />
     );
   }
@@ -340,18 +404,57 @@ const OnboardingManagement = () => {
     <div className="space-y-6">
       <PageHeader
         title="Onboarding"
-        description="Manage internal employee onboarding information."
+        description="Employees, freelancers and vendors — each onboarded on its own form."
         actions={
-          <Button
-            variant="brand"
-            size="pill"
-            icon={UserPlus}
-            onClick={() => setShowForm(true)}
-          >
-            New Onboarding
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            {CATEGORIES.map(({ key, one }) => (
+              <Button
+                key={key}
+                variant={key === "Employee" ? "brand" : "outline"}
+                size="pill"
+                icon={UserPlus}
+                onClick={() => {
+                  // The button both opens the right form AND moves the page to
+                  // that tab, so the new record is in the list you land back on.
+                  setFormCategory(key);
+                  setSelectedCategory(key);
+                  setShowForm(true);
+                }}
+              >
+                New {one}
+              </Button>
+            ))}
+          </div>
         }
       />
+
+      {/* WHICH KIND THE PAGE IS SHOWING. Everything below reads from this. */}
+      <div className="flex flex-wrap gap-2">
+        {CATEGORIES.map(({ key, label }) => {
+          const active = selectedCategory === key;
+          return (
+            <button
+              key={key}
+              type="button"
+              onClick={() => {
+                setSelectedCategory(key);
+                // A region chosen for one kind means nothing for the next.
+                setSelectedRegion("");
+              }}
+              className={`rounded-full px-4 py-2 text-sm font-medium transition-colors ${
+                active
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "bg-muted text-muted-foreground hover:bg-muted/70"
+              }`}
+            >
+              {label}
+              <span className={`ml-2 text-xs ${active ? "opacity-80" : "opacity-60"}`}>
+                {categoryCounts[key] ?? 0}
+              </span>
+            </button>
+          );
+        })}
+      </div>
 
       {/* Active + Inactive + Relieved = Total. Each card filters the table, so
           the numbers are checkable: click one and count the rows. */}

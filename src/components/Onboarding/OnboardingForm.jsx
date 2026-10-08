@@ -1,10 +1,45 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { User, Contact, Building2, CreditCard, FileCheck, BadgePlus } from "lucide-react";
+import { User, Contact, Building2, CreditCard, FileCheck, BadgePlus, Handshake } from "lucide-react";
 
-const OnboardingForm = ({ onSubmit, onCancel, isSubmitting = false, initialData = null }) => {
+/** What each kind of record is called and what the form says about it. */
+const CATEGORIES = {
+  Employee: {
+    title: "Employee Onboarding Form",
+    blurb: "Complete the information form to onboard a new employee.",
+    nameLabel: "Employee Name",
+    sectionOne: "1. Employee Basic Details",
+  },
+  Freelancer: {
+    title: "Freelancer Onboarding Form",
+    blurb: "Somebody we pay by the job rather than by the month.",
+    nameLabel: "Freelancer Name",
+    sectionOne: "1. Freelancer Basic Details",
+  },
+  Vendor: {
+    title: "Vendor Onboarding Form",
+    blurb: "A firm we buy work or parts from. The person named is who we ring.",
+    nameLabel: "Contact Person Name",
+    sectionOne: "1. Vendor Basic Details",
+  },
+};
+
+const OnboardingForm = ({
+  onSubmit,
+  onCancel,
+  isSubmitting = false,
+  initialData = null,
+  category = "Employee",
+}) => {
   const isEditing = Boolean(initialData);
+  // Editing reads the category off the record; a new one is told which button
+  // was pressed. Anything unrecognised is an employee, which is what every
+  // record created before this existed is.
+  const kind = (isEditing ? initialData?.category : category) || "Employee";
+  const words = CATEGORIES[kind] || CATEGORIES.Employee;
+  const isEmployee = kind === "Employee";
+  const isVendor = kind === "Vendor";
 
   // Map a backend record (snake_case) onto the form's camelCase fields. Files
   // are left null: existing uploads are kept unless the operator picks new ones.
@@ -52,6 +87,17 @@ const OnboardingForm = ({ onSubmit, onCancel, isSubmitting = false, initialData 
     totalExperience: rec?.total_experience || "",
     hpExperience: rec?.hp_experience || "",
     skills: rec?.skills || "", // pc, printer, both
+    // 8. The firm, for a vendor
+    companyName: rec?.company_name || "",
+    gstNumber: rec?.gst_number || "",
+    contactPersonRole: rec?.contact_person_role || "",
+    serviceType: rec?.service_type || "",
+    // 9. What the work costs, for a freelancer or a vendor
+    rateType: rec?.rate_type || "",
+    rateAmount: rec?.rate_amount || "",
+    contractStart: rec?.contract_start || "",
+    contractEnd: rec?.contract_end || "",
+    agreement: null,
   });
 
   const [formData, setFormData] = useState(() => buildInitialState(initialData));
@@ -82,11 +128,13 @@ const OnboardingForm = ({ onSubmit, onCancel, isSubmitting = false, initialData 
     <div className="space-y-8 pb-12">
       <div className="flex items-center justify-between">
         <div className="flex flex-col gap-1.5">
-          <h1 className="text-2xl font-bold tracking-tight">{isEditing ? "Edit Onboarding Details" : "Employee Onboarding Form"}</h1>
+          <h1 className="text-2xl font-bold tracking-tight">
+            {isEditing ? `Edit ${kind} Details` : words.title}
+          </h1>
           <p className="text-sm text-muted-foreground">
             {isEditing
               ? "Update the information below. Existing documents stay unless you upload new ones."
-              : "Complete the information form to onboard a new employee."}
+              : words.blurb}
           </p>
         </div>
         {onCancel && (
@@ -104,36 +152,67 @@ const OnboardingForm = ({ onSubmit, onCancel, isSubmitting = false, initialData 
               <User className="h-5 w-5" />
             </div>
             <div>
-              <h3 className="font-semibold text-lg">1. Employee Basic Details</h3>
+              <h3 className="font-semibold text-lg">{words.sectionOne}</h3>
               <p className="text-xs text-muted-foreground">Essential identification and joining info</p>
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            {/* THE FIRM COMES FIRST FOR A VENDOR. It is what the record is
+                about; the person below it is who we ring. */}
+            {isVendor && (
+              <>
+                <div>
+                  <label className={labelStyle}>Company / Firm Name</label>
+                  <input type="text" name="companyName" value={formData.companyName} onChange={handleChange} className={inputStyle} required placeholder="Registered name of the firm" />
+                </div>
+                <div>
+                  <label className={labelStyle}>GST Number</label>
+                  <input type="text" name="gstNumber" value={formData.gstNumber} onChange={handleChange} className={inputStyle} placeholder="33ABCDE1234F1Z5" />
+                </div>
+              </>
+            )}
             <div>
-              <label className={labelStyle}>Employee Name</label>
+              <label className={labelStyle}>{words.nameLabel}</label>
               <input type="text" name="employeeName" value={formData.employeeName} onChange={handleChange} className={inputStyle} required placeholder="Full Name" />
             </div>
             <div>
-              <label className={labelStyle}>Employee ID (If assigned)</label>
+              <label className={labelStyle}>{isVendor ? "Vendor Code (If assigned)" : "Employee ID (If assigned)"}</label>
               <input type="text" name="employeeId" value={formData.employeeId} onChange={handleChange} className={inputStyle} placeholder="Optional" />
             </div>
-            <div>
-              <label className={labelStyle}>Department</label>
-              <input type="text" name="department" value={formData.department} onChange={handleChange} className={inputStyle} required placeholder="IT, HR, Admin etc." />
-            </div>
-            <div>
-              <label className={labelStyle}>Designation</label>
-              <input type="text" name="designation" value={formData.designation} onChange={handleChange} className={inputStyle} required placeholder="Job Title" />
-            </div>
+            {isVendor ? (
+              <>
+                <div>
+                  <label className={labelStyle}>Their Role in the Firm</label>
+                  <input type="text" name="contactPersonRole" value={formData.contactPersonRole} onChange={handleChange} className={inputStyle} placeholder="Proprietor, Manager etc." />
+                </div>
+                <div>
+                  <label className={labelStyle}>What They Supply</label>
+                  <input type="text" name="serviceType" value={formData.serviceType} onChange={handleChange} className={inputStyle} placeholder="Spares, logistics, AMC etc." />
+                </div>
+              </>
+            ) : (
+              <>
+                <div>
+                  <label className={labelStyle}>Department</label>
+                  <input type="text" name="department" value={formData.department} onChange={handleChange} className={inputStyle} required={isEmployee} placeholder="IT, HR, Admin etc." />
+                </div>
+                <div>
+                  <label className={labelStyle}>Designation</label>
+                  <input type="text" name="designation" value={formData.designation} onChange={handleChange} className={inputStyle} required={isEmployee} placeholder="Job Title" />
+                </div>
+              </>
+            )}
             <div>
               <label className={labelStyle}>Work Location on / Branch</label>
               <input type="text" name="workLocation" value={formData.workLocation} onChange={handleChange} className={inputStyle} required placeholder="Location" />
             </div>
-            <div>
-              <label className={labelStyle}>Date of Joining</label>
-              <input type="date" name="dateOfJoining" value={formData.dateOfJoining} onChange={handleChange} className={inputStyle} required />
-            </div>
+            {!isVendor && (
+              <div>
+                <label className={labelStyle}>Date of Joining</label>
+                <input type="date" name="dateOfJoining" value={formData.dateOfJoining} onChange={handleChange} className={inputStyle} required={isEmployee} />
+              </div>
+            )}
             <div>
               <label className={labelStyle}>Mobile Number</label>
               <input type="tel" name="mobileNumber" value={formData.mobileNumber} onChange={handleChange} className={inputStyle} required placeholder="Phone" />
@@ -144,6 +223,56 @@ const OnboardingForm = ({ onSubmit, onCancel, isSubmitting = false, initialData 
             </div>
           </div>
         </Card>
+
+        {/* WHAT THE WORK COSTS, AND FOR HOW LONG.
+            An employee is on a salary and their terms live in payroll; these
+            two are paid per job or per contract, and the office was keeping
+            that on paper. An end date left empty is an open engagement -- the
+            server reads it that way too, and only refuses an end before its
+            start. */}
+        {!isEmployee && (
+          <Card>
+            <div className="flex items-center gap-3 mb-6">
+              <div className="h-10 w-10 rounded-full bg-teal-100 dark:bg-teal-900/30 text-teal-600 flex items-center justify-center shrink-0">
+                <Handshake className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-lg">2. Engagement &amp; Rate</h3>
+                <p className="text-xs text-muted-foreground">What the work costs and how long the arrangement runs</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <div>
+                <label className={labelStyle}>Paid</label>
+                <select name="rateType" value={formData.rateType} onChange={handleChange} className={inputStyle}>
+                  <option value="">Select</option>
+                  <option value="Per case">Per case</option>
+                  <option value="Per day">Per day</option>
+                  <option value="Per hour">Per hour</option>
+                  <option value="Monthly">Monthly</option>
+                  <option value="Per job quote">Per job quote</option>
+                </select>
+              </div>
+              <div>
+                <label className={labelStyle}>Rate (₹)</label>
+                <input type="number" step="0.01" min="0" name="rateAmount" value={formData.rateAmount} onChange={handleChange} className={inputStyle} placeholder="750.00" />
+              </div>
+              <div>
+                <label className={labelStyle}>Contract Start</label>
+                <input type="date" name="contractStart" value={formData.contractStart} onChange={handleChange} className={inputStyle} />
+              </div>
+              <div>
+                <label className={labelStyle}>Contract End</label>
+                <input type="date" name="contractEnd" value={formData.contractEnd} onChange={handleChange} className={inputStyle} />
+                <p className="mt-1 text-xs text-muted-foreground">Leave empty for an open engagement.</p>
+              </div>
+              <div className="md:col-span-2">
+                <label className={labelStyle}>Signed Agreement</label>
+                <input type="file" name="agreement" onChange={(e) => setFormData((prev) => ({ ...prev, agreement: e.target.files?.[0] || null }))} className={inputStyle} accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx" />
+              </div>
+            </div>
+          </Card>
+        )}
 
         {/* Section 2: Personal Details */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
