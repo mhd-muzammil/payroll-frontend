@@ -449,8 +449,18 @@ const Attendance = () => {
       sheet.getRow(1).eachCell((cell, colNumber) => {
         const isDate = colNumber > 3 && colNumber < firstTotalColumn;
         cell.font = { bold: true, color: { argb: isDate ? "FFB45309" : "FF1D4ED8" } };
-        cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+        // NOT WRAPPED, and the row given a height of its own.
+        //
+        // Wrapping was put here for "Present + Leave" and it blanked the dates
+        // instead: a file that does not state a row height leaves Excel with
+        // the default single line, and wrapped text laid out over two lines
+        // inside one line's worth of space is simply not drawn. The cells had
+        // their dates the whole time -- nobody could see them. The headers are
+        // all short enough for one line, so the column is widened for the long
+        // ones rather than the text folded.
+        cell.alignment = { horizontal: "center", vertical: "middle" };
       });
+      sheet.getRow(1).height = 22;
 
       let anyAutoClosed = false;
       employeesList.forEach((emp, idx) => {
@@ -520,8 +530,11 @@ const Attendance = () => {
       sortedDates.forEach((_, i) => {
         sheet.getColumn(4 + i).width = 14;
       });
-      TOTAL_HEADERS.forEach((_, i) => {
-        sheet.getColumn(firstTotalColumn + i).width = 13;
+      TOTAL_HEADERS.forEach((header, i) => {
+        // Wide enough for the longest of them on one line -- "Present + Leave"
+        // is fifteen characters, and a header that has to fold is a header
+        // that can go missing.
+        sheet.getColumn(firstTotalColumn + i).width = Math.max(13, header.length + 3);
       });
 
       const buffer = await workbook.xlsx.writeBuffer();
