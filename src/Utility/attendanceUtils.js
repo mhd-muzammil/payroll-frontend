@@ -57,28 +57,39 @@ export const formatTime = (isoString) => {
 };
 
 /**
- * How long the day was, as a number.
+ * How long the day was -- or null, when the day cannot be measured.
  *
- * The one place the rule for a day that crosses midnight lives: an outtime
- * earlier than the intime is the next morning, not a negative shift.
+ * Null, and not zero, for a day with a Login and no Logout. Those are not the
+ * same thing and the register was printing them the same: an engineer who
+ * worked nine hours and forgot to press Logout read as "0h", which says they
+ * did nothing all day.
+ *
+ * Null as well when the clock-out is not after the clock-in. That used to be
+ * pushed forward by a day on the theory that it was a night shift, and the
+ * theory is wrong: both punches carry their own date, so a real night shift
+ * already ends after it starts. What the rule actually did was dress up broken
+ * records. One engineer's row reading a tidy 14h 55m was a clock-out stamped
+ * the PREVIOUS evening, and the day after it -- the same wrong timestamp, now
+ * a day and a half behind -- came out NEGATIVE and was quietly subtracted from
+ * that person's total for the cycle.
+ *
+ * A number here is a day somebody can stand behind. Anything else is said as
+ * what it is.
  */
 export const hoursBetween = (intime, outtime) => {
-  if (!intime || !outtime) return 0;
+  if (!intime || !outtime) return null;
 
   const start = new Date(intime);
   const end = new Date(outtime);
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return 0;
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
 
-  let diffInMs = end - start;
-  if (diffInMs < 0) {
-    diffInMs += 24 * MS_PER_HOUR;
-  }
-
-  return diffInMs / MS_PER_HOUR;
+  const diffInMs = end - start;
+  return diffInMs > 0 ? diffInMs / MS_PER_HOUR : null;
 };
 
+/** The same in decimal hours, for the payroll code that works in those. */
 export const calculateHours = (intime, outtime) =>
-  !intime || !outtime ? "0.0" : hoursBetween(intime, outtime).toFixed(1);
+  (hoursBetween(intime, outtime) ?? 0).toFixed(1);
 
 /**
  * "4h 36m" -- a stretch of work in the words people say it in.
@@ -101,13 +112,20 @@ export const formatDuration = (hours) => {
 };
 
 /**
- * One day's two punches, as "4h 36m".
+ * One day's two punches, as "4h 36m" -- or a dash when there is no answer.
  *
  * Read off the punches rather than off calculateHours, so the minutes are the
  * real ones: rounding to a tenth of an hour first and converting after turns
  * 4h 38m into 4h 36m.
+ *
+ * A dash where the day cannot be measured, because "0h" is a claim -- that
+ * they were here and did nothing -- and a day nobody closed is not that. It
+ * reads beside the dash already in the Clock Out column: no Logout, no hours.
  */
-export const workedSpan = (intime, outtime) => formatDuration(hoursBetween(intime, outtime));
+export const workedSpan = (intime, outtime) => {
+  const hours = hoursBetween(intime, outtime);
+  return hours === null ? "—" : formatDuration(hours);
+};
 
 export const calculateOvertime = (intime, outtime) => {
   if (!intime || !outtime) return "0.0";
@@ -246,7 +264,10 @@ export const calculateStats = (records, snapshotDate = null) => {
   // few minutes, and now that this is shown as hours and minutes the drift
   // would be read as a number somebody could check.
   const totalWorked = safeRecords.reduce(
-    (sum, r) => sum + hoursBetween(r.intime, r.outtime),
+    // A day with no answer adds nothing. It used to be able to SUBTRACT: a
+    // clock-out stamped before its clock-in came through as a negative number
+    // of hours and came off the cycle's total.
+    (sum, r) => sum + (hoursBetween(r.intime, r.outtime) ?? 0),
     0
   );
 

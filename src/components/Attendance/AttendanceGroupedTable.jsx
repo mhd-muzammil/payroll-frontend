@@ -100,7 +100,11 @@ const AttendanceGroupedTable = ({
       // an hour first: a month of those roundings drifts by several minutes,
       // and upwards as often as not.
       g.totalHours = g.records.reduce(
-        (s, r) => s + hoursBetween(r.intime, r.outtime),
+        // A day with no answer adds nothing, and -- the bug this is really
+        // about -- can no longer take hours away: a clock-out stamped before
+        // its clock-in used to come through negative and be subtracted from
+        // the person's total for the cycle.
+        (s, r) => s + (hoursBetween(r.intime, r.outtime) ?? 0),
         0
       );
     });
