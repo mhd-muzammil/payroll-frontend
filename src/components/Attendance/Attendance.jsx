@@ -57,6 +57,44 @@ const clockOf = (value) => {
     : at.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" });
 };
 
+/** "09:18" -- 24-hour, because an export cell has room for five characters. */
+const clockHHMM = (value) => {
+  if (!value) return "";
+  const at = new Date(value);
+  return Number.isNaN(at.getTime())
+    ? ""
+    : at.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false });
+};
+
+/**
+ * A punch, or nothing at all when the row only carries a date.
+ *
+ * A day somebody did not come in is stored as midnight on that date -- the Add
+ * Record form says so in as many words ("an absent day carries the date and
+ * nothing else"), and the Excel import writes the same for an absence and for
+ * a Sunday. It is not a time anybody arrived, and it must not be printed as
+ * one or counted as one.
+ */
+const punchAt = (value) => (value && clockHHMM(value) !== "00:00" ? value : null);
+
+/**
+ * What one day says in the export grid: the status, and under it the clock.
+ *
+ * The word on its own was the complaint -- it says somebody was there and
+ * nothing about when. On a second line, so the grid still reads at a glance
+ * and the colours still do the work.
+ */
+const exportCellText = (entry) => {
+  if (!entry) return "-";
+  const status = getStatusDisplay(entry.status) || "-";
+  const inAt = clockHHMM(entry.intime);
+  const outAt = clockHHMM(entry.outtime);
+  if (inAt && outAt) return `${status}\n${inAt} - ${outAt}${entry.autoClosed ? " *" : ""}`;
+  if (inAt) return `${status}\nIn ${inAt}`;
+  if (outAt) return `${status}\nOut ${outAt}`;
+  return status;
+};
+
 const formatLocalDate = (date) => {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -318,12 +356,38 @@ const Attendance = () => {
           employeesMap.set(key, {
             name: record.employee_name || "",
             branch: record.branch || "Chennai",
-            statusByDate: {},
+            days: {},
           });
         }
         const datePart = getDatePart(record.intime || record.outtime);
-        if (datePart) {
-          employeesMap.get(key).statusByDate[datePart] = record.status;
+        if (!datePart) return;
+        // The date came off the raw value; from here only real punches count,
+        // so a date marker can neither be printed as a time nor win the
+        // comparisons below for being the earliest thing on the day.
+        const days = employeesMap.get(key).days;
+        const intime = punchAt(record.intime);
+        const outtime = punchAt(record.outtime);
+        const existing = days[datePart];
+        if (!existing) {
+          days[datePart] = {
+            status: record.status,
+            intime,
+            outtime,
+            autoClosed: Boolean(record.auto_closed_out) && Boolean(outtime),
+          };
+          return;
+        }
+        // TWO ROWS FOR ONE DAY -- the office marks somebody who then punches,
+        // or a day is corrected rather than edited. Read as one day: the
+        // earliest arrival, the latest departure, and a status that says they
+        // were here if either row does.
+        if (intime && (!existing.intime || intime < existing.intime)) existing.intime = intime;
+        if (outtime && (!existing.outtime || outtime > existing.outtime)) {
+          existing.outtime = outtime;
+          existing.autoClosed = Boolean(record.auto_closed_out);
+        }
+        if (record.status && (!existing.status || isPresentStatus(record.status))) {
+          existing.status = record.status;
         }
       });
 
@@ -345,31 +409,47 @@ const Attendance = () => {
         cell.alignment = { horizontal: "center", vertical: "middle" };
       });
 
+      let anyAutoClosed = false;
       employeesList.forEach((emp, idx) => {
         const row = sheet.addRow([
           idx + 1,
           emp.name,
           emp.branch,
-          ...sortedDates.map((datePart) => getStatusDisplay(emp.statusByDate[datePart]) || "-"),
+          ...sortedDates.map((datePart) => exportCellText(emp.days[datePart])),
         ]);
 
         row.getCell(1).alignment = { horizontal: "center" };
 
         sortedDates.forEach((datePart, i) => {
           const cell = row.getCell(4 + i);
-          const status = emp.statusByDate[datePart];
-          cell.alignment = { horizontal: "center" };
-          if (status) {
-            cell.font = { color: { argb: STATUS_EXPORT_COLORS[status] || "FF000000" } };
+          const entry = emp.days[datePart];
+          if (entry?.autoClosed) anyAutoClosed = true;
+          // Wrapped, or the second line of the cell is simply not shown.
+          cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+          if (entry?.status) {
+            cell.font = { color: { argb: STATUS_EXPORT_COLORS[entry.status] || "FF000000" } };
           }
         });
       });
+
+      // A LOGOUT NOBODY PRESSED, SAID OUT LOUD.
+      //
+      // The 11.59pm rule closes the day for somebody who forgot, and that time
+      // is the register having an answer, not the hour they went home. Printed
+      // like a real one it would be read as one.
+      if (anyAutoClosed) {
+        sheet.addRow([]);
+        const note = sheet.addRow([
+          "* Logout nobody pressed - the day was closed automatically at 11.59 pm.",
+        ]);
+        note.getCell(1).font = { color: { argb: "FF808080" }, size: 10 };
+      }
 
       sheet.getColumn(1).width = 6;
       sheet.getColumn(2).width = 22;
       sheet.getColumn(3).width = 14;
       sortedDates.forEach((_, i) => {
-        sheet.getColumn(4 + i).width = 13;
+        sheet.getColumn(4 + i).width = 15;
       });
 
       const buffer = await workbook.xlsx.writeBuffer();
