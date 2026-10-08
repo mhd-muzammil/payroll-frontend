@@ -179,20 +179,21 @@ const FROZEN = [
 ];
 const frozenLeft = (index) => FROZEN.slice(0, index).reduce((sum, c) => sum + c.width, 0);
 
-const EmployeePayReport = ({ slips, loading, selectedRegion, onOpenSlip, onSlipUpdated }) => {
-  // Which month the sheet shows. Defaults to the newest month that has slips,
-  // because that is the one being checked; "all" puts every month on one sheet.
-  const periods = useMemo(() => {
-    const seen = new Map();
-    (slips || []).forEach((s) => {
-      const key = `${s.year}-${String(s.month).padStart(2, "0")}`;
-      if (!seen.has(key)) seen.set(key, { key, label: periodOf(s) });
-    });
-    return [...seen.values()].sort((a, b) => b.key.localeCompare(a.key));
-  }, [slips]);
-
-  const [period, setPeriod] = useState("");
-  const activePeriod = period || periods[0]?.key || "all";
+/**
+ * `slips` arrive already narrowed to the chosen month. The month itself is held
+ * by the page, not here, because the region cards above the sheet have to count
+ * the same month the sheet shows -- see Payslip.jsx.
+ */
+const EmployeePayReport = ({
+  slips,
+  loading,
+  selectedRegion,
+  periods,
+  period,
+  onPeriodChange,
+  onOpenSlip,
+  onSlipUpdated,
+}) => {
   const [query, setQuery] = useState("");
 
   const [editing, setEditing] = useState(null); // { id, key }
@@ -206,10 +207,6 @@ const EmployeePayReport = ({ slips, loading, selectedRegion, onOpenSlip, onSlipU
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
     return (slips || [])
-      .filter((s) => {
-        if (activePeriod === "all") return true;
-        return `${s.year}-${String(s.month).padStart(2, "0")}` === activePeriod;
-      })
       .filter((s) => {
         if (!selectedRegion) return true;
         const branch = (s.employee_details?.branch || "Not Assigned").trim().toLowerCase();
@@ -229,7 +226,7 @@ const EmployeePayReport = ({ slips, loading, selectedRegion, onOpenSlip, onSlipU
             String(b.employee_details?.employee_name || ""),
           ),
       );
-  }, [slips, activePeriod, selectedRegion, query]);
+  }, [slips, selectedRegion, query]);
 
   // Summed from the rows on screen, never from a server summary: the totals
   // have to be the sum of exactly what the sheet shows.
@@ -384,8 +381,8 @@ const EmployeePayReport = ({ slips, loading, selectedRegion, onOpenSlip, onSlipU
       {/* The controls: which month, and whom. */}
       <div className="flex flex-wrap items-center gap-3 rounded-3xl border border-border/60 bg-card p-4 shadow-xs">
         <select
-          value={activePeriod}
-          onChange={(e) => setPeriod(e.target.value)}
+          value={period}
+          onChange={(e) => onPeriodChange(e.target.value)}
           className="rounded-xl border border-border bg-background px-3 py-2 text-sm font-medium"
           aria-label="Month"
         >

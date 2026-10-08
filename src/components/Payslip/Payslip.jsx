@@ -53,6 +53,11 @@ const regionStyles = {
   }
 };
 
+const MONTH_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** "2026-09", the key a slip's month is chosen and matched by. */
+const periodKeyOf = (slip) => `${slip.year}-${String(slip.month).padStart(2, "0")}`;
+
 const defaultStyle = {
   bg: "from-gray-50/50 to-slate-50/30 dark:from-gray-950/20 dark:to-slate-950/10",
   border: "border-gray-100 dark:border-gray-950/50",
@@ -651,8 +656,30 @@ const PayslipsPage = () => {
     );
   };
 
+  // WHICH MONTH THE PAY REPORT IS ON -- held here rather than in the report,
+  // because the region cards above it have to count the month the sheet
+  // shows. They counted every slip ever generated: 86 over a sheet of
+  // September's 25. Defaults to the newest month with slips, the one being
+  // checked; "all" puts every month on one sheet.
+  const reportPeriods = useMemo(() => {
+    const seen = new Map();
+    slips.forEach((s) => {
+      const key = periodKeyOf(s);
+      if (!seen.has(key)) seen.set(key, { key, label: `${MONTH_SHORT[(s.month || 1) - 1]} ${s.year}` });
+    });
+    return [...seen.values()].sort((a, b) => b.key.localeCompare(a.key));
+  }, [slips]);
+  const [reportPeriod, setReportPeriod] = useState("");
+  const activeReportPeriod = reportPeriod || reportPeriods[0]?.key || "all";
+  const reportSlips = useMemo(
+    () => (activeReportPeriod === "all" ? slips : slips.filter((s) => periodKeyOf(s) === activeReportPeriod)),
+    [slips, activeReportPeriod],
+  );
+
   const regionStats = useMemo(() => {
-    const listToUse = activeTab === "generate" ? employees : slips;
+    // The office's report counts the month on its sheet; an employee's own
+    // page never shows these cards, and keeps every slip it always had.
+    const listToUse = activeTab === "generate" ? employees : isEmployee ? slips : reportSlips;
     const regions = ["Chennai", "Vellore", "Salem", "Kanchipuram", "Hosur"];
     const stats = {
       Chennai: 0,
@@ -676,7 +703,7 @@ const PayslipsPage = () => {
       }
     });
     return stats;
-  }, [employees, slips, activeTab]);
+  }, [employees, slips, reportSlips, activeTab, isEmployee]);
 
   const filteredSlips = useMemo(() => {
     let list = slips;
@@ -779,7 +806,7 @@ const PayslipsPage = () => {
             <span className="font-bold text-xs md:text-sm tracking-tight text-indigo-700">All Regions</span>
             <div className="flex items-baseline gap-1.5 mt-3">
               <span className="text-2xl md:text-3xl font-black tracking-tight text-foreground">
-                {activeTab === "generate" ? employees.length : slips.length}
+                {activeTab === "generate" ? employees.length : isEmployee ? slips.length : reportSlips.length}
               </span>
               <span className="text-xs font-semibold text-muted-foreground">
                 {activeTab === "generate" ? "staff" : "slips"}
@@ -1107,9 +1134,12 @@ const PayslipsPage = () => {
         </>
       ) : (
         <EmployeePayReport
-          slips={slips}
+          slips={reportSlips}
           loading={loading}
           selectedRegion={selectedRegion}
+          periods={reportPeriods}
+          period={activeReportPeriod}
+          onPeriodChange={setReportPeriod}
           onOpenSlip={setSelectedSlip}
           onSlipUpdated={applyUpdatedSlip}
         />
