@@ -752,10 +752,18 @@ const OnboardingManagement = () => {
             render: (r) => (
               <select
                 value={employmentStatusOf(r)}
-                disabled={savingStatusId === r.id}
+                // NOT ON A FORM NOBODY HAS ACCEPTED. Switching it to Active
+                // here only changes the label: the employee record and login
+                // are made by Accepting, and a row reading Active with nobody
+                // behind it is worse than one that says it is waiting.
+                disabled={savingStatusId === r.id || isPending(r)}
                 onChange={(e) => handleStatusChange(r, e.target.value)}
                 className="rounded-full border border-border/60 bg-background px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
-                title="Where this person stands with the company today"
+                title={
+                  isPending(r)
+                    ? "Accept this form first (the ✓ button) — that is what makes it live"
+                    : "Where this person stands with the company today"
+                }
               >
                 {EMPLOYMENT_STATUSES.map((s) => (
                   <option key={s} value={s}>{s}</option>
