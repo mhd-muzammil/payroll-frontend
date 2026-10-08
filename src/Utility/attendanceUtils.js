@@ -56,19 +56,58 @@ export const formatTime = (isoString) => {
   });
 };
 
-export const calculateHours = (intime, outtime) => {
-  if (!intime || !outtime) return "0.0";
+/**
+ * How long the day was, as a number.
+ *
+ * The one place the rule for a day that crosses midnight lives: an outtime
+ * earlier than the intime is the next morning, not a negative shift.
+ */
+export const hoursBetween = (intime, outtime) => {
+  if (!intime || !outtime) return 0;
 
   const start = new Date(intime);
   const end = new Date(outtime);
-  let diffInMs = end - start;
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return 0;
 
+  let diffInMs = end - start;
   if (diffInMs < 0) {
     diffInMs += 24 * MS_PER_HOUR;
   }
 
-  return (diffInMs / MS_PER_HOUR).toFixed(1);
+  return diffInMs / MS_PER_HOUR;
 };
+
+export const calculateHours = (intime, outtime) =>
+  !intime || !outtime ? "0.0" : hoursBetween(intime, outtime).toFixed(1);
+
+/**
+ * "4h 36m" -- a stretch of work in the words people say it in.
+ *
+ * 4.6h is correct and nobody reads it as four hours thirty-six minutes; the
+ * office asked what the number meant. A part that is zero is left out, so a
+ * full day is "9h" rather than "9h 0m", and a short one is "36m".
+ */
+export const formatDuration = (hours) => {
+  const value = Number(hours);
+  if (!Number.isFinite(value) || value <= 0) return "0h";
+
+  const minutes = Math.round(value * 60);
+  const wholeHours = Math.floor(minutes / 60);
+  const restMinutes = minutes % 60;
+
+  if (!wholeHours) return `${restMinutes}m`;
+  if (!restMinutes) return `${wholeHours}h`;
+  return `${wholeHours}h ${restMinutes}m`;
+};
+
+/**
+ * One day's two punches, as "4h 36m".
+ *
+ * Read off the punches rather than off calculateHours, so the minutes are the
+ * real ones: rounding to a tenth of an hour first and converting after turns
+ * 4h 38m into 4h 36m.
+ */
+export const workedSpan = (intime, outtime) => formatDuration(hoursBetween(intime, outtime));
 
 export const calculateOvertime = (intime, outtime) => {
   if (!intime || !outtime) return "0.0";
@@ -202,8 +241,12 @@ export const calculateStats = (records, snapshotDate = null) => {
   // a per-day "remaining/shortfall" here: counting 9.5h short for every Absent,
   // Leave, and missing-punch-out day snowballs into a meaningless five-digit
   // total. Worked hours is the number people actually want to see.)
+  // Summed from the real lengths rather than from each day rounded to a tenth
+  // of an hour first -- a cycle's worth of those roundings drifts by a good
+  // few minutes, and now that this is shown as hours and minutes the drift
+  // would be read as a number somebody could check.
   const totalWorked = safeRecords.reduce(
-    (sum, r) => sum + parseFloat(calculateHours(r.intime, r.outtime)),
+    (sum, r) => sum + hoursBetween(r.intime, r.outtime),
     0
   );
 

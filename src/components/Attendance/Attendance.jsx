@@ -21,7 +21,8 @@ import { ROLES, getTokenClaims, getUserRole, normalizeRole } from "@/auth/rbac";
 import {
   formatTime,
   formatDayLabel,
-  calculateHours,
+  formatDuration,
+  workedSpan,
   getStatusDisplay,
   getStatusVariant,
   calculateStats,
@@ -230,7 +231,7 @@ const PersonRow = ({ record, showRegion }) => {
           <div className="mt-1 text-[11px] tabular-nums text-muted-foreground">
             {inAt} &rarr; {outAt}
             <span className="ml-1.5 font-medium text-foreground">
-              {calculateHours(record.intime, record.outtime)}h
+              {workedSpan(record.intime, record.outtime)}
             </span>
           </div>
         )}
@@ -654,7 +655,7 @@ const Attendance = () => {
           branch: record.branch || "Chennai",
           in: formatTime(record.intime) || "—",
           out: formatTime(record.outtime) || "—",
-          hours: `${calculateHours(record.intime, record.outtime)}h`,
+          hours: workedSpan(record.intime, record.outtime),
           status: getStatusDisplay(record.status),
         })),
         dayLabel: new Date().toLocaleDateString("en-IN", {
@@ -1038,7 +1039,7 @@ const Attendance = () => {
       { label: "Present", value: stats.presentToday.toString(), subtitle: live, icon: CheckCircle2, accent: "success" },
       { label: "On Leave", value: stats.onLeave.toString(), subtitle: live, icon: Timer, accent: "warning" },
       { label: "Absent", value: stats.absent.toString(), subtitle: live, icon: AlertCircle, accent: "danger" },
-      { label: "Total Hours", value: `${stats.totalWorkedHours}h`, subtitle: "Worked this cycle", icon: Timer, accent: "primary" },
+      { label: "Total Hours", value: formatDuration(stats.totalWorkedHours), subtitle: "Worked this cycle", icon: Timer, accent: "primary" },
     ];
   }, [stats, snapshotDayLabel]);
 

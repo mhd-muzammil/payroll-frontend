@@ -7,7 +7,9 @@ import {
   punchTime,
   formatDayLabel,
   getDatePart,
-  calculateHours,
+  hoursBetween,
+  formatDuration,
+  workedSpan,
   isPresentStatus,
   getStatusDisplay,
 } from "../../Utility/attendanceUtils";
@@ -94,8 +96,11 @@ const AttendanceGroupedTable = ({
       g.presentDays = g.records.filter((r) => isPresentStatus(r.status)).length;
       g.absentDays = g.records.filter((r) => r.status === "Absent").length;
       g.leaveDays = g.records.filter((r) => r.status === "Leave").length;
+      // Summed from the real lengths, not from each day rounded to a tenth of
+      // an hour first: a month of those roundings drifts by several minutes,
+      // and upwards as often as not.
       g.totalHours = g.records.reduce(
-        (s, r) => s + parseFloat(calculateHours(r.intime, r.outtime)),
+        (s, r) => s + hoursBetween(r.intime, r.outtime),
         0
       );
     });
@@ -188,7 +193,7 @@ const AttendanceGroupedTable = ({
                     </span>
                   )}
                   <span className="rounded-full bg-muted px-2.5 py-1 font-medium text-muted-foreground">
-                    {g.totalHours.toFixed(1)}h total
+                    {formatDuration(g.totalHours)} total
                   </span>
                 </div>
               </button>
@@ -278,7 +283,7 @@ const AttendanceGroupedTable = ({
                               {punchTime(r, "outtime")}
                             </td>
                             <td className="px-4 py-3 font-medium whitespace-nowrap">
-                              {calculateHours(r.intime, r.outtime)}h
+                              {workedSpan(r.intime, r.outtime)}
                             </td>
                             <td className="px-4 py-3">
                               <button
@@ -395,7 +400,7 @@ const AttendanceGroupedTable = ({
                             </span>
                           </span>
                           <span className="font-medium text-foreground">
-                            {calculateHours(r.intime, r.outtime)}h
+                            {workedSpan(r.intime, r.outtime)}
                           </span>
                         </div>
                       </div>
