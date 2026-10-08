@@ -2,12 +2,13 @@ import { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar } from "@/components/ui/avatar";
-import { UserPlus, FileCheck, Clock, Eye, X, Calendar, Briefcase, MapPin, Mail, Phone, CreditCard, Building2, ExternalLink, FileText, Trash2, UserCheck, UserMinus, Pencil } from "lucide-react";
+import { UserPlus, FileCheck, Clock, Eye, X, Calendar, Briefcase, MapPin, Mail, Phone, CreditCard, Building2, ExternalLink, FileText, Trash2, UserCheck, UserMinus, Pencil, Link2, Copy, RefreshCw, Inbox } from "lucide-react";
 import PageHeader from "../ui/PageHeader";
 import DataTable from "../ui/DataTable";
 import StatsCard from "../ui/StatsCard";
 import OnboardingForm from "./OnboardingForm";
 import { onboardingService } from "../../services/onboardingService";
+import { onboardingLinkService, onboardingLinkUrl } from "../../services/onboardingLinkService";
 import { api } from "../../api/Api";
 import { extractArray } from "../../Utility/apiUtils";
 
@@ -76,6 +77,9 @@ const CATEGORIES = [
 /** Everything saved before categories existed is an employee, which is what it is. */
 const categoryOf = (record) => record?.category || "Employee";
 
+/** Filled in by the person themselves through the shared link, and not yet read. */
+const isPending = (record) => record?.status === "Pending Review";
+
 const defaultStyle = {
   bg: "from-gray-50/50 to-slate-50/30 dark:from-gray-950/20 dark:to-slate-950/10",
   border: "border-gray-100 dark:border-gray-950/50",
@@ -97,11 +101,77 @@ const OnboardingManagement = () => {
   // which kind is being created.
   const [selectedCategory, setSelectedCategory] = useState("Employee");
   const [formCategory, setFormCategory] = useState("Employee");
+  // The shareable links, keyed by category, and what the Copy button last did.
+  const [links, setLinks] = useState({});
+  const [copied, setCopied] = useState("");
+  const [approvingId, setApprovingId] = useState(null);
+  // Set from the banner: show only what came in through the link.
+  const [pendingOnly, setPendingOnly] = useState(false);
   // Opens on the people who actually work here. Leavers stay one click away on
   // the Relieved card rather than padding the list you look at every day.
   const [selectedStatus, setSelectedStatus] = useState("Active");
   const [searchQuery, setSearchQuery] = useState("");
   const [savingStatusId, setSavingStatusId] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    onboardingLinkService
+      .list()
+      .then((rows) => {
+        if (cancelled) return;
+        setLinks(Object.fromEntries(rows.map((row) => [row.category, row.token])));
+      })
+      // Not being able to read the links is not a reason to break the page --
+      // everything else on it still works without them.
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const copyLink = async (category) => {
+    const token = links[category];
+    if (!token) return;
+    const url = onboardingLinkUrl(token);
+    try {
+      await navigator.clipboard.writeText(url);
+    } catch {
+      // Some browsers refuse the clipboard without a gesture they recognise;
+      // showing the link beats a button that silently does nothing.
+      window.prompt("Copy this link and send it:", url);
+    }
+    setCopied(category);
+    setTimeout(() => setCopied(""), 2500);
+  };
+
+  const resetLink = async (category) => {
+    if (!window.confirm(
+      `Replace the ${category} link?\n\nAnybody who already has the old one will not be able to open it.`,
+    )) return;
+    try {
+      const row = await onboardingLinkService.rotate(category);
+      setLinks((prev) => ({ ...prev, [category]: row.token }));
+      alert(`A new ${category} link is ready. Send the new one out.`);
+    } catch {
+      alert("Could not replace the link. Try again.");
+    }
+  };
+
+  /** Somebody here has read the form: it becomes an ordinary record. */
+  const approveRecord = async (record) => {
+    setApprovingId(record.id);
+    try {
+      const body = new FormData();
+      body.append("status", "Completed");
+      body.append("employment_status", "Active");
+      await onboardingService.update(record.id, body);
+      await fetchOnboardings();
+    } catch {
+      alert("Could not accept this one. Try again.");
+    } finally {
+      setApprovingId(null);
+    }
+  };
 
   const handleViewDocument = async (documentUrl) => {
     const popup = window.open("", "_blank");
@@ -290,7 +360,10 @@ const OnboardingManagement = () => {
     }
   };
 
-  const safeRecords = Array.isArray(records) ? records : [];
+  // Memoised so it is the SAME array from one render to the next. As a plain
+  // expression it was a new [] every time records was not yet an array, and
+  // every count below that keys on it recomputed for nothing.
+  const safeRecords = useMemo(() => (Array.isArray(records) ? records : []), [records]);
 
   // Active / Inactive / Relieved are mutually exclusive and cover everyone, so
   // these three add up to Total and each person is counted exactly once. The
@@ -303,6 +376,11 @@ const OnboardingManagement = () => {
   const categoryScoped = useMemo(
     () => safeRecords.filter((r) => categoryOf(r) === selectedCategory),
     [safeRecords, selectedCategory],
+  );
+
+  const pendingRecords = useMemo(
+    () => safeRecords.filter(isPending),
+    [safeRecords],
   );
 
   const categoryCounts = useMemo(() => {
@@ -366,6 +444,7 @@ const OnboardingManagement = () => {
     // Status is already applied by statusScoped, which is also what the region
     // counts are built from — so a region box and the table can never disagree.
     let list = statusScoped;
+    if (pendingOnly) list = list.filter(isPending);
     if (selectedRegion) {
       list = list.filter((r) => (r.work_location || "Not Assigned").toLowerCase() === selectedRegion.toLowerCase());
     }
@@ -382,7 +461,7 @@ const OnboardingManagement = () => {
       );
     }
     return list;
-  }, [statusScoped, selectedRegion, searchQuery]);
+  }, [statusScoped, selectedRegion, searchQuery, pendingOnly]);
 
   if (showForm || editingRecord) {
     return (
@@ -454,6 +533,63 @@ const OnboardingManagement = () => {
             </button>
           );
         })}
+      </div>
+
+      {/* WHAT CAME IN THROUGH THE LINK.
+          It arrives Inactive, which is where the office does not look, so it
+          is said here instead of left to be found. */}
+      {pendingRecords.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 dark:border-amber-900/60 dark:bg-amber-950/30">
+          <div className="flex items-center gap-3">
+            <Inbox className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0" />
+            <div>
+              <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+                {pendingRecords.length} form{pendingRecords.length === 1 ? "" : "s"} filled in through the link
+              </p>
+              <p className="text-xs text-amber-800/80 dark:text-amber-300/80">
+                Nobody here has read {pendingRecords.length === 1 ? "it" : "them"} yet — check and accept to make the record live.
+              </p>
+            </div>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              // They arrive Inactive, so the view has to go there to show them.
+              setSelectedStatus("Inactive");
+              setSelectedRegion("");
+              setPendingOnly(true);
+            }}
+          >
+            Show them
+          </Button>
+        </div>
+      )}
+
+      {pendingOnly && (
+        <button
+          type="button"
+          onClick={() => setPendingOnly(false)}
+          className="text-xs font-medium text-muted-foreground underline underline-offset-4"
+        >
+          Showing only what came in through the link — show everything
+        </button>
+      )}
+
+      {/* THE LINK TO HAND OUT, for whichever kind is selected. */}
+      <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-border bg-muted/40 px-5 py-4">
+        <Link2 className="h-4 w-4 text-muted-foreground shrink-0" />
+        <p className="text-sm text-muted-foreground">
+          Send {selectedCategory === "Employee" ? "an" : "a"} {selectedCategory.toLowerCase()} this link and they fill in their own form.
+        </p>
+        <div className="flex gap-2 ml-auto">
+          <Button variant="outline" size="sm" icon={Copy} onClick={() => copyLink(selectedCategory)} disabled={!links[selectedCategory]}>
+            {copied === selectedCategory ? "Copied" : "Copy link"}
+          </Button>
+          <Button variant="outline" size="sm" icon={RefreshCw} onClick={() => resetLink(selectedCategory)} disabled={!links[selectedCategory]}>
+            Reset
+          </Button>
+        </div>
       </div>
 
       {/* Active + Inactive + Relieved = Total. Each card filters the table, so
@@ -572,7 +708,20 @@ const OnboardingManagement = () => {
               </div>
             ),
           },
-          { key: "department", label: "Department", render: (r) => <Badge variant="outline">{r.department}</Badge> },
+          {
+            key: "department",
+            label: "Department",
+            render: (r) => (
+              <div className="flex flex-col gap-1">
+                <Badge variant="outline">{r.company_name || r.department || "—"}</Badge>
+                {isPending(r) && (
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400">
+                    Waiting to be read
+                  </span>
+                )}
+              </div>
+            ),
+          },
           { key: "designation", label: "Designation", render: (r) => <span className="text-sm">{r.designation}</span> },
           { key: "work_location", label: "Work Location", render: (r) => <span className="text-sm font-medium">{r.work_location || "Not Assigned"}</span> },
           { key: "joining", label: "Joining Date", render: (r) => <span className="text-sm text-muted-foreground">{r.date_of_joining}</span> },
@@ -597,9 +746,24 @@ const OnboardingManagement = () => {
           {
             key: "act",
             label: "",
-            className: "w-20",
+            className: "w-28",
             render: (r) => (
               <div className="flex items-center gap-1.5">
+                {/* ACCEPTING IS THE OFFICE'S PART. Until somebody here has read
+                    a form that arrived through the link, it is not a record of
+                    anybody -- so the one button that changes that sits with the
+                    row rather than in a menu. */}
+                {isPending(r) && (
+                  <button
+                    onClick={() => approveRecord(r)}
+                    disabled={approvingId === r.id}
+                    className="grid h-8 w-8 place-items-center rounded-lg border border-emerald-200 text-emerald-600 hover:bg-emerald-50 transition-colors disabled:opacity-50 dark:border-emerald-900"
+                    title="Accept this form — makes the record live"
+                    type="button"
+                  >
+                    <UserCheck className="h-4 w-4" />
+                  </button>
+                )}
                 <button
                   onClick={() => setViewingRecord(r)}
                   className="grid h-8 w-8 place-items-center rounded-lg border border-border hover:bg-primary/10 hover:text-primary transition-colors"

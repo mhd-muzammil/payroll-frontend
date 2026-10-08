@@ -19,6 +19,7 @@ import CasesPage from './pages/CasesPage';
 import RequestsPage from './pages/RequestsPage';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import AppUsagePage from './pages/AppUsagePage';
+import PublicOnboardingPage from './pages/PublicOnboardingPage';
 import { ROLES, getDefaultRouteByRole, getUserRole, isAuthenticated } from './auth/rbac';
 import { ErrorBoundary } from './components/ui/ErrorBoundary';
 import { DutyProvider } from './context/DutyContext';
@@ -40,6 +41,12 @@ function App() {
       <Routes>
         <Route path="/" element={<RoleHomeRedirect />} />
         <Route path="/login" element={<LoginPage />} />
+
+        {/* THE ONE PAGE WITH NO LOGIN BEHIND IT.
+            Somebody joining opens this from a message on their own phone and
+            fills in their own form; the token in the URL is what stands in for
+            a session, and the server decides from it which form this is. */}
+        <Route path="/onboard/:token" element={<PublicOnboardingPage />} />
 
         <Route element={<ProtectedRoute allowedRoles={[ROLES.SUPER_ADMIN, ROLES.ADMIN]} />}>
           <Route path="/users" element={<UserManagementPage />} />
