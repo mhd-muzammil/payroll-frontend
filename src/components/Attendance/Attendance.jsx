@@ -22,6 +22,7 @@ import {
   formatTime,
   formatDayLabel,
   formatDuration,
+  hoursBetween,
   workedSpan,
   getStatusDisplay,
   getStatusVariant,
@@ -382,8 +383,15 @@ const Attendance = () => {
             name: record.employee_name || "",
             branch: record.branch || "Chennai",
             days: {},
+            hours: 0,
           });
         }
+        // Per record, which is how the attendance page adds it up. Not off the
+        // merged day the grid draws: a day the office marked AND the engineer
+        // punched is two records, and merging them first would stretch the day
+        // from the office's placeholder to the engineer's real Logout -- the
+        // file would then disagree with the screen it came from.
+        employeesMap.get(key).hours += hoursBetween(record.intime, record.outtime) ?? 0;
         const datePart = getDatePart(record.intime || record.outtime);
         if (!datePart) return;
         // The date came off the raw value; from here only real punches count,
@@ -443,7 +451,13 @@ const Attendance = () => {
       // Absent, and the question the sheet exists to answer -- how many days
       // did this person work -- was left to somebody counting across the screen
       // with a finger.
-      const TOTAL_HEADERS = ["Total Present", "Total Leave", "Total Absent", "Present + Leave"];
+      const TOTAL_HEADERS = [
+        "Total Present",
+        "Total Leave",
+        "Total Absent",
+        "Present + Leave",
+        "Total Hours",
+      ];
       const firstTotalColumn = 4 + sortedDates.length;
 
       sheet.addRow(["S.no", "Name", "Location", ...dateHeaderLabels, ...TOTAL_HEADERS]);
@@ -485,6 +499,10 @@ const Attendance = () => {
           leave,
           absent,
           present + leave,
+          // Words rather than a number, the same "243h 30m" the page shows.
+          // A decimal would sum in Excel and is the form the office said it
+          // could not read.
+          formatDuration(emp.hours),
         ]);
 
         [
@@ -492,6 +510,7 @@ const Attendance = () => {
           STATUS_EXPORT_COLORS.Leave,
           STATUS_EXPORT_COLORS.Absent,
           "FF1F2937",
+          "FF1D4ED8",
         ].forEach((argb, i) => {
           const cell = row.getCell(firstTotalColumn + i);
           cell.font = { bold: true, color: { argb } };
