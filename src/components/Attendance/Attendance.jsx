@@ -422,6 +422,17 @@ const Attendance = () => {
       const workbook = new ExcelJS.Workbook();
       const sheet = workbook.addWorksheet("Attendance Report");
 
+      // WHO AND WHEN STAY ON SCREEN.
+      //
+      // A cycle is thirty-odd columns wide. Scroll to the end of the month and
+      // the names have gone off the left, so every cell in view belongs to
+      // nobody; scroll down past twenty-five people and the dates have gone off
+      // the top. Freezing the header row and the first three columns means the
+      // only thing that moves is the part being read.
+      sheet.views = [
+        { state: "frozen", xSplit: 3, ySplit: 1, topLeftCell: "D2", activeCell: "D2" },
+      ];
+
       const dateHeaderLabels = sortedDates.map((datePart) => {
         const [year, month, day] = datePart.split("-");
         return `${day}-${month}-${year}`;
