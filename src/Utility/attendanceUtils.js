@@ -85,6 +85,23 @@ const MAX_WORKDAY_HOURS = 24;
  *
  * A number here is a day somebody can stand behind. Anything else is said as
  * what it is.
+ *
+ * HOW THE LENGTH ITSELF IS COUNTED is the office's own rule, and not the
+ * clock difference. Whole hours between the two hour marks, plus the minutes
+ * of BOTH punches added together:
+ *
+ *     9:20 am to 9:20 pm   ->  12h + (20 + 20)m  =  12h 40m
+ *     9:07 am to 9:25 pm   ->  12h + (07 + 25)m  =  12h 32m
+ *
+ * The clock difference for those two days is 12h and 12h 18m. This was put to
+ * the office with both columns side by side, including what it does to a short
+ * stretch -- 9:59 am to 10:01 am counts as 2h where the clock says 2 minutes
+ * -- and they chose this one. It is how they have always read a day and it is
+ * what their figures are expected to match, so it is deliberate: anybody
+ * tempted to "correct" it later is changing a decision, not fixing a bug.
+ *
+ * It reads up to 59 minutes longer per person per day than the clock, so it
+ * never reads short.
  */
 export const hoursBetween = (intime, outtime) => {
   if (!intime || !outtime) return null;
@@ -93,8 +110,18 @@ export const hoursBetween = (intime, outtime) => {
   const end = new Date(outtime);
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
 
-  const hours = (end - start) / MS_PER_HOUR;
-  return hours > 0 && hours < MAX_WORKDAY_HOURS ? hours : null;
+  // The record has to make sense first, whatever it is then counted as: the
+  // clock-out after the clock-in, and the two of them inside one day.
+  const elapsed = (end - start) / MS_PER_HOUR;
+  if (!(elapsed > 0 && elapsed < MAX_WORKDAY_HOURS)) return null;
+
+  // Whole hours between the hour marks -- read off the timestamps rather than
+  // off the hour numbers, so a shift that ends after midnight still counts the
+  // hours it crossed.
+  const hourMark = (at) => new Date(at).setMinutes(0, 0, 0);
+  const wholeHours = (hourMark(end) - hourMark(start)) / MS_PER_HOUR;
+
+  return wholeHours + (start.getMinutes() + end.getMinutes()) / 60;
 };
 
 /** The same in decimal hours, for the payroll code that works in those. */
