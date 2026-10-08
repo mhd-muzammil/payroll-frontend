@@ -57,6 +57,16 @@ export const formatTime = (isoString) => {
 };
 
 /**
+ * A day's work cannot be longer than the day.
+ *
+ * The clock-out on one engineer's 15th of September landed three weeks later,
+ * on the morning somebody finally pressed Logout, and the row printed
+ * "551h 49m". Nothing is served by showing that: it is not a shift, it is a
+ * timestamp in the wrong place, and the sum of a month of them is worse.
+ */
+const MAX_WORKDAY_HOURS = 24;
+
+/**
  * How long the day was -- or null, when the day cannot be measured.
  *
  * Null, and not zero, for a day with a Login and no Logout. Those are not the
@@ -83,8 +93,8 @@ export const hoursBetween = (intime, outtime) => {
   const end = new Date(outtime);
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
 
-  const diffInMs = end - start;
-  return diffInMs > 0 ? diffInMs / MS_PER_HOUR : null;
+  const hours = (end - start) / MS_PER_HOUR;
+  return hours > 0 && hours < MAX_WORKDAY_HOURS ? hours : null;
 };
 
 /** The same in decimal hours, for the payroll code that works in those. */
