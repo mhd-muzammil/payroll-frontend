@@ -438,20 +438,54 @@ const Attendance = () => {
         return `${day}-${month}-${year}`;
       });
 
-      sheet.addRow(["S.no", "Name", "Location", ...dateHeaderLabels]);
+      // The count at the end of the row. Thirty-one columns of Present and
+      // Absent, and the question the sheet exists to answer -- how many days
+      // did this person work -- was left to somebody counting across the screen
+      // with a finger.
+      const TOTAL_HEADERS = ["Total Present", "Total Leave", "Total Absent", "Present + Leave"];
+      const firstTotalColumn = 4 + sortedDates.length;
+
+      sheet.addRow(["S.no", "Name", "Location", ...dateHeaderLabels, ...TOTAL_HEADERS]);
       sheet.getRow(1).eachCell((cell, colNumber) => {
-        cell.font = { bold: true, color: { argb: colNumber <= 3 ? "FF1D4ED8" : "FFB45309" } };
-        cell.alignment = { horizontal: "center", vertical: "middle" };
+        const isDate = colNumber > 3 && colNumber < firstTotalColumn;
+        cell.font = { bold: true, color: { argb: isDate ? "FFB45309" : "FF1D4ED8" } };
+        cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
       });
 
       let anyAutoClosed = false;
       employeesList.forEach((emp, idx) => {
+        // Counted the way the page's own cards count, so the sheet and the
+        // screen cannot disagree: present is Present or Overtime, leave is
+        // Leave, absent is Absent. A Late day is in none of the three, exactly
+        // as on the page -- and under-counting is the safe direction for a
+        // figure the office pays from.
+        const marked = sortedDates.map((datePart) => emp.days[datePart]).filter(Boolean);
+        const present = marked.filter((entry) => isPresentStatus(entry.status)).length;
+        const leave = marked.filter((entry) => entry.status === "Leave").length;
+        const absent = marked.filter((entry) => entry.status === "Absent").length;
+
         const row = sheet.addRow([
           idx + 1,
           emp.name,
           emp.branch,
           ...sortedDates.map((datePart) => exportCellText(emp.days[datePart])),
+          // Numbers, not text, so a column of them can be summed.
+          present,
+          leave,
+          absent,
+          present + leave,
         ]);
+
+        [
+          STATUS_EXPORT_COLORS.Present,
+          STATUS_EXPORT_COLORS.Leave,
+          STATUS_EXPORT_COLORS.Absent,
+          "FF1F2937",
+        ].forEach((argb, i) => {
+          const cell = row.getCell(firstTotalColumn + i);
+          cell.font = { bold: true, color: { argb } };
+          cell.alignment = { horizontal: "center", vertical: "middle" };
+        });
 
         row.getCell(1).alignment = { horizontal: "center" };
 
@@ -485,6 +519,9 @@ const Attendance = () => {
       sheet.getColumn(3).width = 14;
       sortedDates.forEach((_, i) => {
         sheet.getColumn(4 + i).width = 14;
+      });
+      TOTAL_HEADERS.forEach((_, i) => {
+        sheet.getColumn(firstTotalColumn + i).width = 13;
       });
 
       const buffer = await workbook.xlsx.writeBuffer();
