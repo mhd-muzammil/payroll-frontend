@@ -57,13 +57,21 @@ const clockOf = (value) => {
     : at.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" });
 };
 
-/** "09:18" -- 24-hour, because an export cell has room for five characters. */
-const clockHHMM = (value) => {
+/**
+ * "09:18 am" -- the same clock the attendance card shows.
+ *
+ * Not the 24-hour one. 19:04 is correct and nobody here says it; the office
+ * writes 7:04 pm, and a sheet that disagrees with the screen it came from
+ * makes somebody stop and work out which of the two is lying.
+ */
+const exportClock = (value) => {
   if (!value) return "";
   const at = new Date(value);
   return Number.isNaN(at.getTime())
     ? ""
-    : at.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false });
+    : at
+        .toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true })
+        .toLowerCase();
 };
 
 /**
@@ -74,25 +82,41 @@ const clockHHMM = (value) => {
  * nothing else"), and the Excel import writes the same for an absence and for
  * a Sunday. It is not a time anybody arrived, and it must not be printed as
  * one or counted as one.
+ *
+ * Asked of the date itself, never of the printed clock: midnight reads "00:00"
+ * in one format and "12:00 AM" in another, and a test written against the
+ * printing would quietly stop matching the day the format changed -- putting
+ * "In 12:00 AM" against every absence in the sheet.
  */
-const punchAt = (value) => (value && clockHHMM(value) !== "00:00" ? value : null);
+const punchAt = (value) => {
+  if (!value) return null;
+  const at = new Date(value);
+  if (Number.isNaN(at.getTime())) return null;
+  return at.getHours() === 0 && at.getMinutes() === 0 ? null : value;
+};
 
 /**
- * What one day says in the export grid: the status, and under it the clock.
+ * What one day says in the export grid.
+ *
+ *     Present
+ *     in 09:18 am
+ *     out 06:28 pm
  *
  * The word on its own was the complaint -- it says somebody was there and
- * nothing about when. On a second line, so the grid still reads at a glance
- * and the colours still do the work.
+ * nothing about when. A line each, labelled, because "09:18 am - 06:28 pm"
+ * runs the two together in a column that is scrolled past thirty times, and
+ * because a day with only an arrival then looks like every other day instead
+ * of needing a shape of its own. The colours still do the first pass.
  */
 const exportCellText = (entry) => {
   if (!entry) return "-";
-  const status = getStatusDisplay(entry.status) || "-";
-  const inAt = clockHHMM(entry.intime);
-  const outAt = clockHHMM(entry.outtime);
-  if (inAt && outAt) return `${status}\n${inAt} - ${outAt}${entry.autoClosed ? " *" : ""}`;
-  if (inAt) return `${status}\nIn ${inAt}`;
-  if (outAt) return `${status}\nOut ${outAt}`;
-  return status;
+  const lines = [getStatusDisplay(entry.status) || "-"];
+  const inAt = exportClock(entry.intime);
+  const outAt = exportClock(entry.outtime);
+  if (inAt) lines.push(`in ${inAt}`);
+  // The star is on the departure because that is the one nobody pressed.
+  if (outAt) lines.push(`out ${outAt}${entry.autoClosed ? " *" : ""}`);
+  return lines.join("\n");
 };
 
 const formatLocalDate = (date) => {
@@ -449,7 +473,7 @@ const Attendance = () => {
       sheet.getColumn(2).width = 22;
       sheet.getColumn(3).width = 14;
       sortedDates.forEach((_, i) => {
-        sheet.getColumn(4 + i).width = 15;
+        sheet.getColumn(4 + i).width = 14;
       });
 
       const buffer = await workbook.xlsx.writeBuffer();
