@@ -354,7 +354,18 @@ const OnboardingManagement = () => {
       }
     } catch (error) {
       console.error("Failed submitting onboarding:", error);
-      alert("Submission failed. Check if all required fields are filled.");
+      // Nothing is compulsory any more, so "check the required fields" would
+      // send somebody looking for a rule that does not exist. Say what the
+      // server actually refused.
+      const detail = error?.response?.data;
+      const reason =
+        detail && typeof detail === "object"
+          ? Object.entries(detail)
+              .map(([field, messages]) => `${field}: ${[].concat(messages).join(" ")}`)
+              .slice(0, 3)
+              .join("\n")
+          : "";
+      alert(reason ? `Could not save:\n${reason}` : "Could not save. Check your connection and try again.");
     } finally {
       setSubmitting(false);
     }
@@ -702,8 +713,17 @@ const OnboardingManagement = () => {
               <div className="flex items-center gap-3">
                 <Avatar name={r.employee_name} />
                 <div>
-                  <div className="font-medium text-sm">{r.employee_name}</div>
-                  <div className="text-xs text-muted-foreground">{r.email_id}</div>
+                  {/* Nothing on the form is compulsory, so a row can arrive with
+                      no name at all. Said, rather than left as a blank line
+                      nobody can click on with any confidence. */}
+                  {r.employee_name ? (
+                    <div className="font-medium text-sm">{r.employee_name}</div>
+                  ) : (
+                    <div className="text-sm italic text-muted-foreground">
+                      {r.company_name || "(no name given)"}
+                    </div>
+                  )}
+                  <div className="text-xs text-muted-foreground">{r.email_id || r.mobile_number || "—"}</div>
                 </div>
               </div>
             ),

@@ -164,7 +164,7 @@ const OnboardingForm = ({
               <>
                 <div>
                   <label className={labelStyle}>Company / Firm Name</label>
-                  <input type="text" name="companyName" value={formData.companyName} onChange={handleChange} className={inputStyle} required placeholder="Registered name of the firm" />
+                  <input type="text" name="companyName" value={formData.companyName} onChange={handleChange} className={inputStyle} placeholder="Registered name of the firm" />
                 </div>
                 <div>
                   <label className={labelStyle}>GST Number</label>
@@ -174,7 +174,7 @@ const OnboardingForm = ({
             )}
             <div>
               <label className={labelStyle}>{words.nameLabel}</label>
-              <input type="text" name="employeeName" value={formData.employeeName} onChange={handleChange} className={inputStyle} required placeholder="Full Name" />
+              <input type="text" name="employeeName" value={formData.employeeName} onChange={handleChange} className={inputStyle} placeholder="Full Name" />
             </div>
             <div>
               <label className={labelStyle}>{isVendor ? "Vendor Code (If assigned)" : "Employee ID (If assigned)"}</label>
@@ -195,31 +195,31 @@ const OnboardingForm = ({
               <>
                 <div>
                   <label className={labelStyle}>Department</label>
-                  <input type="text" name="department" value={formData.department} onChange={handleChange} className={inputStyle} required={isEmployee} placeholder="IT, HR, Admin etc." />
+                  <input type="text" name="department" value={formData.department} onChange={handleChange} className={inputStyle} placeholder="IT, HR, Admin etc." />
                 </div>
                 <div>
                   <label className={labelStyle}>Designation</label>
-                  <input type="text" name="designation" value={formData.designation} onChange={handleChange} className={inputStyle} required={isEmployee} placeholder="Job Title" />
+                  <input type="text" name="designation" value={formData.designation} onChange={handleChange} className={inputStyle} placeholder="Job Title" />
                 </div>
               </>
             )}
             <div>
               <label className={labelStyle}>Work Location on / Branch</label>
-              <input type="text" name="workLocation" value={formData.workLocation} onChange={handleChange} className={inputStyle} required placeholder="Location" />
+              <input type="text" name="workLocation" value={formData.workLocation} onChange={handleChange} className={inputStyle} placeholder="Location" />
             </div>
             {!isVendor && (
               <div>
                 <label className={labelStyle}>Date of Joining</label>
-                <input type="date" name="dateOfJoining" value={formData.dateOfJoining} onChange={handleChange} className={inputStyle} required={isEmployee} />
+                <input type="date" name="dateOfJoining" value={formData.dateOfJoining} onChange={handleChange} className={inputStyle} />
               </div>
             )}
             <div>
               <label className={labelStyle}>Mobile Number</label>
-              <input type="tel" name="mobileNumber" value={formData.mobileNumber} onChange={handleChange} className={inputStyle} required placeholder="Phone" />
+              <input type="tel" name="mobileNumber" value={formData.mobileNumber} onChange={handleChange} className={inputStyle} placeholder="Phone" />
             </div>
             <div>
               <label className={labelStyle}>Email ID</label>
-              <input type="email" name="emailId" value={formData.emailId} onChange={handleChange} className={inputStyle} required placeholder="Work/Personal email" />
+              <input type="email" name="emailId" value={formData.emailId} onChange={handleChange} className={inputStyle} placeholder="Work/Personal email" />
             </div>
           </div>
         </Card>
@@ -288,12 +288,12 @@ const OnboardingForm = ({
             <div className="space-y-4">
               <div>
                 <label className={labelStyle}>Date of Birth</label>
-                <input type="date" name="dob" value={formData.dob} onChange={handleChange} className={inputStyle} required />
+                <input type="date" name="dob" value={formData.dob} onChange={handleChange} className={inputStyle} />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className={labelStyle}>Gender</label>
-                  <select name="gender" value={formData.gender} onChange={handleChange} className={inputStyle} required>
+                  <select name="gender" value={formData.gender} onChange={handleChange} className={inputStyle}>
                     <option value="">Select</option>
                     <option value="Male">Male</option>
                     <option value="Female">Female</option>
@@ -307,7 +307,7 @@ const OnboardingForm = ({
               </div>
               <div>
                 <label className={labelStyle}>Address</label>
-                <textarea name="address" rows={2} value={formData.address} onChange={handleChange} className={inputStyle} placeholder="Full address" required />
+                <textarea name="address" rows={2} value={formData.address} onChange={handleChange} className={inputStyle} placeholder="Full address" />
               </div>
               <div>
                 <label className={labelStyle}>T-shirt size</label>
@@ -335,15 +335,15 @@ const OnboardingForm = ({
             <div className="space-y-4">
               <div>
                 <label className={labelStyle}>Contact Person Name</label>
-                <input type="text" name="emergencyName" value={formData.emergencyName} onChange={handleChange} className={inputStyle} required />
+                <input type="text" name="emergencyName" value={formData.emergencyName} onChange={handleChange} className={inputStyle} />
               </div>
               <div>
                 <label className={labelStyle}>Relationship</label>
-                <input type="text" name="relationship" value={formData.relationship} onChange={handleChange} className={inputStyle} required />
+                <input type="text" name="relationship" value={formData.relationship} onChange={handleChange} className={inputStyle} />
               </div>
               <div>
                 <label className={labelStyle}>Contact Number</label>
-                <input type="tel" name="emergencyNumber" value={formData.emergencyNumber} onChange={handleChange} className={inputStyle} required />
+                <input type="tel" name="emergencyNumber" value={formData.emergencyNumber} onChange={handleChange} className={inputStyle} />
               </div>
             </div>
           </Card>
@@ -363,23 +363,23 @@ const OnboardingForm = ({
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
             <div>
               <label className={labelStyle}>Bank Name</label>
-              <input type="text" name="bankName" value={formData.bankName} onChange={handleChange} className={inputStyle} required />
+              <input type="text" name="bankName" value={formData.bankName} onChange={handleChange} className={inputStyle} />
             </div>
             <div>
               <label className={labelStyle}>Account Holder Name</label>
-              <input type="text" name="accountHolderName" value={formData.accountHolderName} onChange={handleChange} className={inputStyle} required />
+              <input type="text" name="accountHolderName" value={formData.accountHolderName} onChange={handleChange} className={inputStyle} />
             </div>
             <div>
               <label className={labelStyle}>Account Number</label>
-              <input type="text" name="accountNumber" value={formData.accountNumber} onChange={handleChange} className={inputStyle} required />
+              <input type="text" name="accountNumber" value={formData.accountNumber} onChange={handleChange} className={inputStyle} />
             </div>
             <div>
               <label className={labelStyle}>IFSC Code</label>
-              <input type="text" name="ifscCode" value={formData.ifscCode} onChange={handleChange} className={inputStyle} required />
+              <input type="text" name="ifscCode" value={formData.ifscCode} onChange={handleChange} className={inputStyle} />
             </div>
             <div>
               <label className={labelStyle}>Branch</label>
-              <input type="text" name="bankBranch" value={formData.bankBranch} onChange={handleChange} className={inputStyle} required />
+              <input type="text" name="bankBranch" value={formData.bankBranch} onChange={handleChange} className={inputStyle} />
             </div>
             <div className="flex flex-col justify-end">
                <span className="text-xs italic text-muted-foreground mb-3">(Attach cancelled cheque / bank passbook copy)</span>
@@ -514,11 +514,18 @@ const OnboardingForm = ({
           </div>
         </Card>
 
-        <div className="flex items-center justify-end gap-4 pt-4">
-          <Button type="button" variant="outline" size="lg" onClick={onCancel} className="rounded-2xl h-12 px-6 font-medium">
-            Cancel
-          </Button>
-          <Button type="submit" variant="brand" size="lg" disabled={isSubmitting} className="rounded-2xl h-12 px-10 shadow-lg shadow-primary/20 font-semibold">
+        {/* STACKED ON A PHONE, A ROW FROM A TABLET UP.
+            As a right-aligned row the two were wider than a phone and the
+            overflow went off the left edge, taking half of Cancel with it.
+            Submit goes on top on a phone -- it is the one being reached for --
+            and both take the full width so neither can be clipped. */}
+        <div className="flex flex-col-reverse gap-3 pt-4 sm:flex-row sm:items-center sm:justify-end sm:gap-4">
+          {onCancel && (
+            <Button type="button" variant="outline" size="lg" onClick={onCancel} className="w-full sm:w-auto rounded-2xl h-12 px-6 font-medium">
+              Cancel
+            </Button>
+          )}
+          <Button type="submit" variant="brand" size="lg" disabled={isSubmitting} className="w-full sm:w-auto rounded-2xl h-12 px-10 shadow-lg shadow-primary/20 font-semibold">
             {isSubmitting
               ? (isEditing ? "Updating..." : "Submitting...")
               : (isEditing ? "Update Onboarding" : "Submit Onboarding Form")}

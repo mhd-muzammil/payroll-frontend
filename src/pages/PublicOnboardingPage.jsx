@@ -24,6 +24,9 @@ const PublicOnboardingPage = () => {
   const [category, setCategory] = useState("Employee");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  // Bumped to clear the form: a new key gives the form a fresh mount, which is
+  // the one reset that cannot miss a field.
+  const [formKey, setFormKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -107,6 +110,20 @@ const PublicOnboardingPage = () => {
     return body;
   }, []);
 
+  /**
+   * Cancel, for somebody who opened this from a message.
+   *
+   * There is no list to go back to -- they came from WhatsApp, usually in a
+   * tab of its own -- so Cancel clears what they typed, after asking, and
+   * leaves them at the top of an empty form to start again or close.
+   */
+  const handleCancel = () => {
+    if (!window.confirm("Clear the form? Everything you have typed will be removed.")) return;
+    setError("");
+    setFormKey((k) => k + 1);
+    window.scrollTo({ top: 0 });
+  };
+
   const handleSubmit = async (formData) => {
     setSubmitting(true);
     setError("");
@@ -177,8 +194,9 @@ const PublicOnboardingPage = () => {
         <div className="mb-6 rounded-2xl border border-border bg-card px-5 py-4">
           <p className="text-xs uppercase tracking-wide text-muted-foreground">Renderways Technology</p>
           <p className="mt-1 text-sm text-muted-foreground">
-            Please fill in your details below and press Submit. Everything you send goes
-            straight to the office — nobody else can see this page.
+            Please fill in your details below and press Submit. Nothing is compulsory —
+            fill in whatever you have and the office will complete the rest. Everything
+            you send goes straight to the office; nobody else can see this page.
           </p>
         </div>
 
@@ -189,8 +207,10 @@ const PublicOnboardingPage = () => {
         )}
 
         <OnboardingForm
+          key={formKey}
           category={category}
           onSubmit={handleSubmit}
+          onCancel={handleCancel}
           isSubmitting={submitting}
         />
       </div>
