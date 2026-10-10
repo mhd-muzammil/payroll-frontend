@@ -44,8 +44,30 @@ export const toLocalDateTimeInput = (value) => {
  */
 const NO_PUNCH_STATUSES = new Set(["Absent", "Leave"]);
 
+/**
+ * Whether a record holds only a date: an Absent or Leave day stored at
+ * midnight, which nobody punched.
+ *
+ * The status alone no longer says so. Somebody not logged in by 10am is
+ * marked Absent, and if they log in later the Login is recorded on that same
+ * row while the day stays Absent -- the office's rule. That row has a real
+ * time, and it is theirs to see.
+ */
+export const isDayMark = (record) => {
+  if (!record?.intime || !NO_PUNCH_STATUSES.has(record.status)) return false;
+  const at = new Date(record.intime);
+  return at.getHours() === 0 && at.getMinutes() === 0;
+};
+
+/**
+ * Whether there has been a Login on this record. A day mark is not one: read
+ * as a Login it hid the Login button from everybody who came in after 10am,
+ * and started the duty tracking of somebody marked Absent at home.
+ */
+export const hasRealLogin = (record) => Boolean(record?.intime) && !isDayMark(record);
+
 export const punchTime = (record, field) =>
-  NO_PUNCH_STATUSES.has(record?.status) ? "—" : formatTime(record?.[field]);
+  isDayMark(record) ? "—" : formatTime(record?.[field]);
 
 export const formatTime = (isoString) => {
   if (!isoString) return "—";

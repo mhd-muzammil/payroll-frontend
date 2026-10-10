@@ -29,6 +29,7 @@ import {
   calculateStats,
   toLocalDateTimeInput,
   punchTime,
+  hasRealLogin,
   isPresentStatus,
   linkOrphanRows,
   employeeKey,
@@ -921,7 +922,9 @@ const Attendance = () => {
       return formatLocalDate(d) === todayStr;
     }) || null;
   }, [canSelfCheckIn, records, username, employeeId]);
-  const hasInTimeToday = Boolean(employeeSelectedDateRecord?.intime);
+  // A Login, not just a row: the 10am rule writes an Absent row at midnight
+  // for everybody not in yet, and that is a date, not an arrival.
+  const hasInTimeToday = hasRealLogin(employeeSelectedDateRecord);
   const hasOutTimeToday = Boolean(employeeSelectedDateRecord?.outtime);
 
   // LOGGED IN FOR THE DAY, AND NOTHING RECORDING.
@@ -1286,11 +1289,11 @@ const Attendance = () => {
               <div className="mt-6 md:mt-8 grid grid-cols-2 sm:grid-cols-4 gap-4 bg-muted/30 p-4 rounded-2xl border border-border/50 relative z-10">
                 <div>
                   <p className="text-[10px] uppercase text-muted-foreground font-bold tracking-wider mb-1">Shift Entry</p>
-                  <p className="font-semibold">{formatTime(employeeSelectedDateRecord.intime) || "-- : --"}</p>
+                  <p className="font-semibold">{punchTime(employeeSelectedDateRecord, "intime")}</p>
                 </div>
                 <div>
                   <p className="text-[10px] uppercase text-muted-foreground font-bold tracking-wider mb-1">Shift Exit</p>
-                  <p className="font-semibold">{formatTime(employeeSelectedDateRecord.outtime) || "-- : --"}</p>
+                  <p className="font-semibold">{punchTime(employeeSelectedDateRecord, "outtime")}</p>
                 </div>
                 <div>
                   <p className="text-[10px] uppercase text-muted-foreground font-bold tracking-wider mb-1">Status</p>

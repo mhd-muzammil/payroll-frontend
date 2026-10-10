@@ -119,7 +119,10 @@ export const useAttendance = () => {
       "Logged in. Location verified."
     );
     if (data) {
-      setRecords((prev) => [data, ...prev]);
+      // A Login after 10am lands on the Absent row already in the list (the
+      // server records it there), so that row is replaced, not added again --
+      // two rows with one id is one row too many for React's keys.
+      setRecords((prev) => [data, ...prev.filter((r) => r.id !== data.id)]);
     }
     return data;
   }, []);
