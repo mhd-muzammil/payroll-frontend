@@ -30,6 +30,7 @@ import {
   toLocalDateTimeInput,
   punchTime,
   hasRealLogin,
+  roleOf,
   isPresentStatus,
   linkOrphanRows,
   employeeKey,
@@ -639,7 +640,7 @@ const Attendance = () => {
       })
       .filter((record) => {
         if (!selectedRole) return true;
-        return String(record.role || "").toLowerCase() === selectedRole.toLowerCase();
+        return roleOf(record).toLowerCase() === selectedRole.toLowerCase();
       })
       .sort((a, b) =>
         String(a.employee_name || "").localeCompare(String(b.employee_name || "")),
@@ -849,7 +850,7 @@ const Attendance = () => {
       }
 
       if (!isEmployee && selectedRole) {
-        if (String(record.role || "").toLowerCase() !== selectedRole.toLowerCase()) return false;
+        if (roleOf(record).toLowerCase() !== selectedRole.toLowerCase()) return false;
       }
       
       if (searchQuery) {
@@ -874,16 +875,19 @@ const Attendance = () => {
   }, [records, fromDate, toDate, isEmployee, username, employeeId, searchQuery, selectedRegion, selectedRole]);
 
   // Built from what is actually in the records rather than a list written here.
-  // The role on an attendance row is free text copied off the employee -- it is
-  // "Service engineer", "developer", "RMA", "Staff" -- so a hard-coded set would
-  // go stale the first time somebody types a new one.
+  // Roles are free text on the employee -- "FIELD ENGINEER", "RMA Executive",
+  // "CALL COORDINATOR" -- so a hard-coded set would go stale the first time
+  // somebody types a new one. The employee's role now, not the copy on each
+  // row: see roleOf.
   const roleOptions = useMemo(() => {
     // Derived in here rather than closing over safeRecords: that is rebuilt on
     // every render, so listing it as a dependency would make the memo pointless.
-    const list = Array.isArray(records) ? records : [];
+    // Through linkOrphanRows all the same, so a hand-marked row offers its
+    // owner's role rather than the copy it was saved with.
+    const list = linkOrphanRows(Array.isArray(records) ? records : []);
     const seen = new Map();
     for (const record of list) {
-      const role = String(record.role || "").trim();
+      const role = roleOf(record);
       if (role && !seen.has(role.toLowerCase())) seen.set(role.toLowerCase(), role);
     }
     return [...seen.values()].sort((a, b) => a.localeCompare(b));

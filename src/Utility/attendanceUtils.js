@@ -204,6 +204,18 @@ export const calculateRemainingWorkingHours = (intime, outtime) => {
 
 export const getStatusDisplay = (status) => STATUS_DISPLAY[status] || status;
 
+/**
+ * The role to filter a record by: the employee's role now.
+ *
+ * Not `record.role`. That is a copy taken the day the row was written, and the
+ * roles were renamed afterwards -- "Service engineer" is "FIELD ENGINEER" on
+ * the employee today -- so a filter built on the copies offered names nobody
+ * uses any more and split one person's days between two of them. The API
+ * sends the current one as `employee_role`; the copy is only the fallback,
+ * for a server that does not send it yet.
+ */
+export const roleOf = (record) => String(record?.employee_role ?? record?.role ?? "").trim();
+
 export const getStatusVariant = (status) => STATUS_VARIANTS[status] || "muted";
 
 export const REGIONS = ["Chennai", "Vellore", "Salem", "Kanchipuram", "Hosur"];
@@ -255,6 +267,8 @@ export const linkOrphanRows = (records) => {
       // Their real branch, not the "Chennai" the API fills in for a row that
       // belongs to nobody -- this is what puts the day in the right region.
       branch: owner.branch || record.branch,
+      // And their role now, for the same reason: the role filter reads it.
+      employee_role: owner.employee_role ?? record.employee_role,
       email: record.email || owner.email || null,
     };
   });
