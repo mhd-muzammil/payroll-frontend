@@ -1385,8 +1385,8 @@ const Attendance = () => {
           records={filteredRecords}
           fromDate={fromDate}
           toDate={toDate}
+          region={selectedRegion}
           scope={[
-            selectedRegion || "All regions",
             selectedRole || "All roles",
             searchQuery.trim() ? `"${searchQuery.trim()}"` : null,
           ]

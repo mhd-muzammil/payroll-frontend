@@ -8,7 +8,7 @@ import {
   buildAttendanceReport,
   exportClock,
 } from "../../Utility/attendanceReport";
-import { getStatusDisplay, statusShown } from "../../Utility/attendanceUtils";
+import { REGIONS, employeeKey, getStatusDisplay, statusShown } from "../../Utility/attendanceUtils";
 
 /**
  * The Export Report spreadsheet, on screen.
@@ -25,7 +25,14 @@ import { getStatusDisplay, statusShown } from "../../Utility/attendanceUtils";
  * A Radix dialog, like the rest of the app's sheets, because the page is still
  * there underneath: without a focus trap, Tab walked into the hidden attendance
  * cards and Enter on a status toggle turned somebody's Present into Absent.
+ *
+ * Over the table, a box per region and one for all of them: picking Chennai
+ * narrows the table to Chennai's people -- the rows the page's own region
+ * filter would give the report -- and All Regions opens it back up.
  */
+
+// Where a row is counted: the place the sheet's Location column prints.
+const placeOf = (record) => String(record?.branch || "Chennai").toLowerCase();
 
 // The sheet's colours, legible on the dark theme as well. Looked up by the
 // status a day is shown with, so Leave arrives as Sunday or Holiday.
@@ -90,12 +97,30 @@ export default function AttendanceReportView({
   records,
   fromDate,
   toDate,
+  region,
   scope,
   onClose,
   onDownload,
   downloading,
 }) {
-  const report = useMemo(() => buildAttendanceReport(records), [records]);
+  const all = useMemo(() => (Array.isArray(records) ? records : []), [records]);
+  // The region box picked; null is All Regions. Starts on the page's own
+  // region filter, if there is one.
+  const [place, setPlace] = useState(region || null);
+  const shown = useMemo(
+    () => (place ? all.filter((record) => placeOf(record) === place.toLowerCase()) : all),
+    [all, place]
+  );
+  const report = useMemo(() => buildAttendanceReport(shown), [shown]);
+  // How many people each box holds -- the rows it would show.
+  const people = useMemo(() => {
+    const count = (list) => new Set(list.map(employeeKey)).size;
+    const byPlace = { all: count(all) };
+    REGIONS.forEach((name) => {
+      byPlace[name] = count(all.filter((record) => placeOf(record) === name.toLowerCase()));
+    });
+    return byPlace;
+  }, [all]);
   const gridRef = useRef(null);
   // Whatever opened the view -- the Report View button -- gets the focus back
   // when it closes.
@@ -127,11 +152,14 @@ export default function AttendanceReportView({
               </DialogPrimitive.Title>
               <DialogPrimitive.Description className="text-xs text-muted-foreground">
                 {dayLabel(fromDate)} to {dayLabel(toDate)}
+                {` · ${place || region || "All regions"}`}
                 {scope ? ` · ${scope}` : ""}
                 {!empty && ` · ${report.rows.length} ${report.rows.length === 1 ? "person" : "people"}`}
               </DialogPrimitive.Description>
             </div>
-            {!empty && (
+            {/* The Excel is the page's, as it always was -- every region the
+                page's own filters let through. */}
+            {all.length > 0 && (
               <Button variant="outline" onClick={onDownload} disabled={downloading}>
                 {downloading ? "Exporting..." : "Download Excel"}
               </Button>
@@ -139,6 +167,41 @@ export default function AttendanceReportView({
             <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close the report">
               <X />
             </Button>
+          </div>
+
+          {/* The region boxes: everybody, then each branch. */}
+          <div className="grid grid-cols-3 gap-2 border-b border-border px-4 py-3 sm:grid-cols-6 sm:px-6">
+            {[["All Regions", null, people.all], ...REGIONS.map((name) => [name, name, people[name]])].map(
+              ([label, value, count]) => {
+                const active = place === value;
+                return (
+                  <button
+                    key={label}
+                    type="button"
+                    onClick={() => setPlace(value)}
+                    aria-pressed={active}
+                    className={`min-w-0 rounded-2xl border px-3 py-2 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 ${
+                      active
+                        ? "border-primary-glow/50 bg-primary-glow/[0.10]"
+                        : "border-border/60 bg-muted/30 hover:bg-muted/60"
+                    }`}
+                  >
+                    {/* text-xs on a phone, where three boxes share 390px and
+                        "Kanchipuram" would otherwise be cut. */}
+                    <div
+                      className={`truncate text-xs font-bold sm:text-sm ${
+                        active ? "text-primary-glow" : "text-foreground"
+                      }`}
+                    >
+                      {label}
+                    </div>
+                    <div className="text-[11px] tabular-nums text-muted-foreground">
+                      {count} {count === 1 ? "person" : "people"}
+                    </div>
+                  </button>
+                );
+              }
+            )}
           </div>
 
           {empty ? (
