@@ -12,6 +12,7 @@ import {
   workedSpan,
   isPresentStatus,
   getStatusDisplay,
+  dayStatus,
 } from "../../Utility/attendanceUtils";
 
 const STATUS_PILL = {
@@ -20,13 +21,19 @@ const STATUS_PILL = {
   overTime: "bg-cyan-500/10 text-cyan-600 dark:text-cyan-400",
   Absent: "bg-red-500/10 text-red-600 dark:text-red-400",
   Leave: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
+  // Leave, as the day is shown: grey for the weekly Sunday, amber for a holiday.
+  Sunday: "bg-slate-500/10 text-slate-600 dark:text-slate-300",
+  Holiday: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
   Late: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
 };
 
-// Full-row tint by status: Absent = red, Leave / weekly-off (Sunday) = amber.
+// Full-row tint by the status a day is shown with (dayStatus): Absent = red,
+// Sunday = grey, Holiday = amber.
 const ROW_TINT = {
   Absent: "bg-red-500/10 hover:bg-red-500/[0.16]",
   Leave: "bg-amber-500/10 hover:bg-amber-500/[0.16]",
+  Sunday: "bg-slate-500/10 hover:bg-slate-500/[0.16]",
+  Holiday: "bg-amber-500/10 hover:bg-amber-500/[0.16]",
   Late: "bg-amber-500/10 hover:bg-amber-500/[0.16]",
 };
 
@@ -35,6 +42,8 @@ const ROW_TINT = {
 const ROW_TINT_TOUCH = {
   Absent: "bg-red-500/10",
   Leave: "bg-amber-500/10",
+  Sunday: "bg-slate-500/10",
+  Holiday: "bg-amber-500/10",
   Late: "bg-amber-500/10",
 };
 
@@ -96,6 +105,9 @@ const AttendanceGroupedTable = ({
       g.presentDays = g.records.filter((r) => isPresentStatus(r.status)).length;
       g.absentDays = g.records.filter((r) => r.status === "Absent").length;
       g.leaveDays = g.records.filter((r) => r.status === "Leave").length;
+      // Leave is Sunday + Holiday, and the card says which.
+      g.sundayDays = g.records.filter((r) => dayStatus(r) === "Sunday").length;
+      g.holidayDays = g.leaveDays - g.sundayDays;
       // Summed from the real lengths, not from each day rounded to a tenth of
       // an hour first: a month of those roundings drifts by several minutes,
       // and upwards as often as not.
@@ -193,7 +205,7 @@ const AttendanceGroupedTable = ({
                   </span>
                   {g.leaveDays > 0 && (
                     <span className="rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 px-2.5 py-1 font-medium">
-                      Leave {g.leaveDays}
+                      Sunday {g.sundayDays} + Holiday {g.holidayDays} = Leave {g.leaveDays}
                     </span>
                   )}
                   <span className="rounded-full bg-muted px-2.5 py-1 font-medium text-muted-foreground">
@@ -274,7 +286,7 @@ const AttendanceGroupedTable = ({
                           <tr
                             key={r.id}
                             className={`border-t border-border/60 transition ${
-                              ROW_TINT[r.status] || "hover:bg-muted/30"
+                              ROW_TINT[dayStatus(r)] || "hover:bg-muted/30"
                             }`}
                           >
                             <td className="px-4 md:px-5 py-3 font-medium whitespace-nowrap">
@@ -304,7 +316,7 @@ const AttendanceGroupedTable = ({
                                     : "Click to toggle status"
                                 }
                               >
-                                <StatusPill status={r.status} />
+                                <StatusPill status={dayStatus(r)} />
                               </button>
                             </td>
                             {!isEmployee && (
@@ -352,7 +364,7 @@ const AttendanceGroupedTable = ({
                     return (
                       <div
                         key={r.id}
-                        className={`px-4 py-3 ${ROW_TINT_TOUCH[r.status] || ""}`}
+                        className={`px-4 py-3 ${ROW_TINT_TOUCH[dayStatus(r)] || ""}`}
                       >
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-medium flex-1 min-w-0 truncate">
@@ -366,7 +378,7 @@ const AttendanceGroupedTable = ({
                             disabled={isEmployee}
                             className={`shrink-0 ${isEmployee ? "cursor-default" : "cursor-pointer"}`}
                           >
-                            <StatusPill status={r.status} />
+                            <StatusPill status={dayStatus(r)} />
                           </button>
                           {!isEmployee && (
                             <>

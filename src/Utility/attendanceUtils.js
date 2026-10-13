@@ -6,6 +6,8 @@ export const STATUS_VARIANTS = {
   Absent: "error",
   Late: "warning",
   Leave: "warning",
+  Sunday: "muted",
+  Holiday: "warning",
   overTime: "info",
 };
 
@@ -287,6 +289,34 @@ export const getDatePart = (dateTimeValue) => {
   return String(dateTimeValue).slice(0, 10);
 };
 
+/**
+ * Leave, said as what it is: a Sunday or a Holiday.
+ *
+ * The office gives no other kind of leave -- a day off is the weekly Sunday or
+ * a holiday -- and a register reading "Leave" down every Sunday made it look
+ * as if everybody had taken four days off a month. So a Leave day is SHOWN as
+ * "Sunday" when its date is a Sunday and as "Holiday" on any other date, and
+ * the two are counted apart: Sunday 2 + Holiday 2 = Leave 4.
+ *
+ * Only the words change. The row is still Leave, so everything that pays or
+ * counts it -- the payslip, the 10:30 Absent rule, the Sunday job, the
+ * WhatsApp report -- reads it exactly as before.
+ */
+export const isSundayDate = (datePart) => {
+  const [year, month, day] = String(datePart || "").split("-").map(Number);
+  if (!year || !month || !day) return false;
+  // UTC, so the weekday is the calendar date's and not the viewer's clock's.
+  return new Date(Date.UTC(year, month - 1, day)).getUTCDay() === 0;
+};
+
+/** The status a day is shown with: Leave becomes Sunday or Holiday. */
+export const statusShown = (status, datePart) =>
+  status === "Leave" ? (isSundayDate(datePart) ? "Sunday" : "Holiday") : status;
+
+/** The same for a record, on the date every list groups it under. */
+export const dayStatus = (record) =>
+  statusShown(record?.status, getDatePart(record?.intime || record?.outtime));
+
 // Human-readable "Wed, 25 Jun" label from a date part or datetime value.
 // Parsed from the calendar part so it never drifts across timezones.
 export const formatDayLabel = (dateTimeValue) => {
@@ -365,6 +395,8 @@ export const calculateStats = (records, snapshotDate = null) => {
 
   const present = snapshot.filter((r) => isPresentStatus(r.status)).length;
   const leave = snapshot.filter((r) => r.status === "Leave").length;
+  // Leave is Sunday + Holiday; the day's date says which.
+  const sunday = snapshot.filter((r) => dayStatus(r) === "Sunday").length;
   const absent = snapshot.filter((r) => r.status === "Absent").length;
 
   // Region-wise breakdown from the same one-per-employee snapshot
@@ -373,7 +405,15 @@ export const calculateStats = (records, snapshotDate = null) => {
     // people: the snapshot rows this bucket counted, in the order they were
     // counted. The region cards open onto them, so the list and the number on
     // the card can never disagree -- they are the same pass.
-    regionBreakdown[region] = { present: 0, absent: 0, leave: 0, total: 0, people: [] };
+    regionBreakdown[region] = {
+      present: 0,
+      absent: 0,
+      leave: 0,
+      sunday: 0,
+      holiday: 0,
+      total: 0,
+      people: [],
+    };
   });
   snapshot.forEach((r) => {
     const region = resolveRegion(r.branch);
@@ -381,13 +421,18 @@ export const calculateStats = (records, snapshotDate = null) => {
     bucket.total += 1;
     bucket.people.push(r);
     if (isPresentStatus(r.status)) bucket.present += 1;
-    else if (r.status === "Leave") bucket.leave += 1;
-    else if (r.status === "Absent") bucket.absent += 1;
+    else if (r.status === "Leave") {
+      bucket.leave += 1;
+      if (dayStatus(r) === "Sunday") bucket.sunday += 1;
+      else bucket.holiday += 1;
+    } else if (r.status === "Absent") bucket.absent += 1;
   });
 
   return {
     presentToday: present,
     onLeave: leave,
+    onSunday: sunday,
+    onHoliday: leave - sunday,
     absent,
     overtimeHours: totalOvertime.toFixed(1),
     totalWorkedHours: totalWorked.toFixed(1),

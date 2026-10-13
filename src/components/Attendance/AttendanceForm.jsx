@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { X } from "lucide-react";
-import { toLocalDateTimeInput } from "../../Utility/attendanceUtils";
+import { toLocalDateTimeInput, statusShown } from "../../Utility/attendanceUtils";
 
 const initialFormState = {
   employee_name: "",
@@ -60,6 +60,9 @@ const AttendanceForm = ({
   };
 
   const noPunch = NO_PUNCH.has(formData.status);
+  // Leave is offered as what it is for the chosen date -- Sunday or Holiday --
+  // and still saved as Leave, which is what the payslip and the 10:30 rule read.
+  const leaveLabel = statusShown("Leave", dayOf(formData.intime));
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -173,8 +176,10 @@ const AttendanceForm = ({
                 className="w-full h-10 rounded-xl border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-glow"
               />
               <p className="mt-1.5 text-xs text-muted-foreground">
-                Which day they were {String(formData.status).toLowerCase()}. There is no
-                clock in or out on it.
+                {formData.status === "Leave"
+                  ? `Which day was the ${leaveLabel.toLowerCase()}.`
+                  : `Which day they were ${String(formData.status).toLowerCase()}.`}{" "}
+                There is no clock in or out on it.
               </p>
             </div>
           ) : (
@@ -218,7 +223,7 @@ const AttendanceForm = ({
             >
               {STATUS_OPTIONS.map((status) => (
                 <option key={status} value={status}>
-                  {status === "overTime" ? "Overtime" : status}
+                  {status === "overTime" ? "Overtime" : status === "Leave" ? leaveLabel : status}
                 </option>
               ))}
             </select>

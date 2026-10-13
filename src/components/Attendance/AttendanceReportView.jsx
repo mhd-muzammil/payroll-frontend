@@ -8,7 +8,7 @@ import {
   buildAttendanceReport,
   exportClock,
 } from "../../Utility/attendanceReport";
-import { getStatusDisplay } from "../../Utility/attendanceUtils";
+import { getStatusDisplay, statusShown } from "../../Utility/attendanceUtils";
 
 /**
  * The Export Report spreadsheet, on screen.
@@ -27,18 +27,24 @@ import { getStatusDisplay } from "../../Utility/attendanceUtils";
  * cards and Enter on a status toggle turned somebody's Present into Absent.
  */
 
-// The sheet's colours, legible on the dark theme as well.
+// The sheet's colours, legible on the dark theme as well. Looked up by the
+// status a day is shown with, so Leave arrives as Sunday or Holiday.
 const STATUS_TEXT = {
   Present: "text-green-700 dark:text-green-400",
   Overtime: "text-blue-700 dark:text-blue-400",
   overTime: "text-blue-700 dark:text-blue-400",
   Absent: "text-red-600 dark:text-red-400",
   Leave: "text-amber-700 dark:text-amber-400",
+  Sunday: "text-slate-600 dark:text-slate-300",
+  Holiday: "text-amber-700 dark:text-amber-400",
   Late: "text-amber-700 dark:text-amber-400",
 };
 
+// One per REPORT_TOTAL_HEADERS entry, in its order.
 const TOTAL_TEXT = [
   "text-green-700 dark:text-green-400",
+  "text-slate-600 dark:text-slate-300",
+  "text-amber-700 dark:text-amber-400",
   "text-amber-700 dark:text-amber-400",
   "text-red-600 dark:text-red-400",
   "text-foreground",
@@ -59,14 +65,15 @@ const NAME = "w-44 min-w-44 left-12 wrap-anywhere";
 const PLACE = "w-28 min-w-28 sm:left-56";
 
 /** One day: the status, then the punches -- the lines the sheet's cell holds. */
-function DayCell({ entry }) {
+function DayCell({ entry, datePart }) {
   if (!entry) return <span className="text-muted-foreground">-</span>;
+  const shown = statusShown(entry.status, datePart);
   const inAt = exportClock(entry.intime);
   const outAt = exportClock(entry.outtime);
   return (
     <div className="leading-5">
-      <div className={`font-semibold ${STATUS_TEXT[entry.status] || "text-foreground"}`}>
-        {getStatusDisplay(entry.status) || "-"}
+      <div className={`font-semibold ${STATUS_TEXT[shown] || "text-foreground"}`}>
+        {getStatusDisplay(shown) || "-"}
       </div>
       {inAt && <div className="text-xs text-muted-foreground">in {inAt}</div>}
       {outAt && (
@@ -196,10 +203,18 @@ export default function AttendanceReportView({
                           key={datePart}
                           className="border-b border-r border-border bg-background px-2 py-2 text-center align-middle"
                         >
-                          <DayCell entry={row.days[datePart]} />
+                          <DayCell entry={row.days[datePart]} datePart={datePart} />
                         </td>
                       ))}
-                      {[row.present, row.leave, row.absent, row.presentPlusLeave, row.hoursText].map(
+                      {[
+                        row.present,
+                        row.sunday,
+                        row.holiday,
+                        row.leave,
+                        row.absent,
+                        row.presentPlusLeave,
+                        row.hoursText,
+                      ].map(
                         (value, i) => (
                           <td
                             key={REPORT_TOTAL_HEADERS[i]}

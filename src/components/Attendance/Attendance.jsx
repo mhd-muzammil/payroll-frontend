@@ -34,6 +34,7 @@ import {
   roleOf,
   isPresentStatus,
   linkOrphanRows,
+  dayStatus,
 } from "../../Utility/attendanceUtils";
 
 // A live fix older than this is not worth reusing for a punch that decides
@@ -79,58 +80,86 @@ const STAT_ACCENT = {
  * A button rather than a div with a click on it. The card is the way into the
  * list of who those numbers are, so it has to be reachable by keyboard and
  * announce itself as something you can press.
+ *
+ * Read in one glance: how many are in (the big number, out of the total, and
+ * as a percentage), and a bar split the way the day split -- present, absent,
+ * leave -- so the regions compare without reading a line. Leave is Sunday +
+ * Holiday, and when there is any the card says which.
  */
-const RegionCard = ({ name, data, highlight = false, onClick }) => (
-  <button
-    type="button"
-    onClick={onClick}
-    title={`See who is counted in ${name}`}
-    className={`group flex flex-col justify-between rounded-2xl border p-3 text-left transition hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 md:p-4 ${
-      highlight
-        ? "border-primary-glow/40 bg-primary-glow/[0.08] hover:bg-primary-glow/[0.14]"
-        : "border-border/50 bg-muted/30 hover:bg-muted/60"
-    }`}
-  >
-    <div className="w-full">
-      <div className="mb-2">
-        <div className="flex items-center gap-1">
-          <span
-            className={`truncate text-sm font-bold capitalize ${
-              highlight ? "text-primary-glow" : "text-foreground"
-            }`}
-          >
-            {name}
-          </span>
-          <ChevronRight className="ml-auto h-3.5 w-3.5 shrink-0 text-muted-foreground opacity-50 transition group-hover:translate-x-0.5 group-hover:opacity-100" />
-        </div>
-        <Badge variant="outline" className="mt-1 border-primary/20 bg-primary/5 px-1.5 py-0.5 text-[10px] text-primary">
-          {data.total} Total
-        </Badge>
+const RegionCard = ({ name, data, highlight = false, onClick }) => {
+  const share = (count) => (data.total > 0 ? (count / data.total) * 100 : 0);
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={`See who is counted in ${name}`}
+      className={`group flex flex-col rounded-2xl border p-3 text-left transition hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 md:p-4 ${
+        highlight
+          ? "border-primary-glow/40 bg-primary-glow/[0.08] hover:bg-primary-glow/[0.14]"
+          : "border-border/50 bg-muted/30 hover:bg-muted/60"
+      }`}
+    >
+      <div className="flex w-full items-center gap-1">
+        <span
+          className={`truncate text-sm font-bold capitalize ${
+            highlight ? "text-primary-glow" : "text-foreground"
+          }`}
+        >
+          {name}
+        </span>
+        <ChevronRight className="ml-auto h-3.5 w-3.5 shrink-0 text-muted-foreground opacity-50 transition group-hover:translate-x-0.5 group-hover:opacity-100" />
       </div>
-      <div className="space-y-1.5 text-xs">
-        <div className="flex items-center justify-between text-muted-foreground">
-          <span>Present</span>
-          <span className="font-semibold text-emerald-500">{data.present}</span>
-        </div>
-        <div className="flex items-center justify-between text-muted-foreground">
+
+      <div className="mt-2 flex w-full items-baseline gap-1">
+        <span className="text-2xl font-bold leading-none tabular-nums text-foreground">
+          {data.present}
+        </span>
+        <span className="text-xs font-medium tabular-nums text-muted-foreground">
+          / {data.total} present
+        </span>
+        <span className="ml-auto text-xs font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">
+          {Math.round(share(data.present))}%
+        </span>
+      </div>
+
+      {/* The day as it split: present, absent, leave. */}
+      <div className="mt-2.5 flex h-1.5 w-full overflow-hidden rounded-full bg-border/40">
+        <div className="h-full bg-emerald-500" style={{ width: `${share(data.present)}%` }} />
+        <div className="h-full bg-red-500" style={{ width: `${share(data.absent)}%` }} />
+        <div className="h-full bg-amber-500" style={{ width: `${share(data.leave)}%` }} />
+      </div>
+
+      <div className="mt-3 w-full space-y-1 text-xs">
+        <div className="flex items-center gap-1.5 text-muted-foreground">
+          <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-red-500" />
           <span>Absent</span>
-          <span className="font-semibold text-red-500">{data.absent}</span>
+          <span className="ml-auto font-semibold tabular-nums text-red-600 dark:text-red-400">
+            {data.absent}
+          </span>
         </div>
-        <div className="flex items-center justify-between text-muted-foreground">
-          <span>On Leave</span>
-          <span className="font-semibold text-amber-500">{data.leave}</span>
+        <div className="flex items-center gap-1.5 text-muted-foreground">
+          <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />
+          <span>Leave</span>
+          <span className="ml-auto font-semibold tabular-nums text-amber-600 dark:text-amber-400">
+            {data.leave}
+          </span>
         </div>
+        {/* Leave is Sunday + Holiday: the two parts under it, one line each,
+            so a two-digit count never folds the line on a narrow card. */}
+        {data.leave > 0 &&
+          [
+            ["Sunday", data.sunday],
+            ["Holiday", data.holiday],
+          ].map(([label, count]) => (
+            <div key={label} className="flex items-center pl-3 text-[11px] text-muted-foreground">
+              <span>{label}</span>
+              <span className="ml-auto tabular-nums">{count}</span>
+            </div>
+          ))}
       </div>
-    </div>
-    {/* Visual Progress Bar representing present percentage */}
-    <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-border/40">
-      <div
-        className="h-1.5 rounded-full bg-emerald-500"
-        style={{ width: `${data.total > 0 ? (data.present / data.total) * 100 : 0}%` }}
-      />
-    </div>
-  </button>
-);
+    </button>
+  );
+};
 
 /**
  * One person on the snapshot day, as a region card lists them.
@@ -167,7 +196,7 @@ const PersonRow = ({ record, showRegion }) => {
           </div>
         )}
       </div>
-      <StatusPill status={record.status} />
+      <StatusPill status={dayStatus(record)} />
     </div>
   );
 };
@@ -405,11 +434,15 @@ const Attendance = () => {
     const totals = rows.reduce(
       (acc, record) => {
         if (record.status === "Absent") acc.absent += 1;
-        else if (record.status === "Leave") acc.leave += 1;
-        else acc.present += 1;
+        else if (record.status === "Leave") {
+          // Leave is Sunday + Holiday; the day's date says which.
+          acc.leave += 1;
+          if (dayStatus(record) === "Sunday") acc.sunday += 1;
+          else acc.holiday += 1;
+        } else acc.present += 1;
         return acc;
       },
-      { present: 0, absent: 0, leave: 0 },
+      { present: 0, absent: 0, leave: 0, sunday: 0, holiday: 0 },
     );
 
     try {
@@ -421,7 +454,7 @@ const Attendance = () => {
           in: formatTime(record.intime) || "—",
           out: formatTime(record.outtime) || "—",
           hours: workedSpan(record.intime, record.outtime),
-          status: getStatusDisplay(record.status),
+          status: getStatusDisplay(dayStatus(record)),
         })),
         dayLabel: new Date().toLocaleDateString("en-IN", {
           weekday: "long",
@@ -756,10 +789,12 @@ const Attendance = () => {
         present: sum.present + b.present,
         absent: sum.absent + b.absent,
         leave: sum.leave + b.leave,
+        sunday: sum.sunday + b.sunday,
+        holiday: sum.holiday + b.holiday,
         total: sum.total + b.total,
         people: sum.people.concat(b.people || []),
       }),
-      { present: 0, absent: 0, leave: 0, total: 0, people: [] }
+      { present: 0, absent: 0, leave: 0, sunday: 0, holiday: 0, total: 0, people: [] }
     );
   }, [stats.regionBreakdown]);
 
@@ -807,7 +842,17 @@ const Attendance = () => {
     const live = snapshotDayLabel ? `Live · ${snapshotDayLabel}` : "Live headcount";
     return [
       { label: "Present", value: stats.presentToday.toString(), subtitle: live, icon: CheckCircle2, accent: "success" },
-      { label: "On Leave", value: stats.onLeave.toString(), subtitle: live, icon: Timer, accent: "warning" },
+      {
+        label: "On Leave",
+        value: stats.onLeave.toString(),
+        // Leave is Sunday + Holiday; when there is any, say which.
+        subtitle:
+          stats.onLeave > 0
+            ? `Sunday ${stats.onSunday} + Holiday ${stats.onHoliday} · ${live}`
+            : live,
+        icon: Timer,
+        accent: "warning",
+      },
       { label: "Absent", value: stats.absent.toString(), subtitle: live, icon: AlertCircle, accent: "danger" },
       { label: "Total Hours", value: formatDuration(stats.totalWorkedHours), subtitle: "Worked this cycle", icon: Timer, accent: "primary" },
     ];
@@ -1045,8 +1090,8 @@ const Attendance = () => {
                 </div>
                 <div>
                   <p className="text-[10px] uppercase text-muted-foreground font-bold tracking-wider mb-1">Status</p>
-                  <Badge variant={getStatusVariant(employeeSelectedDateRecord.status)} className="mt-0.5">
-                    {getStatusDisplay(employeeSelectedDateRecord.status)}
+                  <Badge variant={getStatusVariant(dayStatus(employeeSelectedDateRecord))} className="mt-0.5">
+                    {getStatusDisplay(dayStatus(employeeSelectedDateRecord))}
                   </Badge>
                 </div>
                 <div>

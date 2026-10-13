@@ -18,15 +18,21 @@ import {
   getStatusDisplay,
   hoursBetween,
   isPresentStatus,
+  isSundayDate,
+  statusShown,
 } from "./attendanceUtils";
 
 // Status -> export text color (ARGB). Falls back to black for anything unmapped.
+// Looked up by the status a day is SHOWN with, so Leave arrives as Sunday
+// (grey) or Holiday (amber).
 export const STATUS_EXPORT_COLORS = {
   Present: "FF15803D",
   Overtime: "FF2563EB",
   overTime: "FF2563EB",
   Absent: "FFDC2626",
   Leave: "FFD97706",
+  Sunday: "FF475569",
+  Holiday: "FFD97706",
   Late: "FFD97706",
 };
 
@@ -80,10 +86,12 @@ export const punchAt = (value) => {
  * runs the two together in a column that is scrolled past thirty times, and
  * because a day with only an arrival then looks like every other day instead
  * of needing a shape of its own. The colours still do the first pass.
+ *
+ * A Leave day reads "Sunday" or "Holiday", by the column's date.
  */
-export const exportCellText = (entry) => {
+export const exportCellText = (entry, datePart) => {
   if (!entry) return "-";
-  const lines = [getStatusDisplay(entry.status) || "-"];
+  const lines = [getStatusDisplay(statusShown(entry.status, datePart)) || "-"];
   const inAt = exportClock(entry.intime);
   const outAt = exportClock(entry.outtime);
   if (inAt) lines.push(`in ${inAt}`);
@@ -96,8 +104,13 @@ export const exportCellText = (entry) => {
 // Absent, and the question the sheet exists to answer -- how many days
 // did this person work -- was left to somebody counting across the screen
 // with a finger.
+//
+// Leave is Sunday + Holiday, so both come first and Leave is their sum: the
+// office reads "Sunday 2 + Holiday 2 = Leave 4" along the row.
 export const REPORT_TOTAL_HEADERS = [
   "Total Present",
+  "Total Sunday",
+  "Total Holiday",
   "Total Leave",
   "Total Absent",
   "Present + Leave",
@@ -113,8 +126,8 @@ export const AUTO_CLOSED_NOTE =
  * branches' own attendance sheets read).
  *
  * Returns { dates: ["2026-10-03", ...], dateLabels: ["03-10-2026", ...],
- * rows: [{ sno, name, branch, days, present, leave, absent, presentPlusLeave,
- * hours, hoursText }], anyAutoClosed }.
+ * rows: [{ sno, name, branch, days, present, sunday, holiday, leave, absent,
+ * presentPlusLeave, hours, hoursText }], anyAutoClosed }.
  */
 export function buildAttendanceReport(records) {
   const list = Array.isArray(records) ? records : [];
@@ -186,6 +199,10 @@ export function buildAttendanceReport(records) {
     const marked = sortedDates.map((datePart) => emp.days[datePart]).filter(Boolean);
     const present = marked.filter((entry) => isPresentStatus(entry.status)).length;
     const leave = marked.filter((entry) => entry.status === "Leave").length;
+    // Leave is Sunday + Holiday; the column's date says which.
+    const sunday = sortedDates.filter(
+      (datePart) => emp.days[datePart]?.status === "Leave" && isSundayDate(datePart),
+    ).length;
     const absent = marked.filter((entry) => entry.status === "Absent").length;
     return {
       sno: idx + 1,
@@ -193,6 +210,8 @@ export function buildAttendanceReport(records) {
       branch: emp.branch,
       days: emp.days,
       present,
+      sunday,
+      holiday: leave - sunday,
       leave,
       absent,
       presentPlusLeave: present + leave,
@@ -260,9 +279,11 @@ export function buildAttendanceWorkbook(ExcelJS, report) {
       emp.sno,
       emp.name,
       emp.branch,
-      ...sortedDates.map((datePart) => exportCellText(emp.days[datePart])),
+      ...sortedDates.map((datePart) => exportCellText(emp.days[datePart], datePart)),
       // Numbers, not text, so a column of them can be summed.
       emp.present,
+      emp.sunday,
+      emp.holiday,
       emp.leave,
       emp.absent,
       emp.presentPlusLeave,
@@ -274,6 +295,8 @@ export function buildAttendanceWorkbook(ExcelJS, report) {
 
     [
       STATUS_EXPORT_COLORS.Present,
+      STATUS_EXPORT_COLORS.Sunday,
+      STATUS_EXPORT_COLORS.Holiday,
       STATUS_EXPORT_COLORS.Leave,
       STATUS_EXPORT_COLORS.Absent,
       "FF1F2937",
@@ -293,7 +316,9 @@ export function buildAttendanceWorkbook(ExcelJS, report) {
       // Wrapped, or the second line of the cell is simply not shown.
       cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
       if (entry?.status) {
-        cell.font = { color: { argb: STATUS_EXPORT_COLORS[entry.status] || "FF000000" } };
+        cell.font = {
+          color: { argb: STATUS_EXPORT_COLORS[statusShown(entry.status, datePart)] || "FF000000" },
+        };
       }
     });
   });

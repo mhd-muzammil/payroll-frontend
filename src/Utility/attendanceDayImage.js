@@ -27,6 +27,7 @@ const BRAND = "#4438ca";
 const GREEN = "#0f6f4c";
 const RED = "#b02b25";
 const AMBER = "#92400e";
+const SLATE = "#475569";
 const STRIPE = "#fafafa";
 
 const PAD = 28;
@@ -50,6 +51,9 @@ const STATUS_COLOR = {
   Present: GREEN,
   Absent: RED,
   Leave: AMBER,
+  // Leave, as the day is shown: the weekly Sunday in grey, a holiday in amber.
+  Sunday: SLATE,
+  Holiday: AMBER,
   Late: AMBER,
 };
 
@@ -114,7 +118,8 @@ export function drawAttendanceDay({ rows, dayLabel, scopeLabel, totals }) {
   text(ctx, scopeLabel, WIDTH - PAD, y, { align: "right", size: 12, color: MUTED });
 
   y += 22;
-  const summary = `Present ${totals.present}   ·   Absent ${totals.absent}   ·   On leave ${totals.leave}   ·   ${rows.length} ${rows.length === 1 ? "record" : "records"}`;
+  // Leave is Sunday + Holiday, said the way the office counts it.
+  const summary = `Present ${totals.present}   ·   Absent ${totals.absent}   ·   Sunday ${totals.sunday} + Holiday ${totals.holiday} = Leave ${totals.leave}   ·   ${rows.length} ${rows.length === 1 ? "record" : "records"}`;
   text(ctx, summary, PAD, y, { size: 12, color: MUTED });
 
   y += 18;
