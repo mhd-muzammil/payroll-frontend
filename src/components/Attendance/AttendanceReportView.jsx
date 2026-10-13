@@ -34,6 +34,43 @@ import { REGIONS, employeeKey, getStatusDisplay, statusShown } from "../../Utili
 // Where a row is counted: the place the sheet's Location column prints.
 const placeOf = (record) => String(record?.branch || "Chennai").toLowerCase();
 
+// Each region box its own colour: a light tint until it is picked, filled when
+// it is. Not the status colours -- green, red, amber and grey already mean
+// Present, Absent, Holiday and Sunday in the table under them. Written out in
+// full so Tailwind sees every class.
+const REGION_TONE = {
+  all: {
+    idle: "border-violet-500/30 bg-violet-500/[0.07] hover:bg-violet-500/[0.14]",
+    label: "text-violet-700 dark:text-violet-300",
+    picked: "border-violet-600 bg-violet-600",
+  },
+  Chennai: {
+    idle: "border-sky-500/30 bg-sky-500/[0.07] hover:bg-sky-500/[0.14]",
+    label: "text-sky-700 dark:text-sky-300",
+    picked: "border-sky-600 bg-sky-600",
+  },
+  Vellore: {
+    idle: "border-teal-500/30 bg-teal-500/[0.07] hover:bg-teal-500/[0.14]",
+    label: "text-teal-700 dark:text-teal-300",
+    picked: "border-teal-600 bg-teal-600",
+  },
+  Salem: {
+    idle: "border-orange-500/30 bg-orange-500/[0.07] hover:bg-orange-500/[0.14]",
+    label: "text-orange-700 dark:text-orange-300",
+    picked: "border-orange-600 bg-orange-600",
+  },
+  Kanchipuram: {
+    idle: "border-fuchsia-500/30 bg-fuchsia-500/[0.07] hover:bg-fuchsia-500/[0.14]",
+    label: "text-fuchsia-700 dark:text-fuchsia-300",
+    picked: "border-fuchsia-600 bg-fuchsia-600",
+  },
+  Hosur: {
+    idle: "border-indigo-500/30 bg-indigo-500/[0.07] hover:bg-indigo-500/[0.14]",
+    label: "text-indigo-700 dark:text-indigo-300",
+    picked: "border-indigo-600 bg-indigo-600",
+  },
+};
+
 // The sheet's colours, legible on the dark theme as well. Looked up by the
 // status a day is shown with, so Leave arrives as Sunday or Holiday.
 const STATUS_TEXT = {
@@ -174,28 +211,31 @@ export default function AttendanceReportView({
             {[["All Regions", null, people.all], ...REGIONS.map((name) => [name, name, people[name]])].map(
               ([label, value, count]) => {
                 const active = place === value;
+                const tone = REGION_TONE[value ?? "all"];
                 return (
                   <button
                     key={label}
                     type="button"
                     onClick={() => setPlace(value)}
                     aria-pressed={active}
-                    className={`min-w-0 rounded-2xl border px-3 py-2 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 ${
-                      active
-                        ? "border-primary-glow/50 bg-primary-glow/[0.10]"
-                        : "border-border/60 bg-muted/30 hover:bg-muted/60"
+                    className={`min-w-0 rounded-2xl border px-3 py-2 text-left shadow-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 ${
+                      active ? tone.picked : tone.idle
                     }`}
                   >
                     {/* text-xs on a phone, where three boxes share 390px and
                         "Kanchipuram" would otherwise be cut. */}
                     <div
                       className={`truncate text-xs font-bold sm:text-sm ${
-                        active ? "text-primary-glow" : "text-foreground"
+                        active ? "text-white" : tone.label
                       }`}
                     >
                       {label}
                     </div>
-                    <div className="text-[11px] tabular-nums text-muted-foreground">
+                    <div
+                      className={`text-[11px] tabular-nums ${
+                        active ? "text-white/85" : "text-muted-foreground"
+                      }`}
+                    >
                       {count} {count === 1 ? "person" : "people"}
                     </div>
                   </button>
