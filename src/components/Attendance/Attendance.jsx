@@ -82,9 +82,11 @@ const STAT_ACCENT = {
  * announce itself as something you can press.
  *
  * Read in one glance: how many are in (the big number, out of the total, and
- * as a percentage), and a bar split the way the day split -- present, absent,
- * leave -- so the regions compare without reading a line. Leave is Sunday +
- * Holiday, and when there is any the card says which.
+ * as a percentage), and a bar split the way the day split, so the regions
+ * compare without reading a line. Under it Present and Absent, and -- only on
+ * a day that has any -- Sunday or Holiday, which is Leave named for what it
+ * is. An ordinary working day has neither, and a line reading 0 every day
+ * would be one more thing to read past.
  */
 const RegionCard = ({ name, data, highlight = false, onClick }) => {
   const share = (count) => (data.total > 0 ? (count / data.total) * 100 : 0);
@@ -110,11 +112,13 @@ const RegionCard = ({ name, data, highlight = false, onClick }) => {
         <ChevronRight className="ml-auto h-3.5 w-3.5 shrink-0 text-muted-foreground opacity-50 transition group-hover:translate-x-0.5 group-hover:opacity-100" />
       </div>
 
-      <div className="mt-2 flex w-full items-baseline gap-1">
+      {/* "/ 26 present" never folds; on a narrow card the percentage moves
+          down instead. */}
+      <div className="mt-2 flex w-full flex-wrap items-baseline gap-x-1 gap-y-0.5">
         <span className="text-2xl font-bold leading-none tabular-nums text-foreground">
           {data.present}
         </span>
-        <span className="text-xs font-medium tabular-nums text-muted-foreground">
+        <span className="whitespace-nowrap text-xs font-medium tabular-nums text-muted-foreground">
           / {data.total} present
         </span>
         <span className="ml-auto text-xs font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">
@@ -122,38 +126,28 @@ const RegionCard = ({ name, data, highlight = false, onClick }) => {
         </span>
       </div>
 
-      {/* The day as it split: present, absent, leave. */}
+      {/* The day as it split: present, absent, Sunday, Holiday. */}
       <div className="mt-2.5 flex h-1.5 w-full overflow-hidden rounded-full bg-border/40">
         <div className="h-full bg-emerald-500" style={{ width: `${share(data.present)}%` }} />
         <div className="h-full bg-red-500" style={{ width: `${share(data.absent)}%` }} />
-        <div className="h-full bg-amber-500" style={{ width: `${share(data.leave)}%` }} />
+        <div className="h-full bg-slate-500" style={{ width: `${share(data.sunday)}%` }} />
+        <div className="h-full bg-amber-500" style={{ width: `${share(data.holiday)}%` }} />
       </div>
 
       <div className="mt-3 w-full space-y-1 text-xs">
-        <div className="flex items-center gap-1.5 text-muted-foreground">
-          <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-red-500" />
-          <span>Absent</span>
-          <span className="ml-auto font-semibold tabular-nums text-red-600 dark:text-red-400">
-            {data.absent}
-          </span>
-        </div>
-        <div className="flex items-center gap-1.5 text-muted-foreground">
-          <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />
-          <span>Leave</span>
-          <span className="ml-auto font-semibold tabular-nums text-amber-600 dark:text-amber-400">
-            {data.leave}
-          </span>
-        </div>
-        {/* Leave is Sunday + Holiday: the two parts under it, one line each,
-            so a two-digit count never folds the line on a narrow card. */}
-        {data.leave > 0 &&
-          [
-            ["Sunday", data.sunday],
-            ["Holiday", data.holiday],
-          ].map(([label, count]) => (
-            <div key={label} className="flex items-center pl-3 text-[11px] text-muted-foreground">
+        {[
+          ["Present", data.present, "bg-emerald-500", "text-emerald-600 dark:text-emerald-400", true],
+          ["Absent", data.absent, "bg-red-500", "text-red-600 dark:text-red-400", true],
+          // Leave, named for what it is -- and only on a day there is any.
+          ["Sunday", data.sunday, "bg-slate-500", "text-slate-600 dark:text-slate-300", data.sunday > 0],
+          ["Holiday", data.holiday, "bg-amber-500", "text-amber-600 dark:text-amber-400", data.holiday > 0],
+        ]
+          .filter(([, , , , shown]) => shown)
+          .map(([label, count, dot, tone]) => (
+            <div key={label} className="flex items-center gap-1.5 text-muted-foreground">
+              <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${dot}`} />
               <span>{label}</span>
-              <span className="ml-auto tabular-nums">{count}</span>
+              <span className={`ml-auto font-semibold tabular-nums ${tone}`}>{count}</span>
             </div>
           ))}
       </div>

@@ -108,6 +108,9 @@ const AttendanceGroupedTable = ({
       // Leave is Sunday + Holiday, and the card says which.
       g.sundayDays = g.records.filter((r) => dayStatus(r) === "Sunday").length;
       g.holidayDays = g.leaveDays - g.sundayDays;
+      // Present + Sunday + Holiday: the Export Report's "Present + Leave",
+      // the same count, so the card and the sheet cannot disagree.
+      g.totalPresentDays = g.presentDays + g.leaveDays;
       // Summed from the real lengths, not from each day rounded to a tenth of
       // an hour first: a month of those roundings drifts by several minutes,
       // and upwards as often as not.
@@ -208,6 +211,9 @@ const AttendanceGroupedTable = ({
                       Sunday {g.sundayDays} + Holiday {g.holidayDays} = Leave {g.leaveDays}
                     </span>
                   )}
+                  <span className="rounded-full bg-primary/10 text-primary px-2.5 py-1 font-semibold">
+                    Total Present Days {g.totalPresentDays}
+                  </span>
                   <span className="rounded-full bg-muted px-2.5 py-1 font-medium text-muted-foreground">
                     {formatDuration(g.totalHours)} total
                   </span>
