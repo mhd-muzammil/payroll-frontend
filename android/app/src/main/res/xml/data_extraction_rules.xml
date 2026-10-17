@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 12 and later: the same exclusions as backup_rules.xml, for the cloud
+  backup and for copying to a new phone alike.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="sharedpref" path="duty_tracker.xml" />
+        <exclude domain="database" path="duty_tracker.db" />
+        <exclude domain="database" path="duty_tracker.db-journal" />
+        <exclude domain="database" path="duty_tracker.db-wal" />
+        <exclude domain="database" path="duty_tracker.db-shm" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="sharedpref" path="duty_tracker.xml" />
+        <exclude domain="database" path="duty_tracker.db" />
+        <exclude domain="database" path="duty_tracker.db-journal" />
+        <exclude domain="database" path="duty_tracker.db-wal" />
+        <exclude domain="database" path="duty_tracker.db-shm" />
+    </device-transfer>
+</data-extraction-rules>

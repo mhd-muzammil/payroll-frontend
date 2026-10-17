@@ -2,8 +2,16 @@
 <manifest
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
+    <!--
+      Backups leave out the duty tracker's own files: its preferences hold the
+      engineer's sign-in tokens, and its database the positions still to send.
+      Restored onto another phone, those would send one person's route from
+      someone else's handset. Everything else backs up as it always did.
+    -->
     <application
         android:allowBackup="true"
+        android:fullBackupContent="@xml/backup_rules"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
@@ -108,6 +116,17 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+    <!--
+      Sending positions from the phone itself (1.5). ACCESS_NETWORK_STATE is how
+      the tracker hears that a network has come back and tries at once; until
+      now it was only here because a library happened to bring it in. The
+      battery one lets the app ask Android, with Android's own yes/no box, to
+      leave it out of battery optimisation, so the two-minute "still here" is
+      not held back while a phone lies still at a customer.
+    -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
     <!--
       Hardware the app uses when it is there, but must never be a reason an

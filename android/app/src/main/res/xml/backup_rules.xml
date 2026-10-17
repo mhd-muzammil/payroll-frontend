@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 11 and older. Only the duty tracker's own files are left out (its
+  sign-in tokens and the positions still to send); everything else backs up
+  exactly as before. Android 12 and later read data_extraction_rules.xml.
+-->
+<full-backup-content>
+    <exclude domain="sharedpref" path="duty_tracker.xml" />
+    <exclude domain="database" path="duty_tracker.db" />
+    <exclude domain="database" path="duty_tracker.db-journal" />
+    <exclude domain="database" path="duty_tracker.db-wal" />
+    <exclude domain="database" path="duty_tracker.db-shm" />
+</full-backup-content>
