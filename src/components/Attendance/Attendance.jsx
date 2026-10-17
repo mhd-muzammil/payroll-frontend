@@ -16,6 +16,7 @@ import { useAttendance } from "../../customHook/useAttendance";
 import { drawAttendanceDay, saveBlob } from "../../Utility/attendanceDayImage";
 import { buildAttendanceReport, buildAttendanceWorkbook } from "../../Utility/attendanceReport";
 import { useDuty } from "../../context/DutyContext";
+import { seenWithin } from "../../Utility/trackingRules";
 import AttendanceForm from "./AttendanceForm";
 import AttendanceReportView from "./AttendanceReportView";
 import AttendanceGroupedTable, { StatusPill } from "./AttendanceGroupedTable";
@@ -355,6 +356,9 @@ const Attendance = () => {
    *
    * Falling back to the device, the options matter: without `timeout` the spec
    * says wait indefinitely, which indoors is what happens.
+   *
+   * How old the fix is goes by when the app GOT it, on the phone's clock --
+   * not by its GPS time, which a phone running fast would always call stale.
    */
   const punchPosition = useCallback(
     () =>
@@ -362,7 +366,7 @@ const Attendance = () => {
         const fresh =
           lastFix &&
           Number.isFinite(lastFix.latitude) &&
-          Date.now() - new Date(lastFix.timestamp).getTime() < FIX_MAX_AGE_MS;
+          seenWithin(lastFix, FIX_MAX_AGE_MS);
         if (fresh) {
           resolve({ latitude: lastFix.latitude, longitude: lastFix.longitude });
           return;

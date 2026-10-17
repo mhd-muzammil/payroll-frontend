@@ -72,6 +72,14 @@ export const caseService = {
    */
   myScorecard: async () => (await api.get(`${BASE}my_scorecard/`)).data,
 
+  /**
+   * The engineer's own past days, "YYYY-MM-DD" to "YYYY-MM-DD": km, Assigned /
+   * Attended / Closed and the close target for every calendar day, plus the
+   * totals. Always the logged-in engineer's -- the server takes no engineer.
+   */
+  myHistory: async (from, to) =>
+    (await api.get(`${BASE}my_history/`, { params: { from, to } })).data,
+
   accept: async (id) => (await api.post(`${byId(id)}accept/`)).data,
   startTravel: async (id) => (await api.post(`${byId(id)}start_travel/`)).data,
   reached: async (id) => (await api.post(`${byId(id)}reached/`)).data,

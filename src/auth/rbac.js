@@ -51,12 +51,31 @@ function getRoleFromClaims(claims) {
   );
 }
 
+/**
+ * Fired on window whenever the tokens change -- a sign-in, a refresh, a
+ * sign-out. The duty tracker listens: APK 1.5 sends positions by itself and
+ * holds its own copy of the tokens, which has to follow a refresh, and has to
+ * be taken away when the engineer signs out or somebody else signs in on the
+ * phone. Same page only; nothing else listens.
+ */
+export const AUTH_CHANGED_EVENT = "payroll:auth-changed";
+
+function announceAuthChange() {
+  try {
+    window.dispatchEvent(new Event(AUTH_CHANGED_EVENT));
+  } catch {
+    // No window to tell, or a listener that threw. Neither is a reason for a
+    // sign-in or a sign-out to fail.
+  }
+}
+
 export function storeAuthTokens({ access, refresh }) {
   if (access) localStorage.setItem(ACCESS_TOKEN_KEY, access);
   if (refresh) localStorage.setItem(REFRESH_TOKEN_KEY, refresh);
   const claims = parseJwt(access);
   const role = getRoleFromClaims(claims);
   if (role) localStorage.setItem(ROLE_KEY, role);
+  announceAuthChange();
   return role;
 }
 
@@ -64,6 +83,7 @@ export function clearAuth() {
   localStorage.removeItem(ACCESS_TOKEN_KEY);
   localStorage.removeItem(REFRESH_TOKEN_KEY);
   localStorage.removeItem(ROLE_KEY);
+  announceAuthChange();
 }
 
 export function getAccessToken() {
@@ -76,6 +96,7 @@ export function setAccessToken(accessToken) {
   const claims = parseJwt(accessToken);
   const role = getRoleFromClaims(claims);
   if (role) localStorage.setItem(ROLE_KEY, role);
+  announceAuthChange();
 }
 
 export function getRefreshToken() {

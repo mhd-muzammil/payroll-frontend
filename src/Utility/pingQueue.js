@@ -10,6 +10,10 @@
  * being backgrounded and the WebView being reloaded, which is the normal life
  * of a phone in a pocket.
  *
+ * Each fix carries `owner`, the user whose duty it was, and is only ever sent
+ * by that user (belongsTo in trackingRules.js). Fixes queued before the tag
+ * existed have none, and go with whoever is signed in, as they always did.
+ *
  * Every function takes the storage it works on so this can be exercised without
  * a browser. Defaults to localStorage, which is what the app passes.
  */
@@ -20,6 +24,12 @@ const KEY = "tracking.pending_fixes";
 // offline longer than a shift, and holding more would only grow a queue nobody
 // is going to act on.
 export const MAX_QUEUED = 2000;
+
+// What the phone's own tracker can hand over at once: its store holds this
+// many (APK 1.4.1's buffer and 1.5's outbox alike). A handover is kept whole up
+// to here -- trimming it to MAX_QUEUED dropped its oldest before a single send
+// had been tried.
+export const MAX_HANDED_OVER = 6000;
 
 // The server refuses a fix older than this, so carrying one to it wastes a
 // request and a slot. Kept in step with MAX_BACKLOG_HOURS in cases/pings.py.
@@ -58,7 +68,7 @@ export function saveQueue(fixes, storage = defaultStorage()) {
 }
 
 /** Drop what the server would refuse anyway, oldest first when over the cap. */
-export function prune(fixes, now = Date.now()) {
+export function prune(fixes, now = Date.now(), cap = MAX_QUEUED) {
   const cutoff = now - MAX_AGE_HOURS * 3600 * 1000;
   const fresh = fixes.filter((fix) => {
     const taken = Date.parse(fix.timestamp);
@@ -66,13 +76,41 @@ export function prune(fixes, now = Date.now()) {
   });
   // Over the cap, the OLDEST go. What is left is the most recent stretch, which
   // is the part anybody is still going to act on.
-  return fresh.length > MAX_QUEUED ? fresh.slice(fresh.length - MAX_QUEUED) : fresh;
+  return fresh.length > cap ? fresh.slice(fresh.length - cap) : fresh;
 }
 
 export function enqueue(fix, storage = defaultStorage(), now = Date.now()) {
-  const queued = prune([...loadQueue(storage), fix], now);
-  saveQueue(queued, storage);
-  return queued.length;
+  return enqueueAll([fix], storage, now);
+}
+
+/**
+ * Queue several at once, in one read and one write -- a phone handing over a
+ * few thousand held fixes used to rewrite the whole queue once per fix.
+ *
+ * A fix whose key is already waiting is skipped. It is the same fix: a live
+ * one that failed again, or one the phone's tracker handed over twice. The
+ * server would skip it anyway; keeping it twice only fills the cap.
+ *
+ * A queue already over MAX_QUEUED holds a handover still being sent (see
+ * enqueueHandover), and a fix joining it does not cut it back down.
+ */
+export function enqueueAll(fixes, storage = defaultStorage(), now = Date.now(), cap = MAX_QUEUED) {
+  const queued = loadQueue(storage);
+  const limit = queued.length > MAX_QUEUED ? Math.max(cap, MAX_HANDED_OVER) : cap;
+  const waiting = new Set(queued.map((fix) => fix.client_key));
+  for (const fix of fixes) {
+    if (!fix?.client_key || waiting.has(fix.client_key)) continue;
+    waiting.add(fix.client_key);
+    queued.push(fix);
+  }
+  const kept = prune(queued, now, limit);
+  saveQueue(kept, storage);
+  return kept.length;
+}
+
+/** What the phone's own tracker handed over: kept whole, up to MAX_HANDED_OVER. */
+export function enqueueHandover(fixes, storage = defaultStorage(), now = Date.now()) {
+  return enqueueAll(fixes, storage, now, MAX_HANDED_OVER);
 }
 
 /**

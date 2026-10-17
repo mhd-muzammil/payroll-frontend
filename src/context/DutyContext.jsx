@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import { trackingService } from "../services/trackingService";
 import { useLiveTracking } from "../customHook/useLiveTracking";
 import { getUserRole, isAuthenticated, ROLES } from "../auth/rbac";
+import { isLogin, localDay, steadyKm } from "../Utility/trackingRules";
 
 /**
  * Owns "am I on duty?" for the whole app.
@@ -270,6 +271,8 @@ export function DutyProvider({ children }) {
   // Null until the backend says, so a screen can tell "no distance yet" from
   // "the backend does not report one".
   const [todayKm, setTodayKm] = useState(null);
+  // The figure on screen and the day it belongs to, for steadyKm.
+  const shownKmRef = useRef(null);
   // "granted" | "prompt" | "denied" | null (browser cannot tell us)
   const [locationPermission, setLocationPermission] = useState(null);
   // What the device said on the last refused attempt, for the engineer to read
@@ -289,7 +292,16 @@ export function DutyProvider({ children }) {
     // Sent on every duty response, so the figure refreshes with the state the
     // app already fetches. Absent from an older backend, in which case the
     // screen simply does not show a distance rather than showing zero.
-    if (typeof state?.today_km === "number") setTodayKm(state.today_km);
+    //
+    // Not straight onto the screen, though: a backlog joining the day can move
+    // the figure down by a few metres, and an engineer watching their own
+    // kilometres fall reads it as kilometres taken off them. A fall under
+    // 0.4 km on the same day keeps the figure already shown -- see steadyKm.
+    if (typeof state?.today_km === "number") {
+      const shown = steadyKm(shownKmRef.current, { km: state.today_km, day: localDay() });
+      shownKmRef.current = shown;
+      setTodayKm(shown.km);
+    }
     return Boolean(state?.on_duty);
   }, []);
 
@@ -304,7 +316,16 @@ export function DutyProvider({ children }) {
       .duty()
       .then((state) => {
         if (cancelled) return;
-        if (applyState(state)) trackingRef.current.start();
+        // The same duty carrying on, not a new one -- so nothing about the
+        // route is cut here, and the app opening is noted. The session is
+        // passed for the tracker's sixteen-hour rule, on the server's clock.
+        if (applyState(state)) {
+          trackingRef.current.start(null, "", {
+            pageLoad: true,
+            sessionId: state?.session_id ?? null,
+            sessionStartedAt: state?.started_at ?? null,
+          });
+        }
       })
       // An employee with no linked record simply is not on duty; a failure here
       // must never block the app.
@@ -412,8 +433,15 @@ export function DutyProvider({ children }) {
       // of the shift — the office could see they were out but never where, and
       // their distance stayed at zero. Duty without a position is not tracking.
       if (!hasCoords(knownFix)) await requireLocationPermission(locationPermission);
-      applyState(await trackingService.startDuty());
-      tracking.start();
+      const state = await trackingService.startDuty();
+      applyState(state);
+      // A Login marks where the duty began, on its first fix. Not every call
+      // here is one -- see isLogin.
+      tracking.start(null, "", {
+        fresh: isLogin(state),
+        sessionId: state?.session_id ?? null,
+        sessionStartedAt: state?.started_at ?? null,
+      });
     } catch (e) {
       setDutyError(
         e?.locationDenied
@@ -441,8 +469,9 @@ export function DutyProvider({ children }) {
     setBusy(true);
     setDutyError(null);
     // Stop the GPS stream first: even if the server call fails, the engineer
-    // asked to go off duty and must not keep broadcasting.
-    tracking.stop();
+    // asked to go off duty and must not keep broadcasting. What the phone still
+    // holds is sent now rather than with the next duty's first fix.
+    tracking.stop({ endOfDuty: true });
     try {
       applyState(await trackingService.endDuty());
     } catch (e) {

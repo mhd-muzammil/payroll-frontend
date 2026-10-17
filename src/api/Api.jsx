@@ -1,6 +1,6 @@
 import axios from "axios";
 import { Capacitor, registerPlugin } from "@capacitor/core";
-import { clearAuth, getAccessToken, getRefreshToken, setAccessToken } from "@/auth/rbac";
+import { clearAuth, getAccessToken, getRefreshToken, storeAuthTokens } from "@/auth/rbac";
 
 console.log("VITE_API_BASE_URL =", import.meta.env.VITE_API_BASE_URL);
 
@@ -53,6 +53,19 @@ if (IS_APP && Capacitor?.isPluginAvailable?.("DutyTracker")) {
     .catch(() => {});
 }
 
+/**
+ * The version header's value, for a sender that has to set it itself: APK
+ * 1.5's own uploader, which posts positions without going through here. Null
+ * until the phone has answered, or on an APK too old to say.
+ */
+export const appVersionHeader = () => appBuild;
+
+// When the server last answered this page with a success. APK 1.5 sends its
+// own positions; the page only takes that over when the phone's uploader is
+// being refused while the page itself is plainly getting through.
+let lastSuccess = 0;
+export const lastSuccessAt = () => lastSuccess;
+
 api.interceptors.request.use((config) => {
   if (IS_APP) {
     config.headers["X-Payroll-Client"] = "app";
@@ -81,7 +94,10 @@ const flushQueue = (newToken) => {
 };
 
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    lastSuccess = Date.now();
+    return response;
+  },
   async (error) => {
     const originalRequest = error.config;
     const status = error.response?.status;
@@ -110,7 +126,13 @@ api.interceptors.response.use(
 
     try {
       const { data } = await axios.post(`${Base_URL}/api/auth/refresh/`, { refresh });
-      setAccessToken(data.access);
+      // BOTH tokens. The server rotates the refresh token on every refresh
+      // and hands the new one back; only the access token used to be kept, so
+      // the one stored stayed the one from the password login and stopped
+      // working thirty days after it -- signing the engineer out mid-duty.
+      // (This relies on BLACKLIST_AFTER_ROTATION staying False: the phone's
+      // own uploader refreshes from the same chain, independently.)
+      storeAuthTokens({ access: data.access, refresh: data.refresh });
       flushQueue(data.access);
       originalRequest.headers.Authorization = `Bearer ${data.access}`;
       return api(originalRequest);

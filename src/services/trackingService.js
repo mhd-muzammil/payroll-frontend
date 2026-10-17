@@ -2,6 +2,15 @@ import { api } from "../api/Api";
 
 const BASE = "/api/tracking/";
 
+// A queued fix or event carries `owner` -- whose duty it was -- so the phone
+// never sends one as somebody else. That is the phone's business, not the
+// server's, and it stays off the wire.
+const withoutOwner = (entry) => {
+  const sent = { ...entry };
+  delete sent.owner;
+  return sent;
+};
+
 export const trackingService = {
   // The caller's own duty state. Read on app load so a refresh or a reopened
   // tab resumes tracking instead of quietly going off duty.
@@ -28,7 +37,21 @@ export const trackingService = {
    * a timeout the phone never saw the answer to — is not stored twice.
    */
   pingBatch: async (pings) => {
-    const { data } = await api.post(`${BASE}ping/batch/`, { pings });
+    const { data } = await api.post(`${BASE}ping/batch/`, { pings: pings.map(withoutOwner) });
+    return data;
+  },
+
+  /**
+   * What the phone saw happen to the tracking: Location or the network going
+   * off and on, the phone stopping the app, the app being opened. Sent ahead
+   * of the fixes, each with the phone's own key so a repeat is skipped.
+   *
+   * An empty list is the heartbeat: it tells the server this app is alive and
+   * recording while it has no new position to send, which is every minute an
+   * engineer spends standing at a customer.
+   */
+  events: async (events) => {
+    const { data } = await api.post(`${BASE}events/`, { events: events.map(withoutOwner) });
     return data;
   },
 
@@ -38,12 +61,18 @@ export const trackingService = {
    * `timestamp` and `client_key` are sent for a live fix too, not only a queued
    * one: a fix that fails and is retried from the queue must be the SAME fix,
    * with the same time and the same id, or the route gains a duplicate.
+   *
+   * So is `after_gap`. It was left out, so the first fix after a Login -- which
+   * goes out on its own, straight away -- reached the server without the one
+   * flag it existed to carry; only a fix that failed and went through the
+   * batch ever arrived with it.
    */
   ping: async ({
     latitude,
     longitude,
     accuracy,
     speed,
+    after_gap,
     status,
     case_id,
     timestamp,
@@ -56,6 +85,7 @@ export const trackingService = {
       longitude,
       accuracy,
       speed,
+      after_gap: Boolean(after_gap),
       status,
       case_id,
       timestamp,

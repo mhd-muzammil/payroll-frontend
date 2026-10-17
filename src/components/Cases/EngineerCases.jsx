@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { caseService } from "../../services/caseService";
 import { useDuty } from "../../context/DutyContext";
+import EngineerHistory from "./EngineerHistory";
 
 /** Time of day, the way somebody reads it back to you. */
 function clockTime(iso) {
@@ -217,7 +218,7 @@ function orderForEngineer(list) {
  * them drive each case forward, and streams their live location (app-open only)
  * while they are travelling to / working on the active case.
  */
-export default function EngineerCases() {
+function TodayCases() {
   const [cases, setCases] = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState(null);
@@ -648,6 +649,55 @@ export default function EngineerCases() {
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+const VIEWS = [
+  ["today", "Today"],
+  ["history", "History"],
+];
+
+/**
+ * My Cases: Today, the working screen exactly as it was, and History, the
+ * engineer's own past cycles.
+ *
+ * Today stays mounted while History is open -- hidden, not torn down -- so
+ * coming back to it is instant and its sixty-second refresh carries on as if
+ * the engineer had never left. History is built afresh each time it is opened,
+ * which puts it back on the current cycle.
+ */
+export default function EngineerCases() {
+  const [view, setView] = useState("today");
+
+  return (
+    <div>
+      <div className="px-4 pt-4">
+        <div
+          role="group"
+          aria-label="My Cases view"
+          className="grid grid-cols-2 gap-1 rounded-xl bg-gray-100 p-1 sm:max-w-xs"
+        >
+          {VIEWS.map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setView(key)}
+              aria-pressed={view === key}
+              className={`min-h-10 rounded-lg text-sm font-semibold transition-colors ${
+                view === key ? "bg-white text-gray-900 shadow-sm" : "text-gray-600 active:bg-gray-200"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div hidden={view !== "today"}>
+        <TodayCases />
+      </div>
+      {view === "history" && <EngineerHistory TargetBar={TargetBar} />}
     </div>
   );
 }
