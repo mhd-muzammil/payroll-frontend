@@ -1036,7 +1036,7 @@ const Attendance = () => {
                     icon={geoLocating ? null : Timer}
                     onClick={handleGeoPunchIn}
                     disabled={loading || geoLocating}
-                    className="!h-14 px-8 shadow-glow-brand w-full sm:w-auto sm:min-w-[180px]"
+                    className="!h-14 px-8 shadow-glow-brand gradient-login w-full sm:w-auto sm:min-w-[180px]"
                   >
                     {geoLocating ? "Authorizing..." : "Login"}
                   </Button>
@@ -1049,7 +1049,7 @@ const Attendance = () => {
                     icon={geoLocating ? null : Timer}
                     onClick={handleGeoPunchOut}
                     disabled={loading || geoLocating}
-                    className="!h-14 px-8 shadow-glow-brand w-full sm:w-auto sm:min-w-[180px]"
+                    className="!h-14 px-8 shadow-glow-brand gradient-logout w-full sm:w-auto sm:min-w-[180px]"
                   >
                     {geoLocating ? "Authorizing..." : "Logout"}
                   </Button>

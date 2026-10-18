@@ -184,6 +184,15 @@
   .gradient-brand {
     background: var(--gradient-brand);
   }
+  /* The attendance gate's Login and Logout: the brand gradient's shape in green
+     and red, so the two read apart at a glance. After .gradient-brand, so they
+     win on a button that has both. */
+  .gradient-login {
+    background: linear-gradient(135deg, #16A34A 0%, #15803D 50%, #166534 100%);
+  }
+  .gradient-logout {
+    background: linear-gradient(135deg, #EF4444 0%, #DC2626 50%, #B91C1C 100%);
+  }
   .text-gradient {
     background: var(--gradient-brand);
     -webkit-background-clip: text;
