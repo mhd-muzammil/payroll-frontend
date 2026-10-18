@@ -1,8 +1,16 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Smartphone, Globe, UserX, RefreshCw, Search } from "lucide-react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { Smartphone, Globe, UserX, RefreshCw, Search, History } from "lucide-react";
 import PageHeader from "../ui/PageHeader";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { employeeService } from "../../services/employeeService";
+import { changedFields } from "../../Utility/phoneStatusRules";
 
 /**
  * Who has started using the phone app, and who has not.
@@ -94,6 +102,200 @@ function when(value) {
   return `${d.toLocaleDateString([], { day: "2-digit", month: "short" })} ${time}`;
 }
 
+const SETTING_TONE = {
+  good: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
+  bad: "bg-red-500/10 text-red-600 dark:text-red-400",
+  ask: "bg-amber-500/10 text-amber-700 dark:text-amber-500",
+  unknown: "bg-muted-foreground/10 text-muted-foreground",
+};
+
+function permissionWord(value) {
+  if (value === "granted") return ["Allowed", "good"];
+  if (value === "denied") return ["Blocked", "bad"];
+  // Android's "ask again, with a reason": the engineer has said no once. Not
+  // the same as never asked, and the history must show the difference.
+  if (value === "prompt-with-rationale") return ["Refused once", "ask"];
+  if (value) return ["Not given", "ask"];
+  return ["Unknown", "unknown"];
+}
+
+function onOffWord(value, on, off, cannotSay = "Unknown") {
+  if (value === true) return [on, "good"];
+  if (value === false) return [off, "bad"];
+  return [cannotSay, "unknown"];
+}
+
+/**
+ * The four things that decide whether a phone keeps recording, as the phone
+ * last reported them. Only app 1.5 can report the battery, so an older app
+ * reads "Needs app 1.5" there rather than a word that looks like a fault.
+ */
+function settingsOf(phone) {
+  return [
+    ["battery_exempt", "Battery", onOffWord(phone.battery_exempt, "Allowed", "Not allowed", "Needs app 1.5")],
+    ["location_permission", "Location", permissionWord(phone.location_permission)],
+    ["notification_permission", "Notifications", permissionWord(phone.notification_permission)],
+    ["gps_on", "GPS", onOffWord(phone.gps_on, "On", "Off")],
+  ];
+}
+
+function PhoneSetup({ phone, changed, showWhen = true, inline = false }) {
+  const chips = settingsOf(phone).map(([field, name, [word, tone]]) => (
+    <span
+      key={field}
+      className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium whitespace-nowrap ${SETTING_TONE[tone]} ${
+        changed?.has(field) ? "ring-2 ring-primary/50" : ""
+      }`}
+    >
+      {name}: {word}
+    </span>
+  ));
+  // On the screen, not in a tooltip: a phone screen has no hover, and a
+  // week-old "Not allowed" must not read as today's.
+  const reported = `Reported ${when(phone.last_seen_at)}`;
+  if (inline) {
+    return (
+      <div className="flex flex-wrap items-center gap-1">
+        {chips}
+        {showWhen && <span className="ml-1 text-[11px] text-muted-foreground">{reported}</span>}
+      </div>
+    );
+  }
+  return (
+    <div>
+      <div className="flex flex-wrap gap-1">{chips}</div>
+      {showWhen && <div className="mt-1 text-[11px] text-muted-foreground">{reported}</div>}
+    </div>
+  );
+}
+
+/** Every change in one phone's set-up, newest first, each with when it was seen. */
+function PhoneHistory({ row, onClose }) {
+  const [state, setState] = useState({ loading: true, rows: [], total: 0, truncated: false, error: null });
+
+  useEffect(() => {
+    let alive = true;
+    employeeService
+      .appHistory(row.employee_id)
+      .then(
+        (data) =>
+          alive &&
+          setState({
+            loading: false,
+            rows: data?.rows ?? [],
+            total: data?.total ?? 0,
+            truncated: Boolean(data?.truncated),
+            error: null,
+          }),
+      )
+      .catch(
+        (e) =>
+          alive &&
+          setState({
+            loading: false,
+            rows: [],
+            total: 0,
+            truncated: false,
+            error: e?.response?.data?.detail || "Could not load the phone's history",
+          }),
+      );
+    return () => {
+      alive = false;
+    };
+  }, [row.employee_id]);
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>{row.employee_name} · phone history</DialogTitle>
+          <DialogDescription>
+            Each entry is how the phone was set up, from when it first reported it to when it last
+            did. What changed from the entry below is outlined.
+          </DialogDescription>
+        </DialogHeader>
+        {state.loading ? (
+          <p className="text-sm text-muted-foreground">Loading...</p>
+        ) : state.error ? (
+          <p className="text-sm text-destructive">{state.error}</p>
+        ) : state.rows.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            This phone has not reported yet. It will once the app is opened on it.
+          </p>
+        ) : (
+          <ol className="space-y-3">
+            {state.rows.map((entry, index) => {
+              const changed = changedFields(entry, state.rows[index + 1]);
+              const versionChanged = changed.has("app_version") || changed.has("android_version");
+              return (
+                <li key={`${entry.first_seen_at}-${index}`} className="rounded-2xl border border-border p-3">
+                  <div className="text-xs font-medium tabular-nums text-foreground">
+                    {when(entry.first_seen_at)}
+                    {when(entry.last_seen_at) !== when(entry.first_seen_at) ? ` → ${when(entry.last_seen_at)}` : ""}
+                    {index === 0 ? " (latest)" : ""}
+                  </div>
+                  <div
+                    className={`mt-1 text-xs text-muted-foreground ${versionChanged ? "font-semibold text-primary" : ""}`}
+                  >
+                    App {entry.app_version || "—"} · Android {entry.android_version || "—"}
+                  </div>
+                  <div className="mt-2">
+                    <PhoneSetup phone={entry} changed={changed} showWhen={false} />
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+        )}
+        {/* Said, so the last entry shown is not taken for the first the phone
+            ever reported. */}
+        {state.truncated && (
+          <p className="text-xs text-muted-foreground">
+            Showing the latest {state.rows.length} of {state.total} entries. Older ones are not shown.
+          </p>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
+ * A row's Phone setup: the chips and the History button when the phone has
+ * reported, whatever the login says. "Not reported yet" only for somebody using
+ * the app -- the rows the Battery permission card counts that way -- and a dash
+ * for everybody else, who has no app to report from.
+ */
+function PhoneCell({ row, onHistory, wide = false }) {
+  if (row.phone) {
+    return (
+      <div className={wide ? "flex flex-wrap items-center gap-x-3 gap-y-1.5" : "flex flex-col items-start gap-1.5"}>
+        {wide && (
+          <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+            Phone setup
+          </span>
+        )}
+        <PhoneSetup phone={row.phone} inline={wide} />
+        <button
+          type="button"
+          onClick={() => onHistory(row)}
+          className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+        >
+          <History className="h-3.5 w-3.5" />
+          History
+        </button>
+      </div>
+    );
+  }
+  if (row.uses_app) {
+    return (
+      <span className="text-xs text-muted-foreground" title="The app has not reported this phone yet">
+        {wide ? "Phone setup: Not reported yet" : "Not reported yet"}
+      </span>
+    );
+  }
+  return <span className="text-muted-foreground">—</span>;
+}
+
 function Stat({ value, label, tone }) {
   return (
     <div className="glass-card rounded-2xl p-4">
@@ -124,6 +326,8 @@ export default function AppUsage() {
   const [error, setError] = useState(null);
   const [query, setQuery] = useState("");
   const [only, setOnly] = useState("waiting");
+  // The row whose phone history is open, or null.
+  const [historyFor, setHistoryFor] = useState(null);
 
   // Split from `refresh` on purpose: nothing here touches state before the
   // first await, so the mount effect below sets no state synchronously. The
@@ -166,6 +370,11 @@ export default function AppUsage() {
           if (row.state !== "app") return false;
           if (!current || !String(row.app_version || "").startsWith(current)) return false;
         }
+        // A phone whose battery optimiser can stop the app: the kilometres
+        // stop with it, so these are the phones to fix first. Every phone that
+        // says so, as the count above does -- one still signed in from before
+        // app logins were recorded is on it too.
+        if (only === "battery" && row.phone?.battery_exempt !== false) return false;
         if (!text) return true;
         return (
           String(row.employee_name || "").toLowerCase().includes(text) ||
@@ -259,21 +468,66 @@ export default function AppUsage() {
         </div>
       )}
 
+      {/* Whether the phones will keep recording. Only app 1.5 can say, so the
+          phones that cannot are counted too, and so are the app users whose
+          phone has not reported at all: "0 not allowed" must not read as "all
+          fine" while nobody has been able to tell.
+          The four figures add up to the card's own total, said on the card. It
+          is not "Using the app": a phone signed in from before app logins were
+          recorded reports like any other and is counted here. */}
+      {typeof data?.battery_not_allowed === "number" && (() => {
+        const cannotTell = data.battery_cannot_tell ?? 0;
+        const notReported = (data.rows ?? []).filter((row) => row.uses_app && !row.phone).length;
+        const phones = (data.phones_reported ?? 0) + notReported;
+        const alarm = data.battery_not_allowed > 0;
+        return (
+          <div className="mb-6">
+            <div className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              Battery permission
+            </div>
+            <button
+              type="button"
+              onClick={() => setOnly("battery")}
+              className={`w-full rounded-2xl border px-4 py-3 text-left transition sm:w-1/2 ${
+                alarm
+                  ? "border-red-500/30 bg-red-500/5 hover:bg-red-500/10"
+                  : "border-border bg-card hover:bg-muted"
+              }`}
+            >
+              <div
+                className={`text-2xl font-bold tabular-nums ${
+                  alarm ? "text-red-600 dark:text-red-400" : "text-foreground"
+                }`}
+              >
+                {data.battery_not_allowed}
+              </div>
+              <div className="text-xs text-muted-foreground">
+                Battery not allowed, of {phones} {phones === 1 ? "phone" : "phones"} · {data.battery_allowed} allowed
+                {cannotTell > 0 ? ` · ${cannotTell} can't tell (need app 1.5)` : ""}
+                {notReported > 0 ? ` · ${notReported} not reported yet` : ""}
+                {alarm ? " · tap to see who" : ""}
+              </div>
+            </button>
+          </div>
+        );
+      })()}
+
       <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div className="grid grid-cols-3 gap-2 sm:flex sm:w-auto">
+        <div className="grid grid-cols-3 gap-2 sm:flex sm:w-auto sm:flex-wrap">
           {[
             ["waiting", "Still to set up"],
             ["app", "Using the app"],
             // The reason the version is here at all: the APK goes out by hand,
             // so somebody has to be able to see who has picked it up.
             ["updated", "Updated"],
+            ["battery", "Battery not allowed"],
             ["all", "Everyone"],
           ].map(([key, label]) => (
             <button
               key={key}
               type="button"
               onClick={() => setOnly(key)}
-              className={`h-10 rounded-xl border px-3 text-sm font-medium transition-colors ${
+              className={`min-h-10 rounded-xl border px-3 py-1 text-sm font-medium transition-colors sm:whitespace-nowrap ${
                 only === key
                   ? "border-primary bg-primary/10 text-primary"
                   : "border-border bg-card text-muted-foreground hover:bg-muted"
@@ -304,7 +558,11 @@ export default function AppUsage() {
             ? "Everybody is on the app."
             : only === "updated"
               ? "Nobody has installed the new version yet."
-              : "Nobody matches that search."}
+              : only === "battery"
+                ? query.trim()
+                  ? "Nobody matches that search."
+                  : "No phone has reported the battery as not allowed."
+                : "Nobody matches that search."}
         </div>
       ) : (
         <div className="glass-card rounded-3xl overflow-hidden border border-border/70">
@@ -327,25 +585,38 @@ export default function AppUsage() {
               </thead>
               <tbody>
                 {rows.map((row) => (
-                  <tr key={row.employee_id} className="border-t border-border/60">
-                    <td className="px-5 py-3 font-medium">{row.employee_name}</td>
-                    <td className="px-5 py-3 text-muted-foreground">{row.branch || "—"}</td>
-                    <td className="px-5 py-3 font-mono text-xs text-muted-foreground">
-                      {row.username || "—"}
-                    </td>
-                    <td className="px-5 py-3">
-                      <StateChip state={row.state} />
-                    </td>
-                    <td className="px-5 py-3">
-                      <VersionChip row={row} current={data?.current_app_version} />
-                    </td>
-                    <td className="px-5 py-3 tabular-nums text-muted-foreground">
-                      {when(row.last_app_login_at)}
-                    </td>
-                    <td className="px-5 py-3 text-xs text-muted-foreground">
-                      {WHAT_TO_DO[row.state] || "—"}
-                    </td>
-                  </tr>
+                  <Fragment key={row.employee_id}>
+                    <tr className="border-t border-border/60">
+                      <td className="px-5 py-3 font-medium">{row.employee_name}</td>
+                      <td className="px-5 py-3 text-muted-foreground">{row.branch || "—"}</td>
+                      <td className="px-5 py-3 font-mono text-xs text-muted-foreground">
+                        {row.username || "—"}
+                      </td>
+                      <td className="px-5 py-3">
+                        <StateChip state={row.state} />
+                      </td>
+                      <td className="px-5 py-3">
+                        <VersionChip row={row} current={data?.current_app_version} />
+                      </td>
+                      <td className="px-5 py-3 tabular-nums text-muted-foreground">
+                        {when(row.last_app_login_at)}
+                      </td>
+                      <td className="px-5 py-3 text-xs text-muted-foreground">
+                        {WHAT_TO_DO[row.state] || "—"}
+                      </td>
+                    </tr>
+                    {/* The phone's set-up on a line of its own under the row.
+                        As a column it pushed the table past a 1280px laptop
+                        and behind a sideways scroll; here the columns are
+                        exactly as they were. */}
+                    {(row.phone || row.uses_app) && (
+                      <tr>
+                        <td colSpan={7} className="px-5 pb-3 pt-0">
+                          <PhoneCell row={row} onHistory={setHistoryFor} wide />
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
                 ))}
               </tbody>
             </table>
@@ -379,11 +650,18 @@ export default function AppUsage() {
                     Last used {when(row.last_app_login_at)}
                   </p>
                 )}
+                {(row.phone || row.uses_app) && (
+                  <div className="mt-2">
+                    <PhoneCell row={row} onHistory={setHistoryFor} />
+                  </div>
+                )}
               </div>
             ))}
           </div>
         </div>
       )}
+
+      {historyFor && <PhoneHistory row={historyFor} onClose={() => setHistoryFor(null)} />}
     </div>
   );
 }

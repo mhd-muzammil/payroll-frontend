@@ -6,6 +6,7 @@ const ENDPOINTS = {
     BULK: "/api/employees/bulk/",
     STATS: "/api/employees/stats/",
     APP_USAGE: "/api/employees/app_usage/",
+    APP_HISTORY: (id) => `/api/employees/${id}/app_history/`,
 };
 
 export const employeeService = {
@@ -16,6 +17,9 @@ export const employeeService = {
      * row that matters most.
      */
     appUsage: async () => (await api.get(ENDPOINTS.APP_USAGE)).data,
+
+    /** Every change in how one employee's phone was set up, newest first. */
+    appHistory: async (id) => (await api.get(ENDPOINTS.APP_HISTORY(id))).data,
 
     getAll: async (params = {}) => {
         const { data } = await api.get(ENDPOINTS.BASE, { params });

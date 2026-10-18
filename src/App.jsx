@@ -23,6 +23,7 @@ import PublicOnboardingPage from './pages/PublicOnboardingPage';
 import { ROLES, getDefaultRouteByRole, getUserRole, isAuthenticated } from './auth/rbac';
 import { ErrorBoundary } from './components/ui/ErrorBoundary';
 import { DutyProvider } from './context/DutyContext';
+import PhoneStatusReporter from './components/PhoneStatusReporter';
 // import CompliancePage from './pages/CompliancePage';
 
 function RoleHomeRedirect() {
@@ -38,6 +39,8 @@ function App() {
     <BrowserRouter>
     {/* Above the routes on purpose: duty must survive page navigation. */}
     <DutyProvider>
+      {/* How the phone is set up to record, for App Usage. App only; renders nothing. */}
+      <PhoneStatusReporter />
       <Routes>
         <Route path="/" element={<RoleHomeRedirect />} />
         <Route path="/login" element={<LoginPage />} />

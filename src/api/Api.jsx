@@ -95,7 +95,10 @@ const flushQueue = (newToken) => {
 
 api.interceptors.response.use(
   (response) => {
-    lastSuccess = Date.now();
+    // Not for a request that asks to be left out (the phone-status report):
+    // it says nothing about the tracking getting through, so it must not be
+    // what decides a takeover.
+    if (!response.config?.skipSuccessMark) lastSuccess = Date.now();
     return response;
   },
   async (error) => {

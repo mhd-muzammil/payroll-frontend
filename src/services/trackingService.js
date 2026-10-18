@@ -12,6 +12,10 @@ const withoutOwner = (entry) => {
 };
 
 export const trackingService = {
+  // How this phone is set up to record (app 1.5 battery, Location, notifications,
+  // GPS), for App Usage. Sent by Utility/phoneStatus.js from the app only.
+  phoneStatus: async (report, config) => (await api.post(`${BASE}phone_status/`, report, config)).data,
+
   // The caller's own duty state. Read on app load so a refresh or a reopened
   // tab resumes tracking instead of quietly going off duty.
   duty: async () => {
