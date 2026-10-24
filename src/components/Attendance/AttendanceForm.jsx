@@ -14,13 +14,15 @@ const initialFormState = {
   status: "Present",
 };
 
-const STATUS_OPTIONS = ["Present", "Absent", "Leave", "Late", "overTime"];
+// Off Day: a day off the office marks, unpaid as Absent is (the payslip counts
+// it as loss of pay), and shown apart from it.
+const STATUS_OPTIONS = ["Present", "Absent", "Leave", "Off Day", "Late", "overTime"];
 
 // Nobody punches in on a day they did not come in, so these ask for the date
 // instead of a clock time -- and they have to ask for something, because a
 // record with no date is filtered out of every list on the page and can never
 // be seen again.
-const NO_PUNCH = new Set(["Absent", "Leave"]);
+const NO_PUNCH = new Set(["Absent", "Leave", "Off Day"]);
 
 /** "2026-09-04T00:00" from "2026-09-04", the way the Excel import stores it. */
 const dayStart = (date) => (date ? `${date}T00:00` : "");
@@ -178,7 +180,9 @@ const AttendanceForm = ({
               <p className="mt-1.5 text-xs text-muted-foreground">
                 {formData.status === "Leave"
                   ? `Which day was the ${leaveLabel.toLowerCase()}.`
-                  : `Which day they were ${String(formData.status).toLowerCase()}.`}{" "}
+                  : formData.status === "Off Day"
+                    ? "Which day was the off day."
+                    : `Which day they were ${String(formData.status).toLowerCase()}.`}{" "}
                 There is no clock in or out on it.
               </p>
             </div>

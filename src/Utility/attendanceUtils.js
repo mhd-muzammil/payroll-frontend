@@ -44,11 +44,11 @@ export const toLocalDateTimeInput = (value) => {
  * Printing that back as "12:00 AM" would read as somebody who clocked in at
  * midnight, so an absent or leave day shows a dash for both times instead.
  */
-const NO_PUNCH_STATUSES = new Set(["Absent", "Leave"]);
+const NO_PUNCH_STATUSES = new Set(["Absent", "Leave", "Off Day"]);
 
 /**
- * Whether a record holds only a date: an Absent or Leave day stored at
- * midnight, which nobody punched.
+ * Whether a record holds only a date: an Absent, Leave or Off Day day stored
+ * at midnight, which nobody punched.
  *
  * The status alone no longer says so. Somebody not logged in by 10am is
  * marked Absent, and if they log in later the Login is recorded on that same
@@ -408,6 +408,7 @@ export const calculateStats = (records, snapshotDate = null) => {
     regionBreakdown[region] = {
       present: 0,
       absent: 0,
+      offDay: 0,
       leave: 0,
       sunday: 0,
       holiday: 0,
@@ -426,6 +427,8 @@ export const calculateStats = (records, snapshotDate = null) => {
       if (dayStatus(r) === "Sunday") bucket.sunday += 1;
       else bucket.holiday += 1;
     } else if (r.status === "Absent") bucket.absent += 1;
+    // A day off the office marked: unpaid like Absent, counted apart from it.
+    else if (r.status === "Off Day") bucket.offDay += 1;
   });
 
   return {

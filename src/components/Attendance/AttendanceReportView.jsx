@@ -35,9 +35,9 @@ import { REGIONS, employeeKey, getStatusDisplay, statusShown } from "../../Utili
 const placeOf = (record) => String(record?.branch || "Chennai").toLowerCase();
 
 // Each region box its own colour: a light tint until it is picked, filled when
-// it is. Not the status colours -- green, red, amber and grey already mean
-// Present, Absent, Holiday and Sunday in the table under them. Written out in
-// full so Tailwind sees every class.
+// it is. Not the status colours -- green, red, pink, amber and grey already
+// mean Present, Absent, Off Day, Holiday and Sunday in the table under them.
+// Written out in full so Tailwind sees every class.
 const REGION_TONE = {
   all: {
     idle: "border-violet-500/30 bg-violet-500/[0.07] hover:bg-violet-500/[0.14]",
@@ -78,6 +78,7 @@ const STATUS_TEXT = {
   Overtime: "text-blue-700 dark:text-blue-400",
   overTime: "text-blue-700 dark:text-blue-400",
   Absent: "text-red-600 dark:text-red-400",
+  "Off Day": "text-pink-600 dark:text-pink-400",
   Leave: "text-amber-700 dark:text-amber-400",
   Sunday: "text-slate-600 dark:text-slate-300",
   Holiday: "text-amber-700 dark:text-amber-400",
@@ -91,6 +92,7 @@ const TOTAL_TEXT = [
   "text-amber-700 dark:text-amber-400",
   "text-amber-700 dark:text-amber-400",
   "text-red-600 dark:text-red-400",
+  "text-pink-600 dark:text-pink-400",
   "text-foreground",
   "text-blue-700 dark:text-blue-400",
 ];
@@ -315,6 +317,7 @@ export default function AttendanceReportView({
                         row.holiday,
                         row.leave,
                         row.absent,
+                        row.offDay,
                         row.presentPlusLeave,
                         row.hoursText,
                       ].map(

@@ -85,9 +85,9 @@ const STAT_ACCENT = {
  * Read in one glance: how many are in (the big number, out of the total, and
  * as a percentage), and a bar split the way the day split, so the regions
  * compare without reading a line. Under it Present and Absent, and -- only on
- * a day that has any -- Sunday or Holiday, which is Leave named for what it
- * is. An ordinary working day has neither, and a line reading 0 every day
- * would be one more thing to read past.
+ * a day that has any -- Off Day, and Sunday or Holiday, which is Leave named
+ * for what it is. An ordinary working day has none of them, and a line
+ * reading 0 every day would be one more thing to read past.
  */
 const RegionCard = ({ name, data, highlight = false, onClick }) => {
   const share = (count) => (data.total > 0 ? (count / data.total) * 100 : 0);
@@ -127,10 +127,11 @@ const RegionCard = ({ name, data, highlight = false, onClick }) => {
         </span>
       </div>
 
-      {/* The day as it split: present, absent, Sunday, Holiday. */}
+      {/* The day as it split: present, absent, Off Day, Sunday, Holiday. */}
       <div className="mt-2.5 flex h-1.5 w-full overflow-hidden rounded-full bg-border/40">
         <div className="h-full bg-emerald-500" style={{ width: `${share(data.present)}%` }} />
         <div className="h-full bg-red-500" style={{ width: `${share(data.absent)}%` }} />
+        <div className="h-full bg-pink-500" style={{ width: `${share(data.offDay)}%` }} />
         <div className="h-full bg-slate-500" style={{ width: `${share(data.sunday)}%` }} />
         <div className="h-full bg-amber-500" style={{ width: `${share(data.holiday)}%` }} />
       </div>
@@ -139,6 +140,8 @@ const RegionCard = ({ name, data, highlight = false, onClick }) => {
         {[
           ["Present", data.present, "bg-emerald-500", "text-emerald-600 dark:text-emerald-400", true],
           ["Absent", data.absent, "bg-red-500", "text-red-600 dark:text-red-400", true],
+          // A day off the office marked -- only on a day there is any.
+          ["Off Day", data.offDay, "bg-pink-500", "text-pink-600 dark:text-pink-400", data.offDay > 0],
           // Leave, named for what it is -- and only on a day there is any.
           ["Sunday", data.sunday, "bg-slate-500", "text-slate-600 dark:text-slate-300", data.sunday > 0],
           ["Holiday", data.holiday, "bg-amber-500", "text-amber-600 dark:text-amber-400", data.holiday > 0],
@@ -196,11 +199,13 @@ const PersonRow = ({ record, showRegion }) => {
   );
 };
 
-// The four ways to read a region card, in the order the card lists them.
+// The ways to read a region card, in the order the card lists them. Off Day,
+// like its line on the card, only when there is any.
 const DETAIL_TABS = [
   { key: "all", label: "All" },
   { key: "present", label: "Present" },
   { key: "absent", label: "Absent" },
+  { key: "offDay", label: "Off Day" },
   { key: "leave", label: "On Leave" },
 ];
 
@@ -432,6 +437,7 @@ const Attendance = () => {
     const totals = rows.reduce(
       (acc, record) => {
         if (record.status === "Absent") acc.absent += 1;
+        else if (record.status === "Off Day") acc.offDay += 1;
         else if (record.status === "Leave") {
           // Leave is Sunday + Holiday; the day's date says which.
           acc.leave += 1;
@@ -440,7 +446,7 @@ const Attendance = () => {
         } else acc.present += 1;
         return acc;
       },
-      { present: 0, absent: 0, leave: 0, sunday: 0, holiday: 0 },
+      { present: 0, absent: 0, offDay: 0, leave: 0, sunday: 0, holiday: 0 },
     );
 
     try {
@@ -786,13 +792,14 @@ const Attendance = () => {
       (sum, b) => ({
         present: sum.present + b.present,
         absent: sum.absent + b.absent,
+        offDay: sum.offDay + b.offDay,
         leave: sum.leave + b.leave,
         sunday: sum.sunday + b.sunday,
         holiday: sum.holiday + b.holiday,
         total: sum.total + b.total,
         people: sum.people.concat(b.people || []),
       }),
-      { present: 0, absent: 0, leave: 0, sunday: 0, holiday: 0, total: 0, people: [] }
+      { present: 0, absent: 0, offDay: 0, leave: 0, sunday: 0, holiday: 0, total: 0, people: [] }
     );
   }, [stats.regionBreakdown]);
 
@@ -821,6 +828,7 @@ const Attendance = () => {
       all: detailPeople.length,
       present: detailPeople.filter((r) => isPresentStatus(r.status)).length,
       absent: detailPeople.filter((r) => r.status === "Absent").length,
+      offDay: detailPeople.filter((r) => r.status === "Off Day").length,
       leave: detailPeople.filter((r) => r.status === "Leave").length,
     }),
     [detailPeople]
@@ -829,6 +837,7 @@ const Attendance = () => {
   const detailRows = useMemo(() => {
     if (detailStatus === "present") return detailPeople.filter((r) => isPresentStatus(r.status));
     if (detailStatus === "absent") return detailPeople.filter((r) => r.status === "Absent");
+    if (detailStatus === "offDay") return detailPeople.filter((r) => r.status === "Off Day");
     if (detailStatus === "leave") return detailPeople.filter((r) => r.status === "Leave");
     return detailPeople;
   }, [detailPeople, detailStatus]);
@@ -1497,7 +1506,7 @@ const Attendance = () => {
 
             {/* The card's three lines, as ways to read the list below. */}
             <div className="flex flex-wrap gap-2 pb-3">
-              {DETAIL_TABS.map((tab) => (
+              {DETAIL_TABS.filter((tab) => tab.key !== "offDay" || detailCounts.offDay > 0).map((tab) => (
                 <button
                   key={tab.key}
                   type="button"

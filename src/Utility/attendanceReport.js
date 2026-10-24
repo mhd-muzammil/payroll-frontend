@@ -30,6 +30,7 @@ export const STATUS_EXPORT_COLORS = {
   Overtime: "FF2563EB",
   overTime: "FF2563EB",
   Absent: "FFDC2626",
+  "Off Day": "FFDB2777",
   Leave: "FFD97706",
   Sunday: "FF475569",
   Holiday: "FFD97706",
@@ -106,13 +107,15 @@ export const exportCellText = (entry, datePart) => {
 // with a finger.
 //
 // Leave is Sunday + Holiday, so both come first and Leave is their sum: the
-// office reads "Sunday 2 + Holiday 2 = Leave 4" along the row.
+// office reads "Sunday 2 + Holiday 2 = Leave 4" along the row. Off Day sits
+// beside Absent: the two days the payslip does not pay.
 export const REPORT_TOTAL_HEADERS = [
   "Total Present",
   "Total Sunday",
   "Total Holiday",
   "Total Leave",
   "Total Absent",
+  "Total Off Day",
   "Present + Leave",
   "Total Hours",
 ];
@@ -127,7 +130,7 @@ export const AUTO_CLOSED_NOTE =
  *
  * Returns { dates: ["2026-10-03", ...], dateLabels: ["03-10-2026", ...],
  * rows: [{ sno, name, branch, days, present, sunday, holiday, leave, absent,
- * presentPlusLeave, hours, hoursText }], anyAutoClosed }.
+ * offDay, presentPlusLeave, hours, hoursText }], anyAutoClosed }.
  */
 export function buildAttendanceReport(records) {
   const list = Array.isArray(records) ? records : [];
@@ -204,6 +207,8 @@ export function buildAttendanceReport(records) {
       (datePart) => emp.days[datePart]?.status === "Leave" && isSundayDate(datePart),
     ).length;
     const absent = marked.filter((entry) => entry.status === "Absent").length;
+    // Unpaid like Absent, so it is in neither Present nor Present + Leave.
+    const offDay = marked.filter((entry) => entry.status === "Off Day").length;
     return {
       sno: idx + 1,
       name: emp.name,
@@ -214,6 +219,7 @@ export function buildAttendanceReport(records) {
       holiday: leave - sunday,
       leave,
       absent,
+      offDay,
       presentPlusLeave: present + leave,
       hours: emp.hours,
       // Words rather than a number, the same "243h 30m" the page shows.
@@ -286,6 +292,7 @@ export function buildAttendanceWorkbook(ExcelJS, report) {
       emp.holiday,
       emp.leave,
       emp.absent,
+      emp.offDay,
       emp.presentPlusLeave,
       // Words rather than a number, the same "243h 30m" the page shows.
       // A decimal would sum in Excel and is the form the office said it
@@ -299,6 +306,7 @@ export function buildAttendanceWorkbook(ExcelJS, report) {
       STATUS_EXPORT_COLORS.Holiday,
       STATUS_EXPORT_COLORS.Leave,
       STATUS_EXPORT_COLORS.Absent,
+      STATUS_EXPORT_COLORS["Off Day"],
       "FF1F2937",
       "FF1D4ED8",
     ].forEach((argb, i) => {
