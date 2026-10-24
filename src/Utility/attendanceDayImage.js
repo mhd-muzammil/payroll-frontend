@@ -51,8 +51,8 @@ const WIDTH = TABLE_W + PAD * 2;
 const STATUS_COLOR = {
   Present: GREEN,
   Absent: RED,
-  // A day off the office marked: unpaid, and not Absent's red.
-  "Off Day": PINK,
+  // Half Day, marked by the office: half a day unpaid, not Absent's red.
+  "Half Day": PINK,
   Leave: AMBER,
   // Leave, as the day is shown: the weekly Sunday in grey, a holiday in amber.
   Sunday: SLATE,
@@ -121,10 +121,10 @@ export function drawAttendanceDay({ rows, dayLabel, scopeLabel, totals }) {
   text(ctx, scopeLabel, WIDTH - PAD, y, { align: "right", size: 12, color: MUTED });
 
   y += 22;
-  // Leave is Sunday + Holiday, said the way the office counts it. Off Day only
+  // Leave is Sunday + Holiday, said the way the office counts it. Half Day only
   // on a day that has one.
-  const offDay = totals.offDay ? `Off Day ${totals.offDay}   ·   ` : "";
-  const summary = `Present ${totals.present}   ·   Absent ${totals.absent}   ·   ${offDay}Sunday ${totals.sunday} + Holiday ${totals.holiday} = Leave ${totals.leave}   ·   ${rows.length} ${rows.length === 1 ? "record" : "records"}`;
+  const halfDay = totals.halfDay ? `Half Day ${totals.halfDay}   ·   ` : "";
+  const summary = `Present ${totals.present}   ·   Absent ${totals.absent}   ·   ${halfDay}Sunday ${totals.sunday} + Holiday ${totals.holiday} = Leave ${totals.leave}   ·   ${rows.length} ${rows.length === 1 ? "record" : "records"}`;
   text(ctx, summary, PAD, y, { size: 12, color: MUTED });
 
   y += 18;

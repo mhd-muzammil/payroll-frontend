@@ -25,15 +25,15 @@ const STATUS_PILL = {
   Sunday: "bg-slate-500/10 text-slate-600 dark:text-slate-300",
   Holiday: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
   Late: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
-  // A day off the office marked, unpaid: pink, apart from Absent's red.
-  "Off Day": "bg-pink-500/10 text-pink-600 dark:text-pink-400",
+  // Half Day, marked by the office, half unpaid: pink, apart from Absent's red.
+  "Half Day": "bg-pink-500/10 text-pink-600 dark:text-pink-400",
 };
 
 // Full-row tint by the status a day is shown with (dayStatus): Absent = red,
-// Off Day = pink, Sunday = grey, Holiday = amber.
+// Half Day = pink, Sunday = grey, Holiday = amber.
 const ROW_TINT = {
   Absent: "bg-red-500/10 hover:bg-red-500/[0.16]",
-  "Off Day": "bg-pink-500/10 hover:bg-pink-500/[0.16]",
+  "Half Day": "bg-pink-500/10 hover:bg-pink-500/[0.16]",
   Leave: "bg-amber-500/10 hover:bg-amber-500/[0.16]",
   Sunday: "bg-slate-500/10 hover:bg-slate-500/[0.16]",
   Holiday: "bg-amber-500/10 hover:bg-amber-500/[0.16]",
@@ -44,7 +44,7 @@ const ROW_TINT = {
 // pointer to hover with, and on Android a :hover state sticks after a tap.
 const ROW_TINT_TOUCH = {
   Absent: "bg-red-500/10",
-  "Off Day": "bg-pink-500/10",
+  "Half Day": "bg-pink-500/10",
   Leave: "bg-amber-500/10",
   Sunday: "bg-slate-500/10",
   Holiday: "bg-amber-500/10",
@@ -108,8 +108,8 @@ const AttendanceGroupedTable = ({
       );
       g.presentDays = g.records.filter((r) => isPresentStatus(r.status)).length;
       g.absentDays = g.records.filter((r) => r.status === "Absent").length;
-      // Unpaid like Absent, and not in Total Present Days below.
-      g.offDayDays = g.records.filter((r) => r.status === "Off Day").length;
+      // Half a day unpaid; counted on its own, not in Total Present Days below.
+      g.halfDayDays = g.records.filter((r) => r.status === "Half Day").length;
       g.leaveDays = g.records.filter((r) => r.status === "Leave").length;
       // Leave is Sunday + Holiday, and the card says which.
       g.sundayDays = g.records.filter((r) => dayStatus(r) === "Sunday").length;
@@ -212,9 +212,9 @@ const AttendanceGroupedTable = ({
                   <span className="rounded-full bg-red-500/10 text-red-600 dark:text-red-400 px-2.5 py-1 font-medium">
                     Absent {g.absentDays}
                   </span>
-                  {g.offDayDays > 0 && (
+                  {g.halfDayDays > 0 && (
                     <span className="rounded-full bg-pink-500/10 text-pink-600 dark:text-pink-400 px-2.5 py-1 font-medium">
-                      Off Day {g.offDayDays}
+                      Half Day {g.halfDayDays}
                     </span>
                   )}
                   {g.leaveDays > 0 && (
