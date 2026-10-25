@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowLeft, Copy, Download, Edit, FileSignature, Loader2, Plus, Send, Trash2 } from "lucide-react";
+import { ArrowLeft, Camera, Copy, Download, Edit, FileSignature, Loader2, Plus, Send, Trash2 } from "lucide-react";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
@@ -87,6 +87,7 @@ export default function AppointmentOrders() {
   const [form, setForm] = useState(EMPTY);
   const [saving, setSaving] = useState(false);
   const [busy, setBusy] = useState(""); // "<id>:<what>"
+  const [photo, setPhoto] = useState(null); // {id, src}: the signing photo open under its row
 
   useEffect(() => {
     let alive = true;
@@ -213,6 +214,16 @@ export default function AppointmentOrders() {
       }
     });
 
+  const showPhoto = (order) => {
+    if (photo?.id === order.id) {
+      setPhoto(null);
+      return;
+    }
+    run(order, "photo", async () => {
+      setPhoto({ id: order.id, src: await appointmentOrderService.photo(order.id) });
+    });
+  };
+
   const remove = (order) => {
     if (!window.confirm(`Delete the appointment order for ${order.name}?`)) return;
     run(order, "delete", async () => {
@@ -282,7 +293,8 @@ export default function AppointmentOrders() {
                       const [label, tone] = STATUS[o.status] || STATUS.draft;
                       const stamp = o.status === "signed" ? o.signed_at : o.status === "opened" ? o.viewed_at : o.sent_at;
                       return (
-                        <tr key={o.id} className="border-t border-border/60">
+                        <Fragment key={o.id}>
+                        <tr className="border-t border-border/60">
                           <td className="px-3 py-2">
                             <div className="font-medium">{o.salutation} {o.name}</div>
                             <div className="text-xs text-muted-foreground">{o.email || "No email"}</div>
@@ -306,6 +318,19 @@ export default function AppointmentOrders() {
                                 {isBusy(o, "pdf") ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
                                 {o.status === "signed" ? "Signed PDF" : "PDF"}
                               </Button>
+                              {o.has_photo && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => showPhoto(o)}
+                                  disabled={isBusy(o, "photo")}
+                                  aria-expanded={photo?.id === o.id}
+                                  className="rounded-lg flex items-center gap-1"
+                                >
+                                  {isBusy(o, "photo") ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Camera className="h-3.5 w-3.5" />}
+                                  {photo?.id === o.id ? "Hide photo" : "Photo"}
+                                </Button>
+                              )}
                               {o.status !== "signed" && (
                                 <>
                                   <Button
@@ -334,6 +359,24 @@ export default function AppointmentOrders() {
                             </div>
                           </td>
                         </tr>
+                        {photo?.id === o.id && (
+                          <tr className="bg-muted/20">
+                            <td colSpan={6} className="px-3 py-3">
+                              <div className="flex items-end gap-3">
+                                <img
+                                  src={photo.src}
+                                  alt={`${o.name} when signing`}
+                                  className="h-56 rounded-xl border border-border object-cover"
+                                />
+                                <p className="text-xs text-muted-foreground">
+                                  Taken with the camera on the signing page when {o.name} signed, {when(o.signed_at)}.
+                                  It is also on the last page of the signed PDF.
+                                </p>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                        </Fragment>
                       );
                     })}
                   </tbody>

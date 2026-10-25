@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
-import { CheckCircle2, Download, Eraser, Link2Off, Loader2, Mail } from "lucide-react";
+import { Camera, CheckCircle2, Download, Eraser, Link2Off, Loader2, Mail, RotateCcw } from "lucide-react";
 
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -172,13 +172,144 @@ function SignaturePad({ onChange, disabled }) {
   );
 }
 
+// Why the camera did not open, by the browser's name for it.
+const CAMERA_PROBLEMS = {
+  NotAllowedError:
+    "The camera is blocked for this page. Allow the camera for this site in your browser's settings, then tap Open camera again.",
+  NotFoundError: "No camera was found. Open this link on your phone to sign.",
+  NotReadableError: "The camera is busy. Close other apps that are using it, then tap Open camera again.",
+  SecurityError: "This browser cannot open the camera here. Open the link in Chrome or Safari.",
+};
+
+/**
+ * The signer's photo, from the front camera as they sign. There is no way to
+ * pick a picture from the gallery. It goes on the signed copy so the office
+ * can see who signed.
+ */
+function SelfieCamera({ photo, onChange, disabled }) {
+  const videoRef = useRef(null);
+  const [stream, setStream] = useState(null);
+  const [live, setLive] = useState(false); // the camera has a picture to take
+  const [opening, setOpening] = useState(false);
+  const [trouble, setTrouble] = useState("");
+
+  // The camera stays on only while it is shown; it goes off when the photo is
+  // taken, on Cancel, and when the page goes away.
+  useEffect(() => {
+    const video = videoRef.current;
+    if (video && stream) {
+      video.srcObject = stream;
+      video.play().catch(() => {});
+    }
+    return () => stream?.getTracks().forEach((track) => track.stop());
+  }, [stream]);
+
+  const open = async () => {
+    setTrouble("");
+    setLive(false);
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setTrouble("This browser cannot open the camera. Open this link in Chrome or Safari on your phone.");
+      return;
+    }
+    setOpening(true);
+    try {
+      const media = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } },
+        audio: false,
+      });
+      onChange("");
+      setStream(media);
+    } catch (err) {
+      setTrouble(CAMERA_PROBLEMS[err?.name] || "Could not open the camera. Please try again.");
+    } finally {
+      setOpening(false);
+    }
+  };
+
+  const take = () => {
+    const video = videoRef.current;
+    if (!video?.videoWidth) return;
+    const scale = Math.min(1, 640 / Math.max(video.videoWidth, video.videoHeight));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(video.videoWidth * scale);
+    canvas.height = Math.round(video.videoHeight * scale);
+    canvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
+    onChange(canvas.toDataURL("image/jpeg", 0.85));
+    setStream(null);
+    setLive(false);
+  };
+
+  const stop = () => {
+    setStream(null);
+    setLive(false);
+  };
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <h3 className="text-sm font-medium">Your photo</h3>
+        <p className="text-xs text-muted-foreground">
+          Take a photo of yourself with the camera. It goes on the signed copy so the office can see who signed;
+          only you and the office get that copy.
+        </p>
+      </div>
+
+      {stream ? (
+        <div className="space-y-2">
+          {/* Shown as a mirror, as a front camera usually is; the photo itself is not flipped. */}
+          <video
+            ref={videoRef}
+            autoPlay
+            muted
+            playsInline
+            onLoadedData={() => setLive(true)}
+            aria-label="Camera"
+            className="mx-auto max-h-80 w-full max-w-sm rounded-xl bg-black object-contain -scale-x-100"
+          />
+          <div className="flex justify-center gap-2">
+            <Button type="button" onClick={take} disabled={!live || disabled} className="gap-2 rounded-xl">
+              <Camera className="h-4 w-4" /> Take photo
+            </Button>
+            <Button type="button" variant="ghost" onClick={stop} disabled={disabled} className="rounded-xl">
+              Cancel
+            </Button>
+          </div>
+        </div>
+      ) : photo ? (
+        <div className="flex items-end gap-3">
+          <img src={photo} alt="Your photo" className="h-40 rounded-xl border border-border object-cover" />
+          <div className="space-y-2">
+            <p className="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400">
+              <CheckCircle2 className="h-3.5 w-3.5" /> Photo taken
+            </p>
+            <Button type="button" variant="outline" size="sm" onClick={open} disabled={opening || disabled} className="gap-1 rounded-lg">
+              {opening ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />} Retake
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <Button type="button" variant="outline" onClick={open} disabled={opening || disabled} className="gap-2 rounded-xl">
+          {opening ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />} Open camera
+        </Button>
+      )}
+
+      {trouble && (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-300">
+          {trouble}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /**
  * The appointment order as the employee sees it, from the link emailed to them.
  *
  * No login and no app around it, like the onboarding form: the token in the
  * URL stands in for a session. They read the letter, tick that they agree,
- * sign in the box and type the code emailed to them. The words on this page
- * come from the same source as the PDF, so they read what they sign.
+ * sign in the box, take their photo and type the code emailed to them. The
+ * words on this page come from the same source as the PDF, so they read what
+ * they sign.
  */
 const PublicAppointmentPage = () => {
   const { token } = useParams();
@@ -186,6 +317,7 @@ const PublicAppointmentPage = () => {
   const [order, setOrder] = useState(null);
   const [agreed, setAgreed] = useState(false);
   const [signature, setSignature] = useState("");
+  const [photo, setPhoto] = useState("");
   const [code, setCode] = useState("");
   const [codeSent, setCodeSent] = useState("");
   const [busy, setBusy] = useState("");
@@ -228,7 +360,7 @@ const PublicAppointmentPage = () => {
     setBusy("sign");
     setError("");
     try {
-      const data = await appointmentOrderService.sign(token, { code, signature, agree: agreed });
+      const data = await appointmentOrderService.sign(token, { code, signature, photo, agree: agreed });
       setSignedAt(data.signed_at);
       setState("signed");
       window.scrollTo({ top: 0 });
@@ -286,7 +418,7 @@ const PublicAppointmentPage = () => {
     );
   }
 
-  const ready = agreed && signature && /^\d{6}$/.test(code);
+  const ready = agreed && signature && photo && /^\d{6}$/.test(code);
 
   return (
     <div className="min-h-dvh bg-background">
@@ -295,8 +427,8 @@ const PublicAppointmentPage = () => {
           <p className="text-xs uppercase tracking-wide text-muted-foreground">Renderways Technology Private Limited</p>
           <h1 className="mt-1 text-lg font-semibold">Your Appointment Order</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Please read it fully. To sign, tick that you agree, sign in the box at the bottom and type the code
-            we email to you.
+            Please read it fully. To sign, tick that you agree, sign in the box at the bottom, take your photo
+            and type the code we email to you.
           </p>
           <div className="mt-3">{download}</div>
         </div>
@@ -334,6 +466,8 @@ const PublicAppointmentPage = () => {
           </label>
 
           <SignaturePad onChange={setSignature} disabled={busy === "sign"} />
+
+          <SelfieCamera photo={photo} onChange={setPhoto} disabled={busy === "sign"} />
 
           <div className="space-y-2">
             <p className="text-sm">
