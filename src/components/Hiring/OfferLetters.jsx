@@ -19,30 +19,12 @@ const when = (iso) =>
     : "";
 
 /**
- * Where a letter stands: mailed or not, the candidate's answer and who gave it
- * (the candidate, from the buttons in the mail, or HR after their reply), and
- * the reply if one came. HR can mark or change the answer.
+ * Where a letter stands: mailed or not, the candidate's answer -- it arrives by
+ * itself when they press Accept or Decline in the mail -- and their reply if
+ * one came.
  */
-function AnswerCell({ letter, onChanged, replyOpen, onToggleReply }) {
-  const [changing, setChanging] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+function AnswerCell({ letter, replyOpen, onToggleReply }) {
   const answer = ANSWER[letter.response];
-
-  const set = async (response) => {
-    if (!response && !window.confirm(`Clear ${letter.name}'s answer?`)) return;
-    setBusy(true);
-    setError("");
-    try {
-      await offerLetterService.setResponse(letter.id, response);
-      setChanging(false);
-      onChanged();
-    } catch (e) {
-      setError(firstError(e?.response?.data) || "Could not save the answer.");
-    } finally {
-      setBusy(false);
-    }
-  };
 
   return (
     <div className="min-w-[180px] space-y-1 text-xs">
@@ -64,26 +46,6 @@ function AnswerCell({ letter, onChanged, replyOpen, onToggleReply }) {
           ↩ Replied {when(letter.reply.received_at)} · {replyOpen ? "hide" : "view reply"}
         </button>
       )}
-      {!answer || changing ? (
-        <div className="flex flex-wrap gap-1 pt-0.5">
-          <Button size="sm" variant="outline" disabled={busy} onClick={() => set("ACCEPTED")} className="h-7 rounded-md px-2 text-xs text-emerald-700 dark:text-emerald-300">
-            Mark accepted
-          </Button>
-          <Button size="sm" variant="outline" disabled={busy} onClick={() => set("DECLINED")} className="h-7 rounded-md px-2 text-xs text-red-700 dark:text-red-300">
-            Mark declined
-          </Button>
-          {answer && (
-            <Button size="sm" variant="ghost" disabled={busy} onClick={() => set("")} className="h-7 px-2 text-xs">
-              Clear
-            </Button>
-          )}
-        </div>
-      ) : (
-        <button type="button" onClick={() => setChanging(true)} className="text-muted-foreground hover:underline">
-          Change
-        </button>
-      )}
-      {error && <div className="text-destructive">{error}</div>}
     </div>
   );
 }
@@ -305,6 +267,20 @@ export default function OfferLetters() {
     setReloads((n) => n + 1);
   }, []);
 
+  // An answer arrives when the candidate presses Accept or Decline in the mail:
+  // coming back to this page reads the list again, quietly, so it shows.
+  useEffect(() => {
+    const again = () => {
+      if (document.visibilityState === "visible") setReloads((n) => n + 1);
+    };
+    document.addEventListener("visibilitychange", again);
+    window.addEventListener("focus", again);
+    return () => {
+      document.removeEventListener("visibilitychange", again);
+      window.removeEventListener("focus", again);
+    };
+  }, []);
+
   const startNew = async () => {
     setError("");
     setNetSalary("");
@@ -484,7 +460,6 @@ export default function OfferLetters() {
                         <td className="px-3 py-2">
                           <AnswerCell
                             letter={l}
-                            onChanged={load}
                             replyOpen={replyOpen === l.id}
                             onToggleReply={() => setReplyOpen(replyOpen === l.id ? null : l.id)}
                           />
