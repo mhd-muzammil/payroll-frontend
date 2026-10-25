@@ -20,6 +20,7 @@ import RequestsPage from './pages/RequestsPage';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import AppUsagePage from './pages/AppUsagePage';
 import PublicOnboardingPage from './pages/PublicOnboardingPage';
+import PublicAppointmentPage from './pages/PublicAppointmentPage';
 import { ROLES, getDefaultRouteByRole, getUserRole, isAuthenticated } from './auth/rbac';
 import { ErrorBoundary } from './components/ui/ErrorBoundary';
 import { DutyProvider } from './context/DutyContext';
@@ -50,6 +51,9 @@ function App() {
             fills in their own form; the token in the URL is what stands in for
             a session, and the server decides from it which form this is. */}
         <Route path="/onboard/:token" element={<PublicOnboardingPage />} />
+        {/* The same kind of page for an employee signing their appointment
+            order from the link emailed to them. */}
+        <Route path="/appointment/:token" element={<PublicAppointmentPage />} />
 
         <Route element={<ProtectedRoute allowedRoles={[ROLES.SUPER_ADMIN, ROLES.ADMIN]} />}>
           <Route path="/users" element={<UserManagementPage />} />
