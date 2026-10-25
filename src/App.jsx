@@ -21,6 +21,7 @@ import ProtectedRoute from './components/auth/ProtectedRoute';
 import AppUsagePage from './pages/AppUsagePage';
 import PublicOnboardingPage from './pages/PublicOnboardingPage';
 import PublicAppointmentPage from './pages/PublicAppointmentPage';
+import PublicOfferPage from './pages/PublicOfferPage';
 import MailPage from './pages/MailPage';
 import OfferLettersPage from './pages/OfferLettersPage';
 import AppointmentOrdersPage from './pages/AppointmentOrdersPage';
@@ -57,6 +58,8 @@ function App() {
         {/* The same kind of page for an employee signing their appointment
             order from the link emailed to them. */}
         <Route path="/appointment/:token" element={<PublicAppointmentPage />} />
+        {/* And for a candidate answering an offer mail's Accept / Decline. */}
+        <Route path="/offer/:token" element={<PublicOfferPage />} />
 
         <Route element={<ProtectedRoute allowedRoles={[ROLES.SUPER_ADMIN, ROLES.ADMIN]} />}>
           <Route path="/users" element={<UserManagementPage />} />

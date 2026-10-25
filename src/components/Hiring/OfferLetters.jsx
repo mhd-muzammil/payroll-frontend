@@ -1,10 +1,121 @@
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowLeft, Download, Edit, FileText, Loader2, Mail, Paperclip, Plus, Send, Trash2 } from "lucide-react";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
+import MailBody from "../Mail/MailBody";
+import { mailService } from "../../services/mailService";
 import { offerLetterService } from "../../services/offerLetterService";
+
+const ANSWER = {
+  ACCEPTED: ["Accepted", "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300"],
+  DECLINED: ["Declined", "bg-red-100 text-red-800 dark:bg-red-500/15 dark:text-red-300"],
+};
+
+const when = (iso) =>
+  iso
+    ? new Date(iso).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "numeric", minute: "2-digit", hour12: true })
+    : "";
+
+/**
+ * Where a letter stands: mailed or not, the candidate's answer and who gave it
+ * (the candidate, from the buttons in the mail, or HR after their reply), and
+ * the reply if one came. HR can mark or change the answer.
+ */
+function AnswerCell({ letter, onChanged, replyOpen, onToggleReply }) {
+  const [changing, setChanging] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const answer = ANSWER[letter.response];
+
+  const set = async (response) => {
+    if (!response && !window.confirm(`Clear ${letter.name}'s answer?`)) return;
+    setBusy(true);
+    setError("");
+    try {
+      await offerLetterService.setResponse(letter.id, response);
+      setChanging(false);
+      onChanged();
+    } catch (e) {
+      setError(firstError(e?.response?.data) || "Could not save the answer.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="min-w-[180px] space-y-1 text-xs">
+      {answer ? (
+        <div>
+          <span className={`inline-block rounded-full px-2 py-0.5 font-semibold ${answer[1]}`}>{answer[0]}</span>
+          <div className="mt-0.5 text-muted-foreground">by {letter.response_by || "—"} · {when(letter.response_at)}</div>
+        </div>
+      ) : letter.mailed_at ? (
+        <div>
+          <span className="inline-block rounded-full bg-muted px-2 py-0.5 font-semibold text-muted-foreground">Mailed</span>
+          <div className="mt-0.5 text-muted-foreground">{when(letter.mailed_at)} · no answer yet</div>
+        </div>
+      ) : (
+        <span className="text-muted-foreground">Not mailed</span>
+      )}
+      {letter.reply && (
+        <button type="button" onClick={onToggleReply} className="block text-left font-medium text-primary hover:underline">
+          ↩ Replied {when(letter.reply.received_at)} · {replyOpen ? "hide" : "view reply"}
+        </button>
+      )}
+      {!answer || changing ? (
+        <div className="flex flex-wrap gap-1 pt-0.5">
+          <Button size="sm" variant="outline" disabled={busy} onClick={() => set("ACCEPTED")} className="h-7 rounded-md px-2 text-xs text-emerald-700 dark:text-emerald-300">
+            Mark accepted
+          </Button>
+          <Button size="sm" variant="outline" disabled={busy} onClick={() => set("DECLINED")} className="h-7 rounded-md px-2 text-xs text-red-700 dark:text-red-300">
+            Mark declined
+          </Button>
+          {answer && (
+            <Button size="sm" variant="ghost" disabled={busy} onClick={() => set("")} className="h-7 px-2 text-xs">
+              Clear
+            </Button>
+          )}
+        </div>
+      ) : (
+        <button type="button" onClick={() => setChanging(true)} className="text-muted-foreground hover:underline">
+          Change
+        </button>
+      )}
+      {error && <div className="text-destructive">{error}</div>}
+    </div>
+  );
+}
+
+/** The candidate's reply to the offer mail, as it arrived in the HR mailbox. */
+// Keyed by the reply, so another one starts afresh.
+function ReplyViewer({ mailId }) {
+  const [mail, setMail] = useState(null);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    let alive = true;
+    mailService.detail(mailId).then(
+      (data) => alive && setMail(data),
+      (e) => alive && setError(firstError(e?.response?.data) || "Could not open the reply."),
+    );
+    return () => {
+      alive = false;
+    };
+  }, [mailId]);
+  if (error) return <p className="text-sm text-destructive">{error}</p>;
+  if (!mail) return <p className="text-sm text-muted-foreground">Opening the reply…</p>;
+  return (
+    <div className="space-y-2">
+      <div className="text-xs text-muted-foreground break-words">
+        {mail.from_name ? `${mail.from_name} <${mail.from_email}>` : mail.from_email} · {when(mail.received_at)} · {mail.subject}
+      </div>
+      <div className="rounded-xl border border-border bg-white p-3 text-slate-900">
+        <MailBody key={mail.id} mail={mail} />
+      </div>
+    </div>
+  );
+}
 
 // Every amount is per month, in rupees. The defaults are the sample letter's.
 const AMOUNTS = [
@@ -168,6 +279,7 @@ export default function OfferLetters() {
   const [busyId, setBusyId] = useState(null);
   const [mailing, setMailing] = useState(null); // the letter being mailed
   const [notice, setNotice] = useState("");
+  const [replyOpen, setReplyOpen] = useState(null); // the letter whose reply is shown
 
   useEffect(() => {
     let alive = true;
@@ -326,6 +438,7 @@ export default function OfferLetters() {
             onSent={(message) => {
               setMailing(null);
               setNotice(message);
+              load(); // the row now says Mailed
             }}
           />
         ) : editing === null ? (
@@ -347,14 +460,15 @@ export default function OfferLetters() {
                 <table className="w-full text-sm">
                   <thead className="bg-muted/40 text-xs uppercase tracking-wider text-muted-foreground">
                     <tr>
-                      {["Ref", "Name", "Role", "Joining", "Package / month", "Made", ""].map((h) => (
+                      {["Ref", "Name", "Role", "Joining", "Package / month", "Made", "Answer", ""].map((h) => (
                         <th key={h} className="px-3 py-2 text-left font-medium whitespace-nowrap">{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
                     {letters.map((l) => (
-                      <tr key={l.id} className="border-t border-border/60">
+                      <Fragment key={l.id}>
+                      <tr className="border-t border-border/60 align-top">
                         <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{l.ref_no}</td>
                         <td className="px-3 py-2 font-medium">{l.name}</td>
                         <td className="px-3 py-2 text-muted-foreground">{l.designation}</td>
@@ -366,6 +480,14 @@ export default function OfferLetters() {
                           {l.created_by_name || "—"}
                           <br />
                           {l.created_at ? new Date(l.created_at).toLocaleDateString("en-IN") : ""}
+                        </td>
+                        <td className="px-3 py-2">
+                          <AnswerCell
+                            letter={l}
+                            onChanged={load}
+                            replyOpen={replyOpen === l.id}
+                            onToggleReply={() => setReplyOpen(replyOpen === l.id ? null : l.id)}
+                          />
                         </td>
                         <td className="px-3 py-2">
                           <div className="flex items-center gap-1 justify-end">
@@ -401,6 +523,14 @@ export default function OfferLetters() {
                           </div>
                         </td>
                       </tr>
+                      {replyOpen === l.id && l.reply && (
+                        <tr className="bg-muted/20">
+                          <td colSpan={8} className="px-3 pb-4 pt-2">
+                            <ReplyViewer key={l.reply.id} mailId={l.reply.id} />
+                          </td>
+                        </tr>
+                      )}
+                      </Fragment>
                     ))}
                   </tbody>
                 </table>

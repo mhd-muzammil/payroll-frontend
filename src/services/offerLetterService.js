@@ -1,4 +1,10 @@
+import axios from "axios";
+
 import { api, Base_URL } from "../api/Api";
+
+// The candidate's page goes round `api`, as the other public pages do: no login
+// to send, and no /login redirect on a 401.
+const open = axios.create({ baseURL: Base_URL });
 
 const ENDPOINTS = {
     BASE: "/api/offer-letters/",
@@ -20,8 +26,21 @@ export const offerLetterService = {
     mailPreview: async (id, dear) =>
         (await api.get(`/api/offer-letters/${id}/mail_preview/`, { params: { dear } })).data,
 
-    /** Mail the letter from the HR mailbox, in HR's offer mail, PDF attached. */
-    sendMail: async (id, body) => (await api.post(`/api/offer-letters/${id}/send_mail/`, body)).data,
+    /**
+     * Mail the letter from the HR mailbox, in HR's offer mail, PDF attached.
+     * Its Accept / Decline buttons lead back to this site.
+     */
+    sendMail: async (id, body) =>
+        (await api.post(`/api/offer-letters/${id}/send_mail/`, { ...body, origin: window.location.origin })).data,
+
+    /** HR records the candidate's answer: "ACCEPTED", "DECLINED", or "" to clear it. */
+    setResponse: async (id, response) => (await api.post(`/api/offer-letters/${id}/response/`, { response })).data,
+
+    // ---- the candidate, from the buttons in the offer mail (no login)
+
+    describeOffer: async (token) => (await open.get(`/api/offer/${token}/`)).data,
+
+    answerOffer: async (token, answer) => (await open.post(`/api/offer/${token}/respond/`, { answer })).data,
 
     /** The reference the next letter should carry, e.g. RTPL/NJ/2026/141. */
     nextRef: async () => (await api.get(ENDPOINTS.NEXT_REF)).data?.ref_no || "",
