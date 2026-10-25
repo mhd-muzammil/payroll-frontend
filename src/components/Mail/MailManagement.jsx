@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import {
   AlertTriangle, ArrowLeft, Download, Inbox, Loader2, Mail, Paperclip, PenSquare, RefreshCw, Search, Send,
 } from "lucide-react";
@@ -287,9 +287,80 @@ function SentPanel({ reloadKey }) {
   );
 }
 
+/** One Payroll mail, opened again as it went: who, what it said, what it carried. */
+// Keyed by the mail, so opening another starts afresh.
+function SystemMailViewer({ id }) {
+  const [mail, setMail] = useState(null);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    let alive = true;
+    mailService.systemDetail(id).then(
+      (data) => alive && setMail(data),
+      (e) => alive && setError(problem(e, "Could not open this mail.")),
+    );
+    return () => {
+      alive = false;
+    };
+  }, [id]);
+
+  const download = async (attachment) => {
+    try {
+      await mailService.systemDownload(id, attachment.id);
+    } catch (e) {
+      setError(problem(e, "Could not download the file."));
+    }
+  };
+
+  if (error) return <p className="text-sm text-destructive">{error}</p>;
+  if (!mail) {
+    return (
+      <p className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" /> Opening…
+      </p>
+    );
+  }
+  return (
+    <div className="space-y-3">
+      <div className="space-y-0.5">
+        <div className="text-base font-semibold break-words">{mail.subject}</div>
+        <div className="text-xs text-muted-foreground break-words">From: {mail.from || "—"}</div>
+        <div className="text-xs text-muted-foreground break-words">To: {mail.to_text}</div>
+        {mail.cc_text && <div className="text-xs text-muted-foreground break-words">Cc: {mail.cc_text}</div>}
+        <div className="text-xs text-muted-foreground">{when(mail.created_at, true)}</div>
+      </div>
+      {mail.attachments.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {mail.attachments.map((file) => (
+            <button
+              key={file.id}
+              type="button"
+              onClick={() => download(file)}
+              className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-1.5 text-sm hover:bg-muted"
+            >
+              <Download className="h-3.5 w-3.5" />
+              <span className="max-w-[240px] truncate">{file.filename}</span>
+              <span className="text-xs text-muted-foreground">{Math.max(1, Math.round(file.size / 1024))} KB</span>
+            </button>
+          ))}
+        </div>
+      )}
+      {mail.body_html || mail.body_text ? (
+        <div className="rounded-xl border border-border bg-white p-3 text-slate-900">
+          <MailBody key={`system-${mail.id}`} mail={{ ...mail, attachments: [] }} />
+        </div>
+      ) : (
+        <p className="text-sm text-muted-foreground">
+          The text of this mail was not kept: it was sent before Payroll started keeping its mails.
+        </p>
+      )}
+    </div>
+  );
+}
+
 function PayrollMailsPanel({ reloadKey }) {
   const [rows, setRows] = useState(null);
   const [error, setError] = useState("");
+  const [open, setOpen] = useState(null);
   useEffect(() => {
     let alive = true;
     mailService.system().then(
@@ -308,26 +379,56 @@ function PayrollMailsPanel({ reloadKey }) {
       <table className="w-full text-sm">
         <thead className="bg-muted/40 text-xs uppercase tracking-wider text-muted-foreground">
           <tr>
-            {["When", "What", "To", "About", "Status"].map((h) => (
+            {["When", "What", "To", "About", "Status", ""].map((h) => (
               <th key={h} className="px-3 py-2 text-left font-medium whitespace-nowrap">{h}</th>
             ))}
           </tr>
         </thead>
         <tbody>
           {rows.map((r) => (
-            <tr key={r.id} className="border-t border-border/60 align-top">
-              <td className="px-3 py-2 whitespace-nowrap tabular-nums">{when(r.created_at, true)}</td>
-              <td className="px-3 py-2">
-                <div className="font-medium">{r.kind_label}</div>
-                <div className="text-xs text-muted-foreground">{r.subject}</div>
-              </td>
-              <td className="px-3 py-2 break-all">{r.to_text}</td>
-              <td className="px-3 py-2">{r.about || "—"}</td>
-              <td className="px-3 py-2">
-                <Chip status={r.status} />
-                {r.error && <div className="mt-1 max-w-[260px] text-xs text-destructive">{r.error}</div>}
-              </td>
-            </tr>
+            <Fragment key={r.id}>
+              <tr
+                onClick={() => setOpen(open === r.id ? null : r.id)}
+                className={`cursor-pointer border-t border-border/60 align-top hover:bg-muted/40 ${open === r.id ? "bg-muted/40" : ""}`}
+              >
+                <td className="px-3 py-2 whitespace-nowrap tabular-nums">{when(r.created_at, true)}</td>
+                <td className="px-3 py-2">
+                  <div className="font-medium">{r.kind_label}</div>
+                  <div className="text-xs text-muted-foreground">{r.subject}</div>
+                </td>
+                <td className="px-3 py-2 break-all">
+                  {r.to_text}
+                  {r.cc_text && <div className="text-xs text-muted-foreground">Cc: {r.cc_text}</div>}
+                </td>
+                <td className="px-3 py-2">{r.about || "—"}</td>
+                <td className="px-3 py-2">
+                  <Chip status={r.status} />
+                  {r.error && <div className="mt-1 max-w-[260px] text-xs text-destructive">{r.error}</div>}
+                </td>
+                <td className="px-3 py-2 text-right">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    aria-expanded={open === r.id}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setOpen(open === r.id ? null : r.id);
+                    }}
+                    className="rounded-lg"
+                  >
+                    {open === r.id ? "Close" : "View"}
+                  </Button>
+                </td>
+              </tr>
+              {open === r.id && (
+                <tr className="bg-muted/20">
+                  <td colSpan={6} className="px-3 pb-4 pt-2">
+                    <SystemMailViewer key={r.id} id={r.id} />
+                  </td>
+                </tr>
+              )}
+            </Fragment>
           ))}
         </tbody>
       </table>

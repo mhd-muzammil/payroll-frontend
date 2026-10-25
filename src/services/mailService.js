@@ -32,6 +32,16 @@ export const mailService = {
 
     system: async () => (await api.get("/api/hr-mail/system/")).data,
 
+    /** One Payroll mail, opened again: its text and what it carried. */
+    systemDetail: async (id) => (await api.get(`/api/hr-mail/system/${id}/`)).data,
+
+    /** A file a Payroll mail carried, saved the way payslips are. */
+    systemDownload: async (mailId, attachmentId) => {
+        const { data } = await api.get(`/api/hr-mail/system/${mailId}/attachments/${attachmentId}/ticket/`);
+        if (!data?.path) throw new Error("No download link came back.");
+        window.location.href = `${Base_URL}${data.path}`;
+    },
+
     /** A picture inside the mail, fetched with the login and shown as a blob. */
     attachmentBlobUrl: async (mailId, attachmentId) => {
         const { data } = await api.get(`/api/hr-mail/messages/${mailId}/attachments/${attachmentId}/`, {
