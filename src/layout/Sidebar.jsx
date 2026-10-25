@@ -20,7 +20,8 @@ import {
   PhoneCall,
   HandCoins,
   MoreHorizontal,
-  Smartphone
+  Smartphone,
+  Mail
 } from "lucide-react";
 import { ROLES, clearAuth, getUserRole, normalizeRole, canAccessSection } from "@/auth/rbac";
 
@@ -28,6 +29,8 @@ const nav = [
   { to: "/dashboard", label: "Dashboard", short: "Home", icon: LayoutDashboard },
   { to: "/users", label: "Users", icon: Users, roles: [ROLES.SUPER_ADMIN, ROLES.ADMIN] },
   { to: "/hiring", label: "Hiring Portal", short: "Hiring", icon: UserCheck },
+  // The HR mailbox. HR, admin and super admin, by role (see OPEN_SECTIONS).
+  { to: "/mail", label: "Mail", icon: Mail, roles: [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.HR] },
   { to: "/onboarding", label: "Onboarding", icon: UserPlus },
   { to: "/employees", label: "Employees", icon: Users },
   // Who has actually started using the phone app. Staff-only: it says when

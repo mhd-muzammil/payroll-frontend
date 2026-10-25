@@ -149,7 +149,7 @@ export function getAllowedSections() {
 // bounces it to the role's default route, which is how /requests silently
 // redirected to /attendance. Add new sections of this kind HERE — Sidebar and
 // ProtectedRoute both read it, so they can never disagree.
-export const OPEN_SECTIONS = ["cases", "requests"];
+export const OPEN_SECTIONS = ["cases", "requests", "mail"];
 
 export function canAccessSection(section) {
   const claims = getTokenClaims();
