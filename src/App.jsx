@@ -22,6 +22,8 @@ import AppUsagePage from './pages/AppUsagePage';
 import PublicOnboardingPage from './pages/PublicOnboardingPage';
 import PublicAppointmentPage from './pages/PublicAppointmentPage';
 import MailPage from './pages/MailPage';
+import OfferLettersPage from './pages/OfferLettersPage';
+import AppointmentOrdersPage from './pages/AppointmentOrdersPage';
 import { ROLES, getDefaultRouteByRole, getUserRole, isAuthenticated } from './auth/rbac';
 import { ErrorBoundary } from './components/ui/ErrorBoundary';
 import { DutyProvider } from './context/DutyContext';
@@ -64,6 +66,8 @@ function App() {
         <Route element={<ProtectedRoute allowedRoles={[ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.HR]} />}>
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/hiring" element={<HiringPage />} />
+          <Route path="/hiring/offer-letters" element={<OfferLettersPage />} />
+          <Route path="/hiring/appointment-orders" element={<AppointmentOrdersPage />} />
           <Route path="/mail" element={<MailPage />} />
           <Route path="/onboarding" element={<OnboardingPage />} />
           <Route path="/employees" element={<EmployeePage />} />

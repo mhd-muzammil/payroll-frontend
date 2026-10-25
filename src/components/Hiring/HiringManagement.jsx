@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { api } from "@/api/Api";
 import DataTable from "../ui/DataTable";
-import OfferLetters from "./OfferLetters";
-import AppointmentOrders from "./AppointmentOrders";
+import { useNavigate } from "react-router-dom";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
@@ -96,8 +95,8 @@ export default function HiringManagement() {
   // Spreadsheet import. Two steps on purpose: the first upload only reports what
   // WOULD happen, because several hundred rows landing in the wrong columns is a
   // day of work to undo by hand.
-  const [offersOpen, setOffersOpen] = useState(false);
-  const [ordersOpen, setOrdersOpen] = useState(false);
+  // Offer letters and appointment orders are pages of their own now.
+  const navigate = useNavigate();
   const [importOpen, setImportOpen] = useState(false);
   const [importFile, setImportFile] = useState(null);
   const [importSource, setImportSource] = useState("");
@@ -356,7 +355,7 @@ export default function HiringManagement() {
         <div className="flex items-center gap-3 shrink-0">
           <Button
             variant="outline"
-            onClick={() => setOffersOpen(true)}
+            onClick={() => navigate("/hiring/offer-letters")}
             className="bg-white/10 border-white/25 text-white hover:bg-white/20 font-semibold px-5 py-2.5 rounded-xl transition-all flex items-center gap-2"
           >
             <FileText className="h-4 w-4" />
@@ -364,7 +363,7 @@ export default function HiringManagement() {
           </Button>
           <Button
             variant="outline"
-            onClick={() => setOrdersOpen(true)}
+            onClick={() => navigate("/hiring/appointment-orders")}
             className="bg-white/10 border-white/25 text-white hover:bg-white/20 font-semibold px-5 py-2.5 rounded-xl transition-all flex items-center gap-2"
           >
             <FileText className="h-4 w-4" />
@@ -625,9 +624,6 @@ export default function HiringManagement() {
           ]}
         />
       )}
-
-      {offersOpen && <OfferLetters open={offersOpen} onOpenChange={setOffersOpen} />}
-      {ordersOpen && <AppointmentOrders open={ordersOpen} onOpenChange={setOrdersOpen} />}
 
       {/* Add / Edit Candidate Dialog Modal */}
       <Dialog open={isOpen} onOpenChange={setIsOpen}>

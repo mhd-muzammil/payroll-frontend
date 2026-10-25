@@ -1,15 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { ArrowLeft, Download, Edit, FileText, Loader2, Mail, Paperclip, Plus, Send, Trash2 } from "lucide-react";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "../ui/dialog";
 import { offerLetterService } from "../../services/offerLetterService";
 
 // Every amount is per month, in rupees. The defaults are the sample letter's.
@@ -161,9 +155,8 @@ function firstError(data) {
  * reference, name, role, joining date and pay filled in. Made here, downloaded
  * as the same PDF HR used to make in Word.
  */
-// Mounted only while open (see HiringManagement), so every opening starts on
-// the list with fresh state.
-export default function OfferLetters({ open, onOpenChange }) {
+// Its own page (/hiring/offer-letters), opened from the Hiring Portal.
+export default function OfferLetters() {
   const [letters, setLetters] = useState([]);
   const [loading, setLoading] = useState(true);
   const [reloads, setReloads] = useState(0);
@@ -296,19 +289,23 @@ export default function OfferLetters({ open, onOpenChange }) {
   const total = sums(form);
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[94vw] md:max-w-[860px] w-full p-6 max-h-[92vh] overflow-y-auto bg-background border-border shadow-2xl rounded-2xl">
-        <DialogHeader>
-          <DialogTitle className="text-xl font-bold flex items-center gap-2">
+    <div className="space-y-4">
+      <Link to="/hiring" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+        <ArrowLeft className="h-4 w-4" />
+        Hiring Portal
+      </Link>
+      <div className="rounded-2xl border border-border bg-card p-4 md:p-6 space-y-4">
+        <div className="space-y-1">
+          <h1 className="text-xl font-bold flex items-center gap-2">
             <FileText className="h-5 w-5 text-primary" />
             {mailing ? "Mail Offer Letter" : editing === null ? "Offer Letters" : editing.id ? "Edit Offer Letter" : "New Offer Letter"}
-          </DialogTitle>
-          <DialogDescription className="text-xs">
+          </h1>
+          <p className="text-xs text-muted-foreground">
             {mailing
               ? "HR's own offer mail, from the HR mailbox, with the letter attached. Only the name and the role change."
               : "The company's own offer letter. Only the reference, name, role, joining date and pay change; every other line is the same as before."}
-          </DialogDescription>
-        </DialogHeader>
+          </p>
+        </div>
 
         {error && (
           <div className="rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
@@ -476,7 +473,7 @@ export default function OfferLetters({ open, onOpenChange }) {
             </div>
           </form>
         )}
-      </DialogContent>
-    </Dialog>
+      </div>
+    </div>
   );
 }

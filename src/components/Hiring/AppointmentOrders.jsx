@@ -1,15 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { ArrowLeft, Copy, Download, Edit, FileSignature, Loader2, Plus, Send, Trash2 } from "lucide-react";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "../ui/dialog";
 import { appointmentOrderService } from "../../services/appointmentOrderService";
 import { offerLetterService } from "../../services/offerLetterService";
 
@@ -81,9 +75,8 @@ function firstError(data) {
  * letter, in the company's printed format, emailed to the employee to read and
  * sign on their phone. Once signed it is a record and cannot be changed.
  */
-// Mounted only while open (see HiringManagement), so every opening starts on
-// the list with fresh state.
-export default function AppointmentOrders({ open, onOpenChange }) {
+// Its own page (/hiring/appointment-orders), opened from the Hiring Portal.
+export default function AppointmentOrders() {
   const [orders, setOrders] = useState([]);
   const [offers, setOffers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -232,18 +225,22 @@ export default function AppointmentOrders({ open, onOpenChange }) {
   const isBusy = (order, what) => busy === `${order.id}:${what}`;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[94vw] md:max-w-[960px] w-full p-6 max-h-[92vh] overflow-y-auto bg-background border-border shadow-2xl rounded-2xl">
-        <DialogHeader>
-          <DialogTitle className="text-xl font-bold flex items-center gap-2">
+    <div className="space-y-4">
+      <Link to="/hiring" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+        <ArrowLeft className="h-4 w-4" />
+        Hiring Portal
+      </Link>
+      <div className="rounded-2xl border border-border bg-card p-4 md:p-6 space-y-4">
+        <div className="space-y-1">
+          <h1 className="text-xl font-bold flex items-center gap-2">
             <FileSignature className="h-5 w-5 text-primary" />
             {editing === null ? "Appointment Orders" : editing.id ? "Edit Appointment Order" : "New Appointment Order"}
-          </DialogTitle>
-          <DialogDescription className="text-xs">
+          </h1>
+          <p className="text-xs text-muted-foreground">
             The company&apos;s appointment order, after the offer letter. Send it and the employee gets a link by
             email to read and sign it on their phone, with a code emailed to them.
-          </DialogDescription>
-        </DialogHeader>
+          </p>
+        </div>
 
         {error && (
           <div className="rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
@@ -438,7 +435,7 @@ export default function AppointmentOrders({ open, onOpenChange }) {
             </div>
           </form>
         )}
-      </DialogContent>
-    </Dialog>
+      </div>
+    </div>
   );
 }

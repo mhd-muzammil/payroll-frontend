@@ -13,7 +13,8 @@ const ProtectedRoute = ({ allowedRoles }) => {
     return <Navigate to={getDefaultRouteByRole(role)} replace />;
   }
 
-  const sectionName = location.pathname.replace(/^\//, "");
+  // A page inside a section (/hiring/offer-letters) belongs to that section.
+  const sectionName = location.pathname.replace(/^\//, "").split("/")[0];
   if (sectionName && sectionName !== "dashboard" && !canAccessSection(sectionName)) {
     return <Navigate to={getDefaultRouteByRole(role)} replace />;
   }
