@@ -14,7 +14,7 @@ const MAIL_TABS = [
   { key: "IGNORED", label: "Ignored" },
   { key: "ALL", label: "All mail" },
 ];
-const SYNC_EVERY_MS = 2 * 60 * 1000;
+const SYNC_EVERY_MS = 60 * 1000;
 
 const STATUS_CHIP = {
   NEW: ["Inbox", "bg-sky-100 text-sky-800 dark:bg-sky-500/15 dark:text-sky-300"],
@@ -264,7 +264,7 @@ function SentPanel({ reloadKey }) {
           <button type="button" onClick={() => setOpen(open === r.id ? null : r.id)} className="w-full px-4 py-3 text-left hover:bg-muted/40">
             <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
               <span>{when(r.created_at, true)}</span>
-              <span>{r.kind === "REPLY" ? "Reply" : "New mail"}</span>
+              <span>{{ REPLY: "Reply", COMPOSE: "New mail", OFFER: "Offer letter" }[r.kind] || r.kind}</span>
               <span>by {r.sent_by || "—"}</span>
               <Chip status={r.status} />
               {r.attachment_names.length > 0 && (
@@ -338,9 +338,9 @@ function PayrollMailsPanel({ reloadKey }) {
 /**
  * The Mail section: the HR mailbox inside Payroll, laid out like the customer
  * mail in OpenCall -- the list on the left, the open mail on the right. New
- * mail is copied in when the page opens and every two minutes while it is
- * open; Sent is what HR sent from here, and Payroll mails is what Payroll
- * sent by itself.
+ * mail is copied in when the page opens and every minute while it is open,
+ * newest first, and a backlog is fetched straight through; Sent is what HR
+ * sent from here, and Payroll mails is what Payroll sent by itself.
  */
 export default function MailManagement() {
   const [summary, setSummary] = useState(null);
@@ -363,55 +363,73 @@ export default function MailManagement() {
   // since another check (another person, an earlier one) may have.
   const seenTotal = useRef(null);
 
+  // The page's one way to check for mail, set up by the effect below.
+  const checkFor = useRef(null);
+
   const isMailTab = MAIL_TABS.some((t) => t.key === tab);
 
-  // What a check for new mail does with its answer, wherever it came from.
-  const settleSync = useCallback((promise) => {
+  useEffect(() => {
     let alive = true;
-    let later = null;
+    let busy = false;
+    const timers = new Set();
+    const later = (job, ms) => {
+      const id = window.setTimeout(() => {
+        timers.delete(id);
+        job();
+      }, ms);
+      timers.add(id);
+    };
     const apply = (result) => {
       setSummary(result);
       const total = result.counts?.ALL ?? null;
       if (result.stored > 0 || total !== seenTotal.current) setListVersion((n) => n + 1);
       seenTotal.current = total;
     };
-    promise.then(
-      (result) => {
-        if (!alive) return;
-        apply(result);
-        setSyncing(false);
-        // Another check was already reading the mailbox (another tab, another
-        // person). Look again once it will have stored what it found.
-        if (result.skipped) {
-          later = window.setTimeout(() => {
-            mailService.summary().then((summary) => alive && apply({ ...summary, stored: 0 }), () => {});
-          }, 6000);
-        }
-      },
-      (e) => {
-        if (!alive) return;
-        setError(problem(e, "Could not check for new mail."));
-        setSyncing(false);
-      },
-    );
-    return () => {
-      alive = false;
-      if (later) window.clearTimeout(later);
+    // Callers have already shown "checking"; this settles it.
+    const run = (force) => {
+      busy = true;
+      mailService.sync(force).then(
+        (result) => {
+          if (!alive) return;
+          apply(result);
+          if (result.pending > 0 && !result.error) {
+            // More mail is waiting (newest came first): keep going until it is all in.
+            later(() => run(true), 1500);
+            return;
+          }
+          busy = false;
+          setSyncing(false);
+          // Another check was already reading the mailbox (another tab, another
+          // person). Look again once it will have stored what it found.
+          if (result.skipped) {
+            later(() => mailService.summary().then((s) => alive && apply({ ...s, stored: 0 }), () => {}), 6000);
+          }
+        },
+        (e) => {
+          if (!alive) return;
+          busy = false;
+          setError(problem(e, "Could not check for new mail."));
+          setSyncing(false);
+        },
+      );
     };
-  }, []);
-
-  useEffect(() => {
-    const cancels = [settleSync(mailService.sync(false))];
-    const timer = window.setInterval(() => {
-      if (document.visibilityState !== "visible") return;
+    checkFor.current = () => {
+      if (busy) return;
       setSyncing(true);
-      cancels.push(settleSync(mailService.sync(false)));
+      run(true);
+    };
+    run(false);
+    const timer = window.setInterval(() => {
+      if (busy || document.visibilityState !== "visible") return;
+      setSyncing(true);
+      run(false);
     }, SYNC_EVERY_MS);
     return () => {
+      alive = false;
       window.clearInterval(timer);
-      cancels.forEach((cancel) => cancel());
+      timers.forEach((id) => window.clearTimeout(id));
     };
-  }, [settleSync]);
+  }, []);
 
   useEffect(() => {
     if (!isMailTab) return undefined;
@@ -445,10 +463,7 @@ export default function MailManagement() {
     }
   };
 
-  const checkNow = () => {
-    setSyncing(true);
-    settleSync(mailService.sync(true));
-  };
+  const checkNow = () => checkFor.current?.();
 
   const chooseTab = (key) => {
     if (key === tab) return;
@@ -481,6 +496,7 @@ export default function MailManagement() {
             <p className="text-sm text-slate-300 mt-0.5">
               {summary?.mailbox || "HR mailbox"}
               {summary?.last_polled_at ? ` · checked ${when(summary.last_polled_at)}` : ""}
+              {summary?.pending > 0 ? ` · getting ${summary.pending} more…` : ""}
             </p>
           </div>
         </div>

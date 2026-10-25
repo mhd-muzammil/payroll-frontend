@@ -16,6 +16,13 @@ export const offerLetterService = {
 
     remove: async (id) => api.delete(ENDPOINTS.BY_ID(id)),
 
+    /** The offer mail exactly as it will go: { subject, html, attachment }. */
+    mailPreview: async (id, dear) =>
+        (await api.get(`/api/offer-letters/${id}/mail_preview/`, { params: { dear } })).data,
+
+    /** Mail the letter from the HR mailbox, in HR's offer mail, PDF attached. */
+    sendMail: async (id, body) => (await api.post(`/api/offer-letters/${id}/send_mail/`, body)).data,
+
     /** The reference the next letter should carry, e.g. RTPL/NJ/2026/141. */
     nextRef: async () => (await api.get(ENDPOINTS.NEXT_REF)).data?.ref_no || "",
 
