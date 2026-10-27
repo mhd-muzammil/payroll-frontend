@@ -333,8 +333,10 @@ function TodayCases() {
     // Punching in at a customer implies being on duty, so start it if they have
     // not. This carried over from Start Travel, and it matters more here: with
     // duty off there is no GPS running, so the punch would record a time and no
-    // place — which is the one thing these buttons exist to capture.
-    if (!onDuty) startDuty();
+    // place — which is the one thing these buttons exist to capture. Never
+    // before the day's Login, though: the server refuses that start and the
+    // duty card says to Login first.
+    if (!onDuty) startDuty(null, { from: "check_in" });
     setContext(c.id, "working");
     runAction(() => caseService.punchIn(c.id, lastFix), c, "working");
   };

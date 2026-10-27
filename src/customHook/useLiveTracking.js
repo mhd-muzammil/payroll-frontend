@@ -84,6 +84,29 @@ const markLogin = (sessionId) => {
   }
 };
 
+// WHOSE TRACKER IS RUNNING ON THIS PHONE: the user signed in when this page
+// last started it. Kept on the phone so a reloaded page can tell whether a
+// tracker it finds running is the signed-in user's to stop, or somebody
+// else's, still on duty, on a shared phone.
+const TRACKER_OWNER_KEY = "tracking.tracker_owner";
+
+const rememberTrackerOwner = (owner) => {
+  try {
+    if (owner == null) localStorage.removeItem(TRACKER_OWNER_KEY);
+    else localStorage.setItem(TRACKER_OWNER_KEY, String(owner));
+  } catch {
+    // Storage blocked: a leftover tracker is then left alone, as before.
+  }
+};
+
+const trackerOwner = () => {
+  try {
+    return localStorage.getItem(TRACKER_OWNER_KEY);
+  } catch {
+    return null;
+  }
+};
+
 // HOW CLOSE TOGETHER THE TRAIL IS KEPT.
 //
 // The distance is the sum of straight lines between the fixes we hold, and the
@@ -1071,6 +1094,7 @@ export function useLiveTracking() {
       // WHOSE DUTY THIS IS, read once, now: the user signed in as it starts.
       // Everything it queues carries them, and only they ever send it.
       ownerRef.current = signedInUserId();
+      rememberTrackerOwner(ownerRef.current);
       sessionRef.current = { id: sessionId, startedAt: sessionStartedAt };
       restartPendingRef.current = false;
       // A recorder starting is taken at its word until it says otherwise: a
@@ -1176,10 +1200,44 @@ export function useLiveTracking() {
       runningRef.current = false;
       loginBoundaryRef.current = false;
       setTracking(false);
-      if (endOfDuty) void flushLeftovers(newest);
+      if (endOfDuty) {
+        rememberTrackerOwner(null);
+        void flushLeftovers(newest);
+      }
     },
     [clearSources, flushLeftovers],
   );
+
+  /**
+   * Off duty on the server and nothing started here, yet a tracker this page
+   * did not start may still be running on the phone: the duty the 12:00 AM
+   * sweep ended while the app was closed. Stopped, notification and all --
+   * what it would record now is not duty, and the kilometres do not count it.
+   */
+  const stopLeftover = useCallback(async () => {
+    if (!USE_DUTY_TRACKER || runningRef.current) return;
+    // Only the signed-in user's own: on a shared phone the tracker running may
+    // be somebody else's duty, still open, and theirs to end.
+    const owner = trackerOwner();
+    const me = signedInUserId();
+    if (owner == null || me == null || owner !== String(me)) return;
+    let state;
+    try {
+      state = await within(DutyTracker.state(), PLUGIN_WAIT_MS);
+    } catch {
+      return;
+    }
+    if (state?.wanted === true && !runningRef.current) {
+      await DutyTracker.stop().catch(() => {});
+      rememberTrackerOwner(null);
+    }
+  }, []);
+
+  /** Whether what this page is tracking is the signed-in user's own duty. */
+  const tracksSignedInUser = useCallback(() => {
+    const me = signedInUserId();
+    return ownerRef.current != null && me != null && String(ownerRef.current) === String(me);
+  }, []);
 
   // Clean up if the component unmounts while still tracking.
   useEffect(() => stop, [stop]);
@@ -1225,5 +1283,17 @@ export function useLiveTracking() {
     return () => window.removeEventListener(AUTH_CHANGED_EVENT, onAuthChanged);
   }, []);
 
-  return { tracking, lastFix, error, queued, held, source, start, stop, setContext };
+  return {
+    tracking,
+    lastFix,
+    error,
+    queued,
+    held,
+    source,
+    start,
+    stop,
+    stopLeftover,
+    tracksSignedInUser,
+    setContext,
+  };
 }

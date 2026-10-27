@@ -285,6 +285,9 @@ export function DutyProvider({ children }) {
   // a ref so the resume effect below runs exactly once, on load.
   const trackingRef = useRef(tracking);
   trackingRef.current = tracking;
+  // Counts every start of a duty here, so an answer asked for before one --
+  // which may still say "off duty" -- is never taken as that duty's end.
+  const startsRef = useRef(0);
 
   const applyState = useCallback((state) => {
     setOnDuty(Boolean(state?.on_duty));
@@ -320,11 +323,16 @@ export function DutyProvider({ children }) {
         // route is cut here, and the app opening is noted. The session is
         // passed for the tracker's sixteen-hour rule, on the server's clock.
         if (applyState(state)) {
+          startsRef.current += 1;
           trackingRef.current.start(null, "", {
             pageLoad: true,
             sessionId: state?.session_id ?? null,
             sessionStartedAt: state?.started_at ?? null,
           });
+        } else {
+          // Off duty -- the 12:00 AM sweep may have ended the duty while the
+          // app was closed, with its tracker still recording on the phone.
+          void trackingRef.current.stopLeftover?.();
         }
       })
       // An employee with no linked record simply is not on duty; a failure here
@@ -351,10 +359,25 @@ export function DutyProvider({ children }) {
     if (!isAuthenticated() || !canTrackDuty(getUserRole())) return;
     let cancelled = false;
     const refresh = () => {
+      const asked = startsRef.current;
       trackingService
         .duty()
         .then((state) => {
-          if (!cancelled) applyState(state);
+          if (cancelled) return;
+          const on = applyState(state);
+          // The server ended the duty -- the 12:00 AM sweep, or a Logout made
+          // elsewhere -- while this phone still records it. Stop: what it
+          // records now is not duty, and the kilometres do not count it. Only
+          // the signed-in user's own duty: on a shared phone, somebody else
+          // signed in is "off duty" while the owner's duty is still open.
+          if (
+            !on &&
+            asked === startsRef.current &&
+            trackingRef.current.tracking &&
+            trackingRef.current.tracksSignedInUser()
+          ) {
+            trackingRef.current.stop({ endOfDuty: true });
+          }
         })
         // A failed refresh must leave the last known figures alone rather than
         // blanking a screen the engineer is reading.
@@ -416,8 +439,11 @@ export function DutyProvider({ children }) {
    *
    * A fix good enough to accept the punch is good enough to start the duty it
    * belongs to. The strict ask stays for the path that arrives without one.
+   *
+   * `from: "check_in"` for a case Check In: the server starts no duty for it
+   * before the day's Login, and says so.
    */
-  const startDuty = useCallback(async (knownFix) => {
+  const startDuty = useCallback(async (knownFix, { from } = {}) => {
     setBusy(true);
     setDutyError(null);
     setDiagnostic(null);
@@ -433,8 +459,10 @@ export function DutyProvider({ children }) {
       // of the shift — the office could see they were out but never where, and
       // their distance stayed at zero. Duty without a position is not tracking.
       if (!hasCoords(knownFix)) await requireLocationPermission(locationPermission);
-      const state = await trackingService.startDuty();
+      const state = await trackingService.startDuty(from ? { from } : undefined);
       applyState(state);
+      // A duty answer asked for before this point predates the duty.
+      startsRef.current += 1;
       // A Login marks where the duty began, on its first fix. Not every call
       // here is one -- see isLogin.
       tracking.start(null, "", {

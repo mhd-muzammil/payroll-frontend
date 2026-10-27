@@ -23,8 +23,10 @@ export const trackingService = {
     return data;
   },
 
-  startDuty: async () => {
-    const { data } = await api.post(`${BASE}start_duty/`);
+  // `body` says where the start came from: {from: "check_in"} for a case
+  // Check In, which starts no duty before the day's Login.
+  startDuty: async (body) => {
+    const { data } = await api.post(`${BASE}start_duty/`, body);
     return data;
   },
 

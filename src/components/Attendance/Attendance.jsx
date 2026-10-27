@@ -17,8 +17,10 @@ import { drawAttendanceDay, saveBlob } from "../../Utility/attendanceDayImage";
 import { buildAttendanceReport, buildAttendanceWorkbook } from "../../Utility/attendanceReport";
 import { useDuty } from "../../context/DutyContext";
 import { seenWithin } from "../../Utility/trackingRules";
+import { readPhoneReadiness } from "../../Utility/phoneReadiness";
 import AttendanceForm from "./AttendanceForm";
 import AttendanceReportView from "./AttendanceReportView";
+import PhoneCheckDialog from "./PhoneCheckDialog";
 import AttendanceGroupedTable, { StatusPill } from "./AttendanceGroupedTable";
 import { ROLES, getTokenClaims, getUserRole, normalizeRole } from "@/auth/rbac";
 import {
@@ -242,6 +244,8 @@ const Attendance = () => {
   } = useDuty();
 
   const [geoLocating, setGeoLocating] = useState(false);
+  // What Login found wrong with the phone, while its screen is open.
+  const [phoneCheck, setPhoneCheck] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [showDeleteAllConfirm, setShowDeleteAllConfirm] = useState(false);
@@ -486,6 +490,15 @@ const Attendance = () => {
 
   const handleGeoPunchIn = useCallback(async () => {
     setGeoLocating(true);
+    // The phone first ("1 a"): a Login on a phone that cannot record the duty
+    // punched the register and then measured the day in straight lines. Nothing
+    // is saved until it passes. Outside the app it lets everything through.
+    const phone = await readPhoneReadiness();
+    if (!phone.ready) {
+      setPhoneCheck(phone);
+      setGeoLocating(false);
+      return;
+    }
     try {
       const { latitude, longitude } = await punchPosition();
       await checkInGeo({ latitude, longitude });
@@ -731,11 +744,20 @@ const Attendance = () => {
     if (!canSelfCheckIn || !Capacitor?.isNativePlatform?.()) return;
     if (repairedDutyRef.current) return;
     if (!hasInTimeToday || hasOutTimeToday || onDuty) return;
+    // Not while a Login is still under way: its own duty start is coming, and
+    // a second one beside it stopped and restarted the tracker -- and could
+    // report a phone check of its own over a duty that had started.
+    if (geoLocating) return;
+    // Today's Login, by today's date now: a page left open across midnight
+    // still holds yesterday's row, and the duty the 12:00 AM sweep has just
+    // ended is not one to start again.
+    const loggedIn = employeeSelectedDateRecord?.intime || employeeSelectedDateRecord?.outtime;
+    if (!loggedIn || formatLocalDate(new Date(loggedIn)) !== formatLocalDate(new Date())) return;
     repairedDutyRef.current = true;
     startDuty().catch(() => {
       // Reported through the duty card's own error line; nothing to add here.
     });
-  }, [canSelfCheckIn, hasInTimeToday, hasOutTimeToday, onDuty, startDuty]);
+  }, [canSelfCheckIn, hasInTimeToday, hasOutTimeToday, onDuty, startDuty, employeeSelectedDateRecord, geoLocating]);
 
   const toNowIso = () => new Date().toISOString();
 
@@ -1390,6 +1412,18 @@ const Attendance = () => {
         <div className="mt-4 rounded-2xl border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
           No attendance records found for {selectedDateLabel}.
         </div>
+      )}
+
+      {/* What Login found wrong with the phone; Login again once it is right. */}
+      {phoneCheck && (
+        <PhoneCheckDialog
+          check={phoneCheck}
+          onClose={() => setPhoneCheck(null)}
+          onReady={() => {
+            setPhoneCheck(null);
+            void handleGeoPunchIn();
+          }}
+        />
       )}
 
       {/* Export Report, on screen: the page's filtered rows, as the file has them. */}
