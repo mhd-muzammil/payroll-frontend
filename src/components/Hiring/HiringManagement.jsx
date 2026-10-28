@@ -43,6 +43,7 @@ const ACTION_CHOICES = [
   "Waiting For Joining Date", 
   "Salary Discussion", 
   "Rejected", 
+  "Interview Scheduled",
   "Decline"
 ];
 
@@ -54,6 +55,7 @@ const actionBadgeStyles = {
   "Waiting For Joining Date": "bg-violet-50 dark:bg-violet-950/30 text-violet-700 dark:text-violet-400 border border-violet-200/50",
   "Salary Discussion": "bg-purple-50 dark:bg-purple-950/30 text-purple-700 dark:text-purple-400 border border-purple-200/50",
   "Rejected": "bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-400 border border-rose-200/50",
+  "Interview Scheduled": "bg-cyan-50 dark:bg-cyan-950/30 text-cyan-700 dark:text-cyan-400 border border-cyan-200/50",
   "Decline": "bg-slate-50 dark:bg-slate-950/30 text-slate-700 dark:text-slate-400 border border-slate-200/50"
 };
 
