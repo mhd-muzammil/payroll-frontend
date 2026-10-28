@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { api } from "@/api/Api";
+import { locationOptions, matchesLocation, NO_LOCATION } from "@/Utility/candidateLocations";
 import DataTable from "../ui/DataTable";
 import { useNavigate } from "react-router-dom";
 import { Button } from "../ui/button";
@@ -60,6 +61,8 @@ export default function HiringManagement() {
   const [candidates, setCandidates] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  // "" is every location; otherwise a key from candidateLocations.
+  const [locationFilter, setLocationFilter] = useState("");
   const [error, setError] = useState("");
 
   // Dialog State
@@ -262,8 +265,18 @@ export default function HiringManagement() {
     }
   };
 
-  // Filter candidates based on search query
+  const locations = locationOptions(candidates);
+  // A place chosen and then emptied by an edit stays chosen, at 0, rather than
+  // the select showing "All locations" over an empty table.
+  const locationChoices =
+    locationFilter && locationFilter !== NO_LOCATION &&
+    !locations.places.some((place) => place.value === locationFilter)
+      ? [...locations.places, { value: locationFilter, label: locationFilter, count: 0 }]
+      : locations.places;
+
+  // Filter candidates based on search query and location
   const filteredCandidates = candidates.filter(cand => {
+    if (!matchesLocation(cand, locationFilter)) return false;
     const q = searchQuery.toLowerCase();
     return (
       (cand.name || "").toLowerCase().includes(q) ||
@@ -433,16 +446,38 @@ export default function HiringManagement() {
 
       {/* Filters & Actions bar */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-card border border-border/60 rounded-3xl p-5 shadow-xs">
-        <div className="relative w-full max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search candidate by name, phone, segment..."
-            className="pl-9 h-10 rounded-xl border border-border focus:ring-1 focus:ring-primary focus:outline-none w-full"
-          />
+        <div className="flex flex-col sm:flex-row items-center gap-3 w-full">
+          <div className="relative w-full max-w-sm">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search candidate by name, phone, segment..."
+              className="pl-9 h-10 rounded-xl border border-border focus:ring-1 focus:ring-primary focus:outline-none w-full"
+            />
+          </div>
+          {/* Present and Perm both count; see candidateLocations.js. */}
+          <div className="relative w-full sm:max-w-xs">
+            <MapPin className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <select
+              aria-label="Filter by location"
+              value={locationFilter}
+              onChange={(e) => setLocationFilter(e.target.value)}
+              className="h-10 w-full rounded-xl border border-border bg-background pl-9 pr-3 text-sm focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
+            >
+              <option value="">All locations ({candidates.length})</option>
+              {locationChoices.map((place) => (
+                <option key={place.value} value={place.value} title={place.label}>
+                  {place.label.length > 50 ? place.label.slice(0, 49) + "…" : place.label} ({place.count})
+                </option>
+              ))}
+              {(locations.none > 0 || locationFilter === NO_LOCATION) && (
+                <option value={NO_LOCATION}>No location ({locations.none})</option>
+              )}
+            </select>
+          </div>
         </div>
-        <div className="text-xs text-muted-foreground font-semibold">
+        <div className="shrink-0 text-xs text-muted-foreground font-semibold">
           Showing {filteredCandidates.length} candidate profiles
         </div>
       </div>
