@@ -265,6 +265,8 @@ const Attendance = () => {
   const [exporting, setExporting] = useState(false);
   // The Export Report sheet, open on screen in its own view.
   const [showReport, setShowReport] = useState(false);
+  // Export Report asks first: with the punch times, or the status alone.
+  const [showExportChoice, setShowExportChoice] = useState(false);
   const [quickRange, setQuickRange] = useState("");
   // Phone only: the From/To inputs and the region select start folded away.
   // From sm: up they are always visible and this is ignored.
@@ -322,8 +324,13 @@ const Attendance = () => {
    * column per date that has a record (not every calendar day — sparse work
    * days, matching how the branches' own attendance sheets read), colored by
    * status. Replaces the old flat one-row-per-punch CSV.
+   *
+   * withTime is the full report (punches under each status, totals at the end
+   * of the row). Without it every date cell is the status alone, and nothing
+   * after the dates -- the sheet the branches send round.
    */
-  const handleExportExcel = async () => {
+  const handleExportExcel = async (withTime = true) => {
+    setShowExportChoice(false);
     if (filteredRecords.length === 0) {
       alert("No attendance records to export for this date.");
       return;
@@ -334,7 +341,9 @@ const Attendance = () => {
       const { default: ExcelJS } = await import("exceljs");
       // The same report the Report View draws -- built once, for both, in
       // Utility/attendanceReport.js, so the file and the screen cannot differ.
-      const workbook = buildAttendanceWorkbook(ExcelJS, buildAttendanceReport(filteredRecords));
+      const workbook = buildAttendanceWorkbook(ExcelJS, buildAttendanceReport(filteredRecords), {
+        withTime,
+      });
 
       const buffer = await workbook.xlsx.writeBuffer();
       const blob = new Blob([buffer], {
@@ -343,7 +352,10 @@ const Attendance = () => {
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.setAttribute("href", url);
-      link.setAttribute("download", `Attendance_Report_${fromDate}_to_${toDate}.xlsx`);
+      link.setAttribute(
+        "download",
+        `Attendance_Report${withTime ? "" : "_Status"}_${fromDate}_to_${toDate}.xlsx`
+      );
       link.style.visibility = "hidden";
       document.body.appendChild(link);
       link.click();
@@ -1372,7 +1384,7 @@ const Attendance = () => {
             {loading ? "Refreshing..." : "Refresh"}
           </Button>
           {!isEmployee && (
-            <Button variant="outline" onClick={handleExportExcel} disabled={exporting}>
+            <Button variant="outline" onClick={() => setShowExportChoice(true)} disabled={exporting}>
               {exporting ? "Exporting..." : "Export Report"}
             </Button>
           )}
@@ -1440,7 +1452,7 @@ const Attendance = () => {
             .filter(Boolean)
             .join(" · ")}
           onClose={() => setShowReport(false)}
-          onDownload={handleExportExcel}
+          onDownload={() => handleExportExcel(true)}
           downloading={exporting}
         />
       )}
@@ -1572,6 +1584,36 @@ const Attendance = () => {
                 ))
               )}
             </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Export Report: with or without the punch times. Same date range,
+          region and filters either way. */}
+      {showExportChoice && (
+        <Dialog open={showExportChoice} onOpenChange={(open) => { if (!open) setShowExportChoice(false); }}>
+          <DialogContent className="sm:max-w-md bg-card border border-border shadow-2xl rounded-3xl p-6">
+            <DialogHeader className="mb-4">
+              <DialogTitle className="text-xl font-bold tracking-tight">Export Report</DialogTitle>
+              <DialogDescription className="text-sm text-muted-foreground mt-1">
+                Include each day's in and out time, or only the status?
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <Button icon={Clock} onClick={() => handleExportExcel(true)}>
+                With Timing
+              </Button>
+              <Button variant="outline" icon={FileText} onClick={() => handleExportExcel(false)}>
+                Without Timing
+              </Button>
+            </div>
+
+            <DialogFooter className="mt-5">
+              <Button variant="outline" onClick={() => setShowExportChoice(false)}>
+                Cancel
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       )}

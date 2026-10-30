@@ -241,8 +241,12 @@ export function buildAttendanceReport(records) {
 /**
  * The report as an Excel workbook -- the sheet Export Report has always made.
  * `ExcelJS` is passed in because the page loads it only when it is needed.
+ *
+ * `withTime: false` is Export Report's "Without Timing": each date cell is the
+ * status word alone and the row ends at the last date -- no punches, no
+ * totals, no auto-logout note. The sheet the branches send round.
  */
-export function buildAttendanceWorkbook(ExcelJS, report) {
+export function buildAttendanceWorkbook(ExcelJS, report, { withTime = true } = {}) {
   const { dates: sortedDates, dateLabels: dateHeaderLabels, rows } = report;
 
   const workbook = new ExcelJS.Workbook();
@@ -259,7 +263,7 @@ export function buildAttendanceWorkbook(ExcelJS, report) {
     { state: "frozen", xSplit: 3, ySplit: 1, topLeftCell: "D2", activeCell: "D2" },
   ];
 
-  const TOTAL_HEADERS = REPORT_TOTAL_HEADERS;
+  const TOTAL_HEADERS = withTime ? REPORT_TOTAL_HEADERS : [];
   const firstTotalColumn = 4 + sortedDates.length;
 
   sheet.addRow(["S.no", "Name", "Location", ...dateHeaderLabels, ...TOTAL_HEADERS]);
@@ -281,6 +285,30 @@ export function buildAttendanceWorkbook(ExcelJS, report) {
 
   let anyAutoClosed = false;
   rows.forEach((emp) => {
+    if (!withTime) {
+      const row = sheet.addRow([
+        emp.sno,
+        emp.name,
+        emp.branch,
+        ...sortedDates.map((datePart) => {
+          const entry = emp.days[datePart];
+          return entry ? getStatusDisplay(statusShown(entry.status, datePart)) || "-" : "-";
+        }),
+      ]);
+      row.getCell(1).alignment = { horizontal: "center" };
+      sortedDates.forEach((datePart, i) => {
+        const cell = row.getCell(4 + i);
+        const entry = emp.days[datePart];
+        cell.alignment = { horizontal: "center", vertical: "middle" };
+        if (entry?.status) {
+          cell.font = {
+            color: { argb: STATUS_EXPORT_COLORS[statusShown(entry.status, datePart)] || "FF000000" },
+          };
+        }
+      });
+      return;
+    }
+
     const row = sheet.addRow([
       emp.sno,
       emp.name,
@@ -346,7 +374,7 @@ export function buildAttendanceWorkbook(ExcelJS, report) {
   sheet.getColumn(2).width = 22;
   sheet.getColumn(3).width = 14;
   sortedDates.forEach((_, i) => {
-    sheet.getColumn(4 + i).width = 14;
+    sheet.getColumn(4 + i).width = withTime ? 14 : 13;
   });
   TOTAL_HEADERS.forEach((header, i) => {
     // Wide enough for the longest of them on one line -- "Present + Leave"
