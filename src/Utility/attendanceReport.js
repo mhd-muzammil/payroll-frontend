@@ -247,7 +247,14 @@ export function buildAttendanceReport(records) {
  * totals, no auto-logout note. The sheet the branches send round.
  */
 export function buildAttendanceWorkbook(ExcelJS, report, { withTime = true } = {}) {
-  const { dates: sortedDates, dateLabels: dateHeaderLabels, rows } = report;
+  const { dates: sortedDates, dateLabels: dateHeaderLabels } = report;
+  // Without Timing reads location by location, A-Z by name inside each, and
+  // S.no runs straight down the sheet -- how the branches' own sheet is laid out.
+  const rows = withTime
+    ? report.rows
+    : [...report.rows]
+        .sort((a, b) => a.branch.localeCompare(b.branch) || a.name.localeCompare(b.name))
+        .map((row, idx) => ({ ...row, sno: idx + 1 }));
 
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet("Attendance Report");
@@ -368,6 +375,16 @@ export function buildAttendanceWorkbook(ExcelJS, report, { withTime = true } = {
     sheet.addRow([]);
     const note = sheet.addRow([AUTO_CLOSED_NOTE]);
     note.getCell(1).font = { color: { argb: "FF808080" }, size: 10 };
+  }
+
+  // The status-only sheet is a printed-looking grid: every cell boxed.
+  if (!withTime) {
+    const thin = { style: "thin", color: { argb: "FF000000" } };
+    sheet.eachRow((row) => {
+      for (let col = 1; col <= 3 + sortedDates.length; col++) {
+        row.getCell(col).border = { top: thin, left: thin, bottom: thin, right: thin };
+      }
+    });
   }
 
   sheet.getColumn(1).width = 6;
