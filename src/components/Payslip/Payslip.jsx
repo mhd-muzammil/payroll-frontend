@@ -134,7 +134,9 @@ const PayslipsPage = () => {
   const fetchMonthSlips = async (m = genMonth, y = genYear) => {
     setMonthSlipsLoading(true);
     try {
-      const res = await api.get(`/api/payslips/?month=${m}&year=${y}`);
+      // With the relieved: a month they worked still shows on this list,
+      // marked Relieved (see generateRows).
+      const res = await api.get(`/api/payslips/?month=${m}&year=${y}&with_relieved=1`);
       setMonthSlips(extractArray(res.data));
     } catch (err) {
       console.error("Failed to fetch month payslips:", err);
@@ -728,8 +730,19 @@ const PayslipsPage = () => {
     return list;
   }, [slips, selectedRegion, historyQuery]);
 
+  // The staff, and anybody relieved since who has a slip for this month: the
+  // month they worked stays on the list, marked Relieved. The region cards
+  // above count staff, so they are left as they were.
+  const generateRows = useMemo(() => {
+    const listed = new Set(employees.map((e) => e.id));
+    const relieved = monthSlips
+      .filter((s) => s.employee_details?.status === "relieved" && !listed.has(s.employee))
+      .map((s) => s.employee_details);
+    return [...employees, ...relieved];
+  }, [employees, monthSlips]);
+
   const filteredEmployees = useMemo(() => {
-    let list = employees;
+    let list = generateRows;
     if (selectedRegion) {
       list = list.filter(e => e.branch?.toLowerCase() === selectedRegion.toLowerCase());
     }
@@ -743,7 +756,7 @@ const PayslipsPage = () => {
       );
     }
     return list;
-  }, [employees, selectedRegion, query]);
+  }, [generateRows, selectedRegion, query]);
 
   return (
     <div className="space-y-6">
@@ -923,7 +936,14 @@ const PayslipsPage = () => {
                     <div className="flex items-center gap-3">
                       <Avatar name={emp.employee_name || "Emp"} />
                       <div>
-                        <div className="text-sm font-medium">{emp.employee_name || "Unknown"}</div>
+                        <div className="text-sm font-medium">
+                          {emp.employee_name || "Unknown"}
+                          {emp.status === "relieved" && (
+                            <span className="ml-1.5 rounded-full bg-rose-100 px-2 py-0.5 text-[11px] font-semibold text-rose-700 dark:bg-rose-950/60 dark:text-rose-300">
+                              Relieved
+                            </span>
+                          )}
+                        </div>
                         <div className="text-[11px] text-muted-foreground truncate max-w-[200px]">{emp.email || "no email"}</div>
                         <div className="text-xs text-muted-foreground font-mono">{emp.emp_code || `ID: ${emp.id}`} - {emp.role || "N/A"}</div>
                       </div>

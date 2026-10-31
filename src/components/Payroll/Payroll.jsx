@@ -166,9 +166,11 @@ const PayrollPage = () => {
       const statsUrl = region 
         ? `/api/payslips/company_stats/?branch=${region}&month=${m}&year=${y}` 
         : `/api/payslips/company_stats/?month=${m}&year=${y}`;
+      // With the relieved: a month they worked stays on the roster, marked
+      // Relieved, as the month's totals above count it.
       const payslipsUrl = region
-        ? `/api/payslips/?month=${m}&year=${y}&branch=${region}`
-        : `/api/payslips/?month=${m}&year=${y}`;
+        ? `/api/payslips/?month=${m}&year=${y}&branch=${region}&with_relieved=1`
+        : `/api/payslips/?month=${m}&year=${y}&with_relieved=1`;
 
       const [cyclesRes, statsRes, payslipsRes] = await Promise.all([
         api.get(summaryUrl).catch(e => {
@@ -261,18 +263,22 @@ const PayrollPage = () => {
       if (empId) payslipMap.set(Number(empId), p);
     });
 
-    return allEmployees.map(emp => {
-      const slip = payslipMap.get(Number(emp.id));
-      return {
-        ...emp,
-        payslip: slip || null,
-        payslipStatus: slip ? slip.status : "Not Generated",
-        netSalary: slip ? parseFloat(slip.net_salary || 0) : null,
-        grossEarnings: slip ? parseFloat(slip.gross_earnings || 0) : null,
-        lopDays: slip ? parseFloat(slip.lop_days || 0) : null,
-        paidDays: slip ? parseFloat(slip.paid_days || 0) : null,
-      };
+    const row = (emp, slip) => ({
+      ...emp,
+      payslip: slip || null,
+      payslipStatus: slip ? slip.status : "Not Generated",
+      netSalary: slip ? parseFloat(slip.net_salary || 0) : null,
+      grossEarnings: slip ? parseFloat(slip.gross_earnings || 0) : null,
+      lopDays: slip ? parseFloat(slip.lop_days || 0) : null,
+      paidDays: slip ? parseFloat(slip.paid_days || 0) : null,
     });
+    // Anybody relieved since who has a slip this month: not on the staff list
+    // any more, but the month they worked is shown, marked Relieved.
+    const listed = new Set(allEmployees.map(emp => Number(emp.id)));
+    const relieved = (monthlyPayslips || [])
+      .filter(p => p.employee_details?.status === "relieved" && !listed.has(Number(p.employee?.id || p.employee)))
+      .map(p => row(p.employee_details, p));
+    return [...allEmployees.map(emp => row(emp, payslipMap.get(Number(emp.id)))), ...relieved];
   }, [allEmployees, monthlyPayslips]);
 
   const filteredRoster = useMemo(() => {
@@ -669,7 +675,14 @@ const PayrollPage = () => {
                   label: "Employee",
                   render: (e) => (
                     <div>
-                      <div className="font-bold text-sm text-foreground">{e.employee_name}</div>
+                      <div className="font-bold text-sm text-foreground">
+                        {e.employee_name}
+                        {e.status === "relieved" && (
+                          <span className="ml-1.5 rounded-full bg-rose-100 px-2 py-0.5 text-[11px] font-semibold text-rose-700 dark:bg-rose-950/60 dark:text-rose-300">
+                            Relieved
+                          </span>
+                        )}
+                      </div>
                       <div className="flex items-center gap-1.5 mt-0.5">
                         {e.emp_code && (
                           <span className="text-[10px] font-mono font-semibold bg-muted px-1.5 py-0.5 rounded text-muted-foreground">
