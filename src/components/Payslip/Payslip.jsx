@@ -146,7 +146,10 @@ const PayslipsPage = () => {
   const fetchPayslips = async () => {
     setLoading(true);
     try {
-      const res = await api.get("/api/payslips/");
+      // The Employee Pay Report keeps the relieved -- a month they worked is a
+      // month paid, as the Payroll page counts it -- and marks them. The server
+      // ignores the flag on an employee's own list.
+      const res = await api.get("/api/payslips/?with_relieved=1");
       setSlips(extractArray(res.data));
     } catch (err) {
       console.error("Failed to fetch payslips:", err);

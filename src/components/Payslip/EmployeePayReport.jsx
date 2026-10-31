@@ -490,6 +490,12 @@ const EmployeePayReport = ({
                       <span className="ml-1.5 text-[11px] text-muted-foreground">
                         {slip.sent_at ? "· Sent" : "· Not sent"}
                       </span>
+                      {/* Left since: the month they worked is still a month paid. */}
+                      {slip.employee_details?.status === "relieved" && (
+                        <span className="ml-1.5 rounded-full bg-rose-100 px-2 py-0.5 text-[11px] font-semibold text-rose-700 dark:bg-rose-950/60 dark:text-rose-300">
+                          Relieved
+                        </span>
+                      )}
                     </td>
                     {GROUPS.flatMap((g) =>
                       g.columns.map((c) => (
