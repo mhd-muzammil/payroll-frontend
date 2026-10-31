@@ -9,6 +9,7 @@ const ENDPOINTS = {
     LINK: (id) => `/api/appointment-orders/${id}/link/`,
     PDF_TICKET: (id) => `/api/appointment-orders/${id}/pdf_ticket/`,
     PHOTO: (id) => `/api/appointment-orders/${id}/photo/`,
+    SIGNATURE_PHOTO: (id) => `/api/appointment-orders/${id}/signature-photo/`,
 };
 
 /**
@@ -17,6 +18,17 @@ const ENDPOINTS = {
  * opening their appointment order on their own phone has neither.
  */
 const open = axios.create({ baseURL: Base_URL });
+
+/** A picture from the API, as a data: URL for an <img>. */
+const picture = async (url) => {
+    const { data } = await api.get(url, { responseType: "blob" });
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(new Error("Could not read the photo."));
+        reader.readAsDataURL(data);
+    });
+};
 
 export const appointmentOrderService = {
     list: async () => (await api.get(ENDPOINTS.BASE)).data,
@@ -42,21 +54,29 @@ export const appointmentOrderService = {
     },
 
     /** The photo the employee took when signing, as a data: URL for an <img>. */
-    photo: async (id) => {
-        const { data } = await api.get(ENDPOINTS.PHOTO(id), { responseType: "blob" });
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(reader.result);
-            reader.onerror = () => reject(new Error("Could not read the photo."));
-            reader.readAsDataURL(data);
-        });
-    },
+    photo: (id) => picture(ENDPOINTS.PHOTO(id)),
+
+    /** The photo of their signature on paper, taken when signing, the same way. */
+    signaturePhoto: (id) => picture(ENDPOINTS.SIGNATURE_PHOTO(id)),
 
     // ---- the employee, from the emailed link
 
     read: async (token) => (await open.get(`/api/appointment/${token}/`)).data,
 
     sendCode: async (token) => (await open.post(`/api/appointment/${token}/code/`, {})).data,
+
+    /**
+     * The ink the server takes from a photo of the paper signature, as a data: URL. Nothing is kept.
+     * Given up after a minute, so a stalled upload says so instead of spinning.
+     */
+    previewSignature: async (token, signaturePhoto) =>
+        (
+            await open.post(
+                `/api/appointment/${token}/signature-preview/`,
+                { signature_photo: signaturePhoto },
+                { timeout: 60000 },
+            )
+        ).data?.signature || "",
 
     sign: async (token, body) => (await open.post(`/api/appointment/${token}/sign/`, body)).data,
 

@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowLeft, Camera, Copy, Download, Edit, FileSignature, Loader2, Plus, Send, Trash2 } from "lucide-react";
+import { ArrowLeft, Camera, Copy, Download, Edit, FileSignature, Loader2, MapPin, PenLine, Plus, Send, Trash2 } from "lucide-react";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
@@ -87,7 +87,7 @@ export default function AppointmentOrders() {
   const [form, setForm] = useState(EMPTY);
   const [saving, setSaving] = useState(false);
   const [busy, setBusy] = useState(""); // "<id>:<what>"
-  const [photo, setPhoto] = useState(null); // {id, src}: the signing photo open under its row
+  const [photo, setPhoto] = useState(null); // {id, kind, src}: a signing photo open under its row
 
   useEffect(() => {
     let alive = true;
@@ -214,15 +214,21 @@ export default function AppointmentOrders() {
       }
     });
 
-  const showPhoto = (order) => {
-    if (photo?.id === order.id) {
+  // kind: "photo", the employee; "signature", their signature on paper.
+  const showPhoto = (order, kind) => {
+    if (photo?.id === order.id && photo.kind === kind) {
       setPhoto(null);
       return;
     }
-    run(order, "photo", async () => {
-      setPhoto({ id: order.id, src: await appointmentOrderService.photo(order.id) });
+    run(order, kind, async () => {
+      const src =
+        kind === "signature"
+          ? await appointmentOrderService.signaturePhoto(order.id)
+          : await appointmentOrderService.photo(order.id);
+      setPhoto({ id: order.id, kind, src });
     });
   };
+  const showing = (order, kind) => photo?.id === order.id && photo.kind === kind;
 
   const remove = (order) => {
     if (!window.confirm(`Delete the appointment order for ${order.name}?`)) return;
@@ -305,6 +311,18 @@ export default function AppointmentOrders() {
                           <td className="px-3 py-2 whitespace-nowrap">
                             <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${tone}`}>{label}</span>
                             {stamp && <div className="mt-0.5 text-xs text-muted-foreground">{when(stamp)}</div>}
+                            {o.location && (
+                              <a
+                                href={o.location.map}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                title="Where the phone was when signing. Opens Google Maps."
+                                className="mt-0.5 flex items-center gap-1 text-xs text-primary hover:underline"
+                              >
+                                <MapPin className="h-3 w-3 shrink-0" />
+                                {o.location.text}
+                              </a>
+                            )}
                           </td>
                           <td className="px-3 py-2">
                             <div className="flex items-center gap-1 justify-end">
@@ -322,13 +340,26 @@ export default function AppointmentOrders() {
                                 <Button
                                   variant="outline"
                                   size="sm"
-                                  onClick={() => showPhoto(o)}
+                                  onClick={() => showPhoto(o, "photo")}
                                   disabled={isBusy(o, "photo")}
-                                  aria-expanded={photo?.id === o.id}
+                                  aria-expanded={showing(o, "photo")}
                                   className="rounded-lg flex items-center gap-1"
                                 >
                                   {isBusy(o, "photo") ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Camera className="h-3.5 w-3.5" />}
-                                  {photo?.id === o.id ? "Hide photo" : "Photo"}
+                                  {showing(o, "photo") ? "Hide photo" : "Photo"}
+                                </Button>
+                              )}
+                              {o.has_signature_photo && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => showPhoto(o, "signature")}
+                                  disabled={isBusy(o, "signature")}
+                                  aria-expanded={showing(o, "signature")}
+                                  className="rounded-lg flex items-center gap-1"
+                                >
+                                  {isBusy(o, "signature") ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <PenLine className="h-3.5 w-3.5" />}
+                                  {showing(o, "signature") ? "Hide sign photo" : "Sign photo"}
                                 </Button>
                               )}
                               {o.status !== "signed" && (
@@ -365,13 +396,21 @@ export default function AppointmentOrders() {
                               <div className="flex items-end gap-3">
                                 <img
                                   src={photo.src}
-                                  alt={`${o.name} when signing`}
+                                  alt={photo.kind === "signature" ? `${o.name}'s signature on paper` : `${o.name} when signing`}
                                   className="h-56 rounded-xl border border-border object-cover"
                                 />
-                                <p className="text-xs text-muted-foreground">
-                                  Taken with the camera on the signing page when {o.name} signed, {when(o.signed_at)}.
-                                  It is also on the last page of the signed PDF.
-                                </p>
+                                {photo.kind === "signature" ? (
+                                  <p className="text-xs text-muted-foreground">
+                                    {o.name} signed on paper and took this photo with the camera on the signing page,
+                                    {" "}{when(o.signed_at)}. The signature on the order is the ink from it. It is also on
+                                    the last page of the signed PDF.
+                                  </p>
+                                ) : (
+                                  <p className="text-xs text-muted-foreground">
+                                    Taken with the camera on the signing page when {o.name} signed, {when(o.signed_at)}.
+                                    It is also on the last page of the signed PDF.
+                                  </p>
+                                )}
                               </div>
                             </td>
                           </tr>
