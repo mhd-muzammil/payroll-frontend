@@ -44,8 +44,11 @@ export const useAttendance = () => {
   };
 
   const fetchAll = useCallback(async (params = {}) => {
+    // The Attendance page keeps the days a relieved person worked, marked
+    // Relieved, as the payslip and payroll screens do. The server ignores the
+    // flag on an employee's own list; the WhatsApp poster never sends it.
     const data = await handleRequest(
-      () => attendanceService.getAll(params)
+      () => attendanceService.getAll({ ...params, with_relieved: 1 })
     );
     if (typeof data === "string") {
       throw new Error("API returned invalid format (HTML instead of JSON). Check proxy or backend server.");

@@ -247,6 +247,10 @@ export const linkOrphanRows = (records) => {
   const owners = new Map();
   for (const record of list) {
     if (record.employee_id == null) continue;
+    // Nobody relieved owns a row of nobody's: their days are on the page now,
+    // marked, but before that such a row was never handed to them, and the
+    // headcount it counts in must not move because they came back.
+    if (record.employee_status === "relieved") continue;
     const name = String(record.employee_name || "").trim().toLowerCase();
     if (!name) continue;
     let known = owners.get(name);

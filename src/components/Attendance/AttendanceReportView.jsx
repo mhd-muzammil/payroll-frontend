@@ -299,6 +299,11 @@ export default function AttendanceReportView({
                       </td>
                       <td className={`sticky z-10 ${NAME} border-b border-r border-border bg-card px-3 py-2 font-medium text-foreground`}>
                         {row.name || "-"}
+                        {row.relieved && (
+                          <span className="ml-1.5 rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold text-rose-700 dark:bg-rose-950/60 dark:text-rose-300">
+                            Relieved
+                          </span>
+                        )}
                       </td>
                       <td className={`sm:sticky sm:z-10 ${PLACE} border-b border-r border-border bg-card px-3 py-2 text-foreground`}>
                         {row.branch}

@@ -426,6 +426,9 @@ const Attendance = () => {
 
     const rows = safeRecords
       .filter((record) => getDatePart(record.intime || record.outtime) === today)
+      // The WhatsApp poster sends this picture when it posts images; its text
+      // never names somebody relieved, so neither does the picture.
+      .filter((record) => record.employee_status !== "relieved")
       .filter((record) => {
         if (!selectedRegion) return true;
         return (record.branch || "Chennai").toLowerCase() === selectedRegion.toLowerCase();
@@ -806,9 +809,15 @@ const Attendance = () => {
   };
 
   // Live headcount snapshot anchors on today; calculateStats falls back to the
-  // latest day with data when today is outside the selected cycle.
+  // latest day with data when today is outside the selected cycle. Staff only:
+  // a relieved person's days are on the table, marked, but the cards and the
+  // region counts are what they were before those days came back on the page.
   const stats = useMemo(
-    () => calculateStats(filteredRecords, formatLocalDate(new Date())),
+    () =>
+      calculateStats(
+        filteredRecords.filter((record) => record.employee_status !== "relieved"),
+        formatLocalDate(new Date())
+      ),
     [filteredRecords]
   );
 
@@ -1377,7 +1386,7 @@ const Attendance = () => {
               would sit half-width beside a gap. */}
           <Button
             variant="outline"
-            onClick={fetchAll}
+            onClick={() => fetchAll()}
             disabled={loading}
             className={isEmployee ? "col-span-2 sm:col-span-1" : ""}
           >

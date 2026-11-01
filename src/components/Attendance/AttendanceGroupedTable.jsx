@@ -89,6 +89,7 @@ const AttendanceGroupedTable = ({
         map.set(key, {
           key,
           employee_name: r.employee_name,
+          relieved: r.employee_status === "relieved",
           email: r.email || null,
           department: r.department,
           role: r.role,
@@ -187,6 +188,11 @@ const AttendanceGroupedTable = ({
                       <span className="text-sm font-semibold truncate">
                         {g.employee_name}
                       </span>
+                      {g.relieved && (
+                        <span className="shrink-0 rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold text-rose-700 dark:bg-rose-950/60 dark:text-rose-300">
+                          Relieved
+                        </span>
+                      )}
                       <Badge
                         variant="outline"
                         className="shrink-0 capitalize border-border/80 text-foreground text-[10px] px-1.5 py-0"

@@ -148,6 +148,8 @@ export function buildAttendanceReport(records) {
     if (!employeesMap.has(key)) {
       employeesMap.set(key, {
         name: record.employee_name || "",
+        // Marked on the screen's report, and after the name in the file.
+        relieved: record.employee_status === "relieved",
         branch: record.branch || "Chennai",
         days: {},
         hours: 0,
@@ -212,6 +214,7 @@ export function buildAttendanceReport(records) {
     return {
       sno: idx + 1,
       name: emp.name,
+      relieved: emp.relieved,
       branch: emp.branch,
       days: emp.days,
       present,
@@ -272,6 +275,9 @@ export function buildAttendanceWorkbook(ExcelJS, report, { withTime = true } = {
 
   const TOTAL_HEADERS = withTime ? REPORT_TOTAL_HEADERS : [];
   const firstTotalColumn = 4 + sortedDates.length;
+  // Somebody relieved is on the sheet for the days they worked, and the name
+  // says so, as the badge does on the screen's report.
+  const nameOf = (emp) => (emp.relieved ? `${emp.name} (Relieved)` : emp.name);
 
   sheet.addRow(["S.no", "Name", "Location", ...dateHeaderLabels, ...TOTAL_HEADERS]);
   sheet.getRow(1).eachCell((cell, colNumber) => {
@@ -295,7 +301,7 @@ export function buildAttendanceWorkbook(ExcelJS, report, { withTime = true } = {
     if (!withTime) {
       const row = sheet.addRow([
         emp.sno,
-        emp.name,
+        nameOf(emp),
         emp.branch,
         ...sortedDates.map((datePart) => {
           const entry = emp.days[datePart];
@@ -318,7 +324,7 @@ export function buildAttendanceWorkbook(ExcelJS, report, { withTime = true } = {
 
     const row = sheet.addRow([
       emp.sno,
-      emp.name,
+      nameOf(emp),
       emp.branch,
       ...sortedDates.map((datePart) => exportCellText(emp.days[datePart], datePart)),
       // Numbers, not text, so a column of them can be summed.
