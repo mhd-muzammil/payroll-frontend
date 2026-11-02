@@ -738,8 +738,14 @@ const PayslipsPage = () => {
     const relieved = monthSlips
       .filter((s) => s.employee_details?.status === "relieved" && !listed.has(s.employee))
       .map((s) => s.employee_details);
-    return [...employees, ...relieved];
-  }, [employees, monthSlips]);
+    // Not before they joined: a cycle that ended (the 24th) before somebody's
+    // date of joining is not theirs, unless a slip for it is already here.
+    // Compared as "YYYY-MM-DD" strings, never through new Date().
+    const cycleEnd = `${genYear}-${String(genMonth).padStart(2, "0")}-24`;
+    const hasSlip = new Set(monthSlips.map((s) => s.employee));
+    const joined = (e) => !e.date_of_joining || e.date_of_joining <= cycleEnd || hasSlip.has(e.id);
+    return [...employees.filter(joined), ...relieved];
+  }, [employees, monthSlips, genMonth, genYear]);
 
   const filteredEmployees = useMemo(() => {
     let list = generateRows;
