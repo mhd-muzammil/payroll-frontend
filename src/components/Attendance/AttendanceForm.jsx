@@ -61,7 +61,16 @@ const AttendanceForm = ({
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const noPunch = NO_PUNCH.has(formData.status);
+  // A day somebody punched keeps its punches, whatever the office marks it:
+  // marking it Half Day (or Absent, or Leave) changes the status, not the Login
+  // and Logout they made. Doing otherwise erased them -- the row came back with
+  // midnight and no logout. Only a day with no punch is kept as just its date.
+  const hadPunch = Boolean(
+    initialData &&
+      (initialData.outtime ||
+        (initialData.intime && !toLocalDateTimeInput(initialData.intime).endsWith("T00:00")))
+  );
+  const noPunch = NO_PUNCH.has(formData.status) && !hadPunch;
   // Leave is offered as what it is for the chosen date -- Sunday or Holiday --
   // and still saved as Leave, which is what the payslip and the 10:30 rule read.
   const leaveLabel = statusShown("Leave", dayOf(formData.intime));
@@ -77,7 +86,8 @@ const AttendanceForm = ({
     const payload = { ...formData, ...forceValues };
     // An absent day carries the date and nothing else: midnight on that date,
     // which is where the page reads the date from and what the import writes.
-    if (NO_PUNCH.has(payload.status)) {
+    // Not a day with punches on it: those stay as they are (see hadPunch).
+    if (NO_PUNCH.has(payload.status) && !hadPunch) {
       payload.intime = dayStart(dayOf(payload.intime));
       payload.outtime = null;
     }
