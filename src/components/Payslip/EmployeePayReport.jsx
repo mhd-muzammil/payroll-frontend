@@ -12,7 +12,7 @@ import { api } from "@/api/Api";
  *
  * The yellow cells are the ones that can be changed, and they are exactly the
  * inputs the payroll engine takes: the day counts, and the amounts that move
- * from month to month (incentive, other earnings, staff advance, TDS,
+ * from month to month (incentive, other earnings, EPF, staff advance, TDS,
  * insurance, other deduction). A change goes to the server, which re-runs the
  * whole slip, and the row comes back with every derived figure -- earned
  * amounts, deductions, net -- recomputed. Nothing derived is typed by hand, so
@@ -35,6 +35,7 @@ const EDITS = {
   special_work_days: (v, s) => ({ total_days: s.total_days, lop_days: s.lop_days, special_work_days: v }),
   earned_incentive: (v) => ({ incentive: v }),
   earned_other_earnings: (v) => ({ other_earnings: v }),
+  deduction_epf: (v) => ({ epf: v }),
   deduction_staff_advance: (v) => ({ staff_advance: v }),
   deduction_tds: (v) => ({ tds: v }),
   deduction_insurance: (v) => ({ insurance: v }),
@@ -432,6 +433,8 @@ const EmployeePayReport = ({
   const [savingId, setSavingId] = useState(null);
   const [flashId, setFlashId] = useState(null);
   const [exporting, setExporting] = useState(false);
+  // Whether anything was typed in the open cell (see commitEdit).
+  const typedIn = useRef(false);
   // Slips already sent to their employee, where the office has said yes to
   // changing what that employee can already see. Asked once per slip.
   const confirmedSent = useRef(new Set());
@@ -515,6 +518,7 @@ const EmployeePayReport = ({
       }
       confirmedSent.current.add(slip.id);
     }
+    typedIn.current = false;
     setEditing({ id: slip.id, key });
     setDraft(String(toNumber(slip[key])));
   };
@@ -561,7 +565,11 @@ const EmployeePayReport = ({
     } else {
       value = twoPlaces(value);
     }
-    if (value === before) {
+    // EPF typed in -- even the figure already showing -- is set for the
+    // month. Until it is, the structure's EPF follows the days, so skipping
+    // it as "unchanged" would leave the next LOP edit to cut it.
+    const setsEpf = key === "deduction_epf" && typedIn.current && !slip.manual_overrides?.epf;
+    if (value === before && !setsEpf) {
       cancelEdit();
       return;
     }
@@ -600,7 +608,10 @@ const EmployeePayReport = ({
           type="text"
           inputMode="decimal"
           value={draft}
-          onChange={(e) => setDraft(e.target.value)}
+          onChange={(e) => {
+            typedIn.current = true;
+            setDraft(e.target.value);
+          }}
           onBlur={() => commitEdit(slip)}
           onKeyDown={(e) => {
             if (e.key === "Enter") e.currentTarget.blur();
