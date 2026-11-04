@@ -65,6 +65,8 @@ const PayrollPage = () => {
   const [selectedRegion, setSelectedRegion] = useState("");
   const [allEmployees, setAllEmployees] = useState([]);
   const [monthlyPayslips, setMonthlyPayslips] = useState([]);
+  // Relieved people who worked in the selected month's cycle (see employeeRoster).
+  const [relievedWorked, setRelievedWorked] = useState([]);
   const [generating, setGenerating] = useState(false);
   const [selectedSlipForModal, setSelectedSlipForModal] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -172,7 +174,7 @@ const PayrollPage = () => {
         ? `/api/payslips/?month=${m}&year=${y}&branch=${region}&with_relieved=1`
         : `/api/payslips/?month=${m}&year=${y}&with_relieved=1`;
 
-      const [cyclesRes, statsRes, payslipsRes] = await Promise.all([
+      const [cyclesRes, statsRes, payslipsRes, relievedRes] = await Promise.all([
         api.get(summaryUrl).catch(e => {
           console.error("Cycle API Error Details:", e);
           throw new Error(`Summary Endpt Failure: ${e.response?.status || e.message}`);
@@ -183,6 +185,10 @@ const PayrollPage = () => {
         }),
         api.get(payslipsUrl).catch(e => {
           console.error("Payslips List API Error Details:", e);
+          return { data: [] };
+        }),
+        api.get(`/api/payslips/relieved_worked/?month=${m}&year=${y}`).catch(e => {
+          console.error("Relieved-worked API Error Details:", e);
           return { data: [] };
         })
       ]);
@@ -215,6 +221,7 @@ const PayrollPage = () => {
         setStats(statsRes.data);
       }
       setMonthlyPayslips(extractArray(payslipsRes.data || []));
+      setRelievedWorked(extractArray(relievedRes.data || []));
     } catch (err) {
       console.error("Aggregated Fetch Exception:", err);
       setError(err.message || "Network communication error or API disconnect");
@@ -284,8 +291,20 @@ const PayrollPage = () => {
     const cycleEnd = `${selectedYear}-${String(selectedMonth).padStart(2, "0")}-24`;
     const joined = (emp) =>
       !emp.date_of_joining || emp.date_of_joining <= cycleEnd || payslipMap.has(Number(emp.id));
-    return [...allEmployees.filter(joined).map(emp => row(emp, payslipMap.get(Number(emp.id)))), ...relieved];
-  }, [allEmployees, monthlyPayslips, selectedMonth, selectedYear]);
+    // And anybody relieved who worked in this cycle but has no slip for it
+    // yet: the month is still theirs to be paid. Marked Relieved, Not
+    // Generated; each is generated from their own row (Generate Slip), since
+    // Bulk Generate is for the staff.
+    const shown = new Set([...listed, ...relieved.map(r => Number(r.id))]);
+    const relievedToPay = (relievedWorked || [])
+      .filter(emp => !shown.has(Number(emp.id)))
+      .map(emp => row(emp, payslipMap.get(Number(emp.id))));
+    return [
+      ...allEmployees.filter(joined).map(emp => row(emp, payslipMap.get(Number(emp.id)))),
+      ...relieved,
+      ...relievedToPay,
+    ];
+  }, [allEmployees, monthlyPayslips, relievedWorked, selectedMonth, selectedYear]);
 
   const filteredRoster = useMemo(() => {
     return employeeRoster.filter((emp) => {

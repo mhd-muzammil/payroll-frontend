@@ -95,6 +95,8 @@ const PayslipsPage = () => {
   const [employees, setEmployees] = useState([]);
   const [employeesLoading, setEmployeesLoading] = useState(true);
   const [monthSlips, setMonthSlips] = useState([]);
+  // Relieved people who worked in the chosen month's cycle (see generateRows).
+  const [relievedWorked, setRelievedWorked] = useState([]);
   const [monthSlipsLoading, setMonthSlipsLoading] = useState(false);
   
   const [genMonth, setGenMonth] = useState(() => new Date().getMonth() + 1);
@@ -136,8 +138,15 @@ const PayslipsPage = () => {
     try {
       // With the relieved: a month they worked still shows on this list,
       // marked Relieved (see generateRows).
-      const res = await api.get(`/api/payslips/?month=${m}&year=${y}&with_relieved=1`);
+      const [res, relievedRes] = await Promise.all([
+        api.get(`/api/payslips/?month=${m}&year=${y}&with_relieved=1`),
+        api.get(`/api/payslips/relieved_worked/?month=${m}&year=${y}`).catch((err) => {
+          console.error("Failed to fetch relieved staff who worked this month:", err);
+          return { data: [] };
+        }),
+      ]);
       setMonthSlips(extractArray(res.data));
+      setRelievedWorked(extractArray(relievedRes.data));
     } catch (err) {
       console.error("Failed to fetch month payslips:", err);
     } finally {
@@ -744,8 +753,13 @@ const PayslipsPage = () => {
     const cycleEnd = `${genYear}-${String(genMonth).padStart(2, "0")}-24`;
     const hasSlip = new Set(monthSlips.map((s) => s.employee));
     const joined = (e) => !e.date_of_joining || e.date_of_joining <= cycleEnd || hasSlip.has(e.id);
-    return [...employees.filter(joined), ...relieved];
-  }, [employees, monthSlips, genMonth, genYear]);
+    // And anybody relieved who worked in this cycle but has no slip for it
+    // yet: the month is still theirs to be paid, so they get a row to
+    // Generate from. Bulk Generate is for the staff and leaves them out.
+    const shown = new Set([...listed, ...relieved.map((e) => e.id)]);
+    const relievedToPay = relievedWorked.filter((e) => !shown.has(e.id));
+    return [...employees.filter(joined), ...relieved, ...relievedToPay];
+  }, [employees, monthSlips, relievedWorked, genMonth, genYear]);
 
   const filteredEmployees = useMemo(() => {
     let list = generateRows;
