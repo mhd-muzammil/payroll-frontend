@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from "react";
-import { Eye, Loader2, Lock, Search } from "lucide-react";
+import { Eye, FileSpreadsheet, Loader2, Lock, Search } from "lucide-react";
 import { api } from "@/api/Api";
 
 /**
@@ -179,6 +179,237 @@ const FROZEN = [
 ];
 const frozenLeft = (index) => FROZEN.slice(0, index).reduce((sum, c) => sum + c.width, 0);
 
+/*
+ * THE SHEET AS AN EXCEL FILE.
+ *
+ * Exactly the table on screen -- the rows the month, region and search leave,
+ * in the same order, with the same columns and totals -- coloured the way the
+ * screen colours it. Excel has no dark mode, so these are the light sheet's
+ * colours, as ARGB: the theme's neutrals (index.css) and the Tailwind tints
+ * the table is drawn in, each as the browser paints it over white.
+ */
+const XL = {
+  text: "FF0A0A0A", // text-foreground
+  mutedText: "FF737373", // text-muted-foreground
+  muted: "FFF5F5F5", // bg-muted: the plain headings and the totals row
+  border: "FFE5E5E5", // border-border
+  input: "FFFEFCE8", // bg-yellow-50: a cell that can be changed
+  locked: "FFFBFBFB", // bg-muted/40: the same cell on a Paid slip
+  pencil: "FFD08700", // text-yellow-600: the ✎ over a column that can be changed
+  net: "FFF3F3F3", // bg-primary/5
+  netHead: "FFE7E7E7", // bg-primary/10
+  netTotal: "FFDCDCDC", // bg-primary/15
+  relieved: "FFC70036", // text-rose-700
+};
+const XL_GROUP = {
+  days: "FFF1F5F9", // slate-100
+  gross: "FFEEF2FF", // indigo-50
+  earned: "FFECFDF5", // emerald-50
+  deductions: "FFFFF1F2", // rose-50
+  employer: "FFFFFBEB", // amber-50
+};
+// The status pill's two colours: the cell takes its tint, the word its ink.
+const XL_STATUS = {
+  Paid: { fill: "FFDFF2FE", text: "FF00598A" }, // sky-100 / sky-800
+  Generated: { fill: "FFD0FAE5", text: "FF006045" }, // emerald-100 / emerald-800
+  Pending: { fill: "FFFEF3C6", text: "FF973C00" }, // amber-100 / amber-800
+};
+
+/**
+ * Amounts in lakhs and crores, as the sheet shows them: 4,94,838.06. Excel
+ * groups in threes on its own, so the commas are placed by the size of the
+ * number. A format holds only two conditions, so a negative amount gets a
+ * format of its own, written the way the screen writes it: ₹-500.00.
+ */
+const xlDigits = (abs) =>
+  abs >= 10000000 ? "##\\,##\\,##\\,##0.00" : abs >= 100000 ? "##\\,##\\,##0.00" : "#,##0.00";
+const xlMoney = (n, rupee = false) => {
+  const r = rupee ? '"₹"' : "";
+  if (n < 0) return `${r}#,##0.00;${rupee ? '"₹-"' : '"-"'}${xlDigits(-n)}`;
+  return `[>=10000000]${r}${xlDigits(1e7)};[>=100000]${r}${xlDigits(1e5)};${r}${xlDigits(0)}`;
+};
+
+const statusWords = (slip) => ({
+  status: String(slip.status ?? ""),
+  sent: slip.sent_at ? " · Sent" : " · Not sent",
+  relieved: slip.employee_details?.status === "relieved" ? "  Relieved" : "",
+});
+
+/** The workbook for `rows` and their `totals`. `ExcelJS` is loaded by the caller, only when asked for. */
+function buildPayReportWorkbook(ExcelJS, rows, totals) {
+  const numeric = GROUPS.flatMap((g) => g.columns.map((c) => ({ ...c, tone: g.tone })));
+  const lead = [...FROZEN.map((c) => c.label), "Branch", "Month", "Status"];
+  const first = lead.length + 1; // the first figure's column
+  const netCol = first + numeric.length;
+  const totalRow = 3 + rows.length;
+
+  const workbook = new ExcelJS.Workbook();
+  // The headings and the three who-columns stay put, as on screen.
+  const sheet = workbook.addWorksheet("Employee Pay Report", {
+    views: [{ state: "frozen", xSplit: FROZEN.length, ySplit: 2, topLeftCell: "D3" }],
+  });
+  const solid = (argb) => ({ type: "pattern", pattern: "solid", fgColor: { argb } });
+  const ink = (argb, bold = false) => ({ bold, color: { argb } });
+
+  // Headings: the lead heads and Net span both heading rows; each group's
+  // name spans its columns, with the column names under it in its tint.
+  lead.forEach((label, i) => {
+    sheet.mergeCells(1, i + 1, 2, i + 1);
+    const cell = sheet.getCell(1, i + 1);
+    cell.value = label.toUpperCase();
+    cell.font = ink(XL.mutedText, true);
+    cell.fill = solid(XL.muted);
+    cell.alignment = { horizontal: "left", vertical: "middle" };
+  });
+  let col = first;
+  GROUPS.forEach((g) => {
+    const end = col + g.columns.length - 1;
+    sheet.mergeCells(1, col, 1, end);
+    const top = sheet.getCell(1, col);
+    top.value = g.label.toUpperCase();
+    top.font = ink(XL.text, true);
+    top.fill = solid(XL_GROUP[g.tone]);
+    top.alignment = { horizontal: "center", vertical: "middle" };
+    g.columns.forEach((c, j) => {
+      const cell = sheet.getCell(2, col + j);
+      cell.value = EDITS[c.key]
+        ? { richText: [{ text: c.label, font: ink(XL.mutedText, true) }, { text: " ✎", font: ink(XL.pencil) }] }
+        : c.label;
+      cell.font = ink(XL.mutedText, true);
+      cell.fill = solid(XL_GROUP[g.tone]);
+      cell.alignment = { horizontal: "right", vertical: "middle" };
+    });
+    col = end + 1;
+  });
+  sheet.mergeCells(1, netCol, 2, netCol);
+  const netHead = sheet.getCell(1, netCol);
+  netHead.value = NET.label.toUpperCase();
+  netHead.font = ink(XL.text, true);
+  netHead.fill = solid(XL.netHead);
+  netHead.alignment = { horizontal: "right", vertical: "middle" };
+  sheet.getRow(1).height = 22;
+  sheet.getRow(2).height = 20;
+
+  // A row per slip.
+  rows.forEach((slip, index) => {
+    const row = sheet.getRow(3 + index);
+    const emp = slip.employee_details || {};
+    const code = String(emp.emp_code ?? "").trim();
+    row.getCell(1).value = index + 1;
+    row.getCell(1).font = ink(XL.mutedText);
+    row.getCell(1).alignment = { horizontal: "center" };
+    // A plain number goes in as one, or Excel flags every code "number stored
+    // as text" -- up to 11 digits: from 12, Excel shows a number as 1.2E+11.
+    row.getCell(2).value = /^[1-9]\d{0,10}$/.test(code) ? Number(code) : code || "—";
+    row.getCell(2).font = ink(XL.mutedText);
+    row.getCell(2).alignment = { horizontal: "left" };
+    row.getCell(3).value = emp.employee_name || "—";
+    row.getCell(4).value = emp.branch || "Not Assigned";
+    row.getCell(5).value = periodOf(slip);
+
+    const words = statusWords(slip);
+    const pill = XL_STATUS[slip.status] || XL_STATUS.Pending;
+    const status = row.getCell(6);
+    status.value = {
+      richText: [
+        { text: words.status, font: ink(pill.text, true) },
+        { text: words.sent, font: ink(XL.mutedText) },
+        ...(words.relieved ? [{ text: words.relieved, font: ink(XL.relieved, true) }] : []),
+      ],
+    };
+    status.fill = solid(pill.fill);
+
+    numeric.forEach((c, j) => {
+      const cell = row.getCell(first + j);
+      const n = toNumber(slip[c.key]);
+      cell.value = n;
+      if (c.kind === "money") cell.numFmt = xlMoney(n);
+      cell.alignment = { horizontal: "right" };
+      if (EDITS[c.key] && slip.status === "Paid") {
+        cell.fill = solid(XL.locked);
+        cell.font = ink(XL.mutedText);
+      } else if (EDITS[c.key]) {
+        cell.fill = solid(XL.input);
+      }
+    });
+
+    const net = row.getCell(netCol);
+    const n = toNumber(slip.net_salary);
+    net.value = n;
+    net.numFmt = xlMoney(n, true);
+    net.font = ink(XL.text, true);
+    net.fill = solid(XL.net);
+    net.alignment = { horizontal: "right" };
+  });
+
+  // The totals: a SUM over the rows above, with the screen's figure already
+  // in it -- so the file shows it on opening, and still adds up after an edit.
+  const total = sheet.getRow(totalRow);
+  for (let c = 1; c <= netCol; c += 1) {
+    total.getCell(c).fill = solid(XL.muted);
+    total.getCell(c).font = ink(XL.text, true);
+  }
+  total.getCell(3).value = `Total · ${rows.length}`;
+  sheet.mergeCells(totalRow, 4, totalRow, 6);
+  const sum = (c, result) => {
+    const letter = sheet.getColumn(c).letter;
+    return { formula: `SUM(${letter}3:${letter}${totalRow - 1})`, result };
+  };
+  numeric.forEach((c, j) => {
+    const cell = total.getCell(first + j);
+    cell.value = sum(first + j, totals[c.key]);
+    if (c.kind === "money") cell.numFmt = xlMoney(totals[c.key]);
+    cell.alignment = { horizontal: "right" };
+  });
+  const netTotal = total.getCell(netCol);
+  netTotal.value = sum(netCol, totals.net_salary);
+  netTotal.numFmt = xlMoney(totals.net_salary, true);
+  netTotal.fill = solid(XL.netTotal);
+  netTotal.alignment = { horizontal: "right" };
+
+  // The grid, as on screen, with the heavier line over the totals.
+  const thin = { style: "thin", color: { argb: XL.border } };
+  for (let r = 1; r <= totalRow; r += 1) {
+    for (let c = 1; c <= netCol; c += 1) {
+      sheet.getCell(r, c).border = {
+        top: r === totalRow ? { style: "medium", color: { argb: XL.border } } : thin,
+        left: thin,
+        bottom: thin,
+        right: thin,
+      };
+    }
+  }
+
+  // Wide enough for the longest thing in each column -- a number that does
+  // not fit shows as ##### in Excel. Headings are capitals, and wider.
+  const fit = (heading, texts, capitals = true) =>
+    Math.min(
+      40,
+      Math.max(Math.ceil(heading.length * (capitals ? 1.3 : 1.1)), ...texts.map((t) => String(t).length)) + 3,
+    );
+  const leadTexts = [
+    rows.map((_, i) => i + 1),
+    rows.map((s) => s.employee_details?.emp_code || "—"),
+    [...rows.map((s) => s.employee_details?.employee_name || "—"), `Total · ${rows.length}`],
+    rows.map((s) => s.employee_details?.branch || "Not Assigned"),
+    rows.map(periodOf),
+    rows.map((s) => Object.values(statusWords(s)).join("")),
+  ];
+  lead.forEach((label, i) => {
+    sheet.getColumn(i + 1).width = fit(label, leadTexts[i]);
+  });
+  numeric.forEach((c, j) => {
+    const texts = [...rows.map((s) => formatCell(c, s[c.key])), formatCell(c, totals[c.key])];
+    sheet.getColumn(first + j).width = fit(c.label + (EDITS[c.key] ? " ✎" : ""), texts, false);
+  });
+  sheet.getColumn(netCol).width = fit(NET.label, [
+    ...rows.map((s) => `₹${formatMoney(s.net_salary)}`),
+    `₹${formatMoney(totals.net_salary)}`,
+  ]);
+
+  return workbook;
+}
+
 /**
  * `slips` arrive already narrowed to the chosen month. The month itself is held
  * by the page, not here, because the region cards above the sheet have to count
@@ -200,6 +431,7 @@ const EmployeePayReport = ({
   const [draft, setDraft] = useState("");
   const [savingId, setSavingId] = useState(null);
   const [flashId, setFlashId] = useState(null);
+  const [exporting, setExporting] = useState(false);
   // Slips already sent to their employee, where the office has said yes to
   // changing what that employee can already see. Asked once per slip.
   const confirmedSent = useRef(new Set());
@@ -237,6 +469,38 @@ const EmployeePayReport = ({
     });
     return sums;
   }, [rows]);
+
+  // The table as an Excel file: exactly the rows on screen, in its colours.
+  // Not while a changed cell is saving: the rows would still hold the figures
+  // from before it, and the file would disagree with the payslip.
+  const downloadExcel = async () => {
+    if (exporting || savingId !== null || rows.length === 0) return;
+    setExporting(true);
+    try {
+      const { default: ExcelJS } = await import("exceljs");
+      const buffer = await buildPayReportWorkbook(ExcelJS, rows, totals).xlsx.writeBuffer();
+      const month = periods.find((p) => p.key === period)?.label || "All months";
+      const name = ["Employee Pay Report", month, selectedRegion]
+        .filter(Boolean)
+        .join(" ")
+        .replace(/[^\w-]+/g, "_");
+      const url = URL.createObjectURL(
+        new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }),
+      );
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${name}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Excel download failed", err);
+      alert("Could not make the Excel file. Reload the page and try again.");
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const startEdit = (slip, key) => {
     if (!EDITS[key] || slip.status === "Paid" || savingId) return;
@@ -404,6 +668,16 @@ const EmployeePayReport = ({
           <span className="font-semibold text-foreground">{rows.length}</span> payslip{rows.length === 1 ? "" : "s"} ·
           net <span className="font-semibold text-foreground">₹{formatMoney(totals.net_salary)}</span>
         </div>
+        <button
+          type="button"
+          onClick={downloadExcel}
+          disabled={exporting || savingId !== null || rows.length === 0}
+          className="inline-flex items-center gap-2 rounded-xl border border-border bg-background px-3 py-2 text-sm font-medium hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+          title="Download this table as an Excel file, in the same colours"
+        >
+          {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />}
+          {exporting ? "Preparing…" : "Download Excel"}
+        </button>
         <div className="flex w-full items-center gap-2 text-xs text-muted-foreground">
           <span className="inline-block h-3 w-3 rounded-sm border border-yellow-300 bg-yellow-50 dark:border-yellow-800 dark:bg-yellow-950/40" />
           Yellow cells can be changed — click, type, press Enter. Totals and net are worked out again on the payslip.
