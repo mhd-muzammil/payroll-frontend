@@ -56,6 +56,9 @@ const GROUPS = [
     columns: [
       days("total_days", "Total"),
       days("paid_days", "Paid"),
+      // From attendance, to look at: the cycle's Absent and Half Day rows.
+      days("absent_days", "Absent"),
+      days("half_days", "Half Day"),
       days("lop_days", "LOP"),
       days("off_days", "Off"),
       days("casual_leave_used", "CL Used"),

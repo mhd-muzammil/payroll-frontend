@@ -159,8 +159,9 @@ const PayslipsPage = () => {
     try {
       // The Employee Pay Report keeps the relieved -- a month they worked is a
       // month paid, as the Payroll page counts it -- and marks them. The server
-      // ignores the flag on an employee's own list.
-      const res = await api.get("/api/payslips/?with_relieved=1");
+      // ignores the flag on an employee's own list. with_day_counts brings each
+      // slip's Absent and Half Day count from attendance, for the report to show.
+      const res = await api.get("/api/payslips/?with_relieved=1&with_day_counts=1");
       setSlips(extractArray(res.data));
     } catch (err) {
       console.error("Failed to fetch payslips:", err);
@@ -296,7 +297,9 @@ const PayslipsPage = () => {
     // it is already open, and wrong for one made on the Pay Report, which
     // threw the payslip over the sheet after every cell.
     setSelectedSlip((current) => (current && current.id === updated.id ? updated : current));
-    setSlips((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+    // Merged, not replaced: the Absent and Half Day counts come with the list
+    // only, and an edit to the slip does not change attendance.
+    setSlips((prev) => prev.map((s) => (s.id === updated.id ? { ...s, ...updated } : s)));
     setMonthSlips((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
   };
 
