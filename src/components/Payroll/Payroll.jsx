@@ -6,7 +6,7 @@ import PageHeader from "../ui/PageHeader";
 import StatsCard from "../ui/StatsCard";
 import Toolbar from "../ui/Toolbar";
 import DataTable from "../ui/DataTable";
-import { Wallet, TrendingUp, Clock, CheckCircle2, Play, MoreHorizontal, Loader2, MapPin, Users, Save, Calendar, FileText, Eye, X, Send } from "lucide-react";
+import { Wallet, TrendingUp, Clock, CheckCircle2, Play, MoreHorizontal, Loader2, MapPin, Users, Save, Calendar, FileText, Eye, X, Send, Undo2 } from "lucide-react";
 import { api } from "@/api/Api";
 import { extractArray } from "../../Utility/apiUtils";
 
@@ -399,6 +399,26 @@ const PayrollPage = () => {
     } catch (e) {
       console.error("Failed to mark payslip as paid", e);
       alert("Failed to update status to Paid.");
+    }
+  };
+
+  // A slip marked Paid by mistake goes back to Generated -- editable again,
+  // like any unpaid slip. Whether it was sent to the employee stays as it was.
+  // True once it is done.
+  const handleRemovePaid = async (slip, name) => {
+    const period = new Date(slip.year, slip.month - 1, 1).toLocaleString("en-IN", { month: "long", year: "numeric" });
+    if (!window.confirm(`Remove Paid from ${name}'s ${period} payslip?\n\nIt goes back to Generated and can be changed again.`)) {
+      return false;
+    }
+    try {
+      await api.patch(`/api/payslips/${slip.id}/`, { status: "Generated" });
+      alert("Paid removed. The payslip is back to Generated.");
+      fetchData(selectedRegion, selectedMonth, selectedYear);
+      return true;
+    } catch (e) {
+      console.error("Failed to remove Paid", e);
+      alert("Could not remove Paid. Please try again.");
+      return false;
     }
   };
 
@@ -856,13 +876,21 @@ const PayrollPage = () => {
                               Send Payslip
                             </button>
                           )}
-                          {e.payslipStatus !== "Paid" && (
+                          {e.payslipStatus !== "Paid" ? (
                             <button
                               onClick={() => handleMarkPaid(e.payslip.id)}
                               className="flex items-center gap-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 h-8 text-xs font-bold transition-colors shadow-2xs"
                             >
                               <CheckCircle2 className="h-3.5 w-3.5" />
                               Mark Paid
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => handleRemovePaid(e.payslip, e.employee_name)}
+                              className="flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 px-2.5 h-8 text-xs font-bold transition-colors dark:border-rose-900 dark:bg-rose-950 dark:text-rose-400"
+                            >
+                              <Undo2 className="h-3.5 w-3.5" />
+                              Remove Paid
                             </button>
                           )}
                         </>
@@ -1104,7 +1132,7 @@ const PayrollPage = () => {
               </Badge>
 
               <div className="flex items-center gap-2">
-                {selectedSlipForModal.status !== "Paid" && (
+                {selectedSlipForModal.status !== "Paid" ? (
                   <Button
                     onClick={() => {
                       handleMarkPaid(selectedSlipForModal.id);
@@ -1113,6 +1141,20 @@ const PayrollPage = () => {
                     className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs"
                   >
                     Mark Paid
+                  </Button>
+                ) : (
+                  <Button
+                    variant="outline"
+                    onClick={async () => {
+                      const name =
+                        selectedSlipForModal.employee_name ||
+                        selectedSlipForModal.employee_details?.employee_name ||
+                        "this employee";
+                      if (await handleRemovePaid(selectedSlipForModal, name)) setSelectedSlipForModal(null);
+                    }}
+                    className="border-rose-200 text-rose-700 hover:bg-rose-50 font-bold text-xs dark:border-rose-900 dark:text-rose-400"
+                  >
+                    Remove Paid
                   </Button>
                 )}
                 <Button
