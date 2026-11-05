@@ -57,8 +57,10 @@ const GROUPS = [
       days("total_days", "Total"),
       days("paid_days", "Paid"),
       // From attendance, to look at: the cycle's Absent and Half Day rows.
-      days("absent_days", "Absent"),
-      days("half_days", "Half Day"),
+      // "—" when the server sent none (one older than these columns), never
+      // a 0 that reads as "no absence".
+      { ...days("absent_days", "Absent"), fromAttendance: true },
+      { ...days("half_days", "Half Day"), fromAttendance: true },
       days("lop_days", "LOP"),
       days("off_days", "Off"),
       days("casual_leave_used", "CL Used"),
@@ -156,7 +158,11 @@ const formatDays = (value) => {
 };
 
 const formatCell = (column, value) =>
-  column.kind === "money" ? formatMoney(value) : formatDays(value);
+  column.fromAttendance && value == null
+    ? "—"
+    : column.kind === "money"
+      ? formatMoney(value)
+      : formatDays(value);
 
 const periodOf = (slip) => `${MONTHS[(slip.month || 1) - 1]} ${slip.year}`;
 
@@ -326,7 +332,7 @@ function buildPayReportWorkbook(ExcelJS, rows, totals) {
     numeric.forEach((c, j) => {
       const cell = row.getCell(first + j);
       const n = toNumber(slip[c.key]);
-      cell.value = n;
+      cell.value = c.fromAttendance && slip[c.key] == null ? "—" : n;
       if (c.kind === "money") cell.numFmt = xlMoney(n);
       cell.alignment = { horizontal: "right" };
       if (EDITS[c.key] && slip.status === "Paid") {
@@ -361,7 +367,7 @@ function buildPayReportWorkbook(ExcelJS, rows, totals) {
   };
   numeric.forEach((c, j) => {
     const cell = total.getCell(first + j);
-    cell.value = sum(first + j, totals[c.key]);
+    cell.value = totals[c.key] == null ? "—" : sum(first + j, totals[c.key]);
     if (c.kind === "money") cell.numFmt = xlMoney(totals[c.key]);
     cell.alignment = { horizontal: "right" };
   });
@@ -471,7 +477,10 @@ const EmployeePayReport = ({
   const totals = useMemo(() => {
     const sums = {};
     ALL_NUMERIC.forEach((c) => {
-      sums[c.key] = rows.reduce((acc, s) => acc + toNumber(s[c.key]), 0);
+      sums[c.key] =
+        c.fromAttendance && rows.some((s) => s[c.key] == null)
+          ? null
+          : rows.reduce((acc, s) => acc + toNumber(s[c.key]), 0);
     });
     return sums;
   }, [rows]);
